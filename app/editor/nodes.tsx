@@ -926,45 +926,30 @@ export function FaceNodeView({ node, onDelete, onUpdate, onStartConnection, onEn
   );
 }
 
-export function BlendNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition }: any) {
+export function StyleNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition }: any) {
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
   
-  const onDrop = async (e: React.DragEvent) => {
-    e.preventDefault();
-    const files = e.dataTransfer.files;
-    if (files && files.length) {
-      const reader = new FileReader();
-      reader.onload = () => onUpdate(node.id, { styleImage: reader.result });
-      reader.readAsDataURL(files[0]);
-    }
-  };
-
-  const onPaste = async (e: React.ClipboardEvent) => {
-    const items = e.clipboardData.items;
-    for (let i = 0; i < items.length; i++) {
-      if (items[i].type.startsWith("image/")) {
-        const file = items[i].getAsFile();
-        if (file) {
-          const reader = new FileReader();
-          reader.onload = () => onUpdate(node.id, { styleImage: reader.result });
-          reader.readAsDataURL(file);
-          return;
-        }
-      }
-    }
-    const text = e.clipboardData.getData("text");
-    if (text && (text.startsWith("http") || text.startsWith("data:image"))) {
-      onUpdate(node.id, { styleImage: text });
-    }
-  };
+  const styleOptions = [
+    { value: "90s-anime", label: "90's Anime Style" },
+    { value: "mha", label: "My Hero Academia Style" },
+    { value: "dbz", label: "Dragon Ball Z Style" },
+    { value: "ukiyo-e", label: "Ukiyo-e Style" },
+    { value: "cyberpunk", label: "Cyberpunk Style" },
+    { value: "steampunk", label: "Steampunk Style" },
+    { value: "cubism", label: "Cubism Style" },
+    { value: "van-gogh", label: "Post-Impressionist (Van Gogh) Style" },
+    { value: "simpsons", label: "Simpsons Style" },
+    { value: "family-guy", label: "Family Guy Style" },
+    { value: "arcane", label: "Arcane – Painterly + Neon Rim Light" },
+    { value: "wildwest", label: "Wild West Style" },
+    { value: "stranger-things", label: "Stranger Things – 80s Kodak Style" },
+    { value: "breaking-bad", label: "Breaking Bad – Dusty Orange & Teal" },
+  ];
   
   return (
     <div 
       className="nb-node absolute text-white w-[320px]" 
       style={{ left: localPos.x, top: localPos.y }}
-      onDrop={onDrop}
-      onDragOver={(e) => e.preventDefault()}
-      onPaste={onPaste}
     >
       <div 
         className="nb-header px-3 py-2 flex items-center justify-between rounded-t-[14px] cursor-grab active:cursor-grabbing"
@@ -973,7 +958,7 @@ export function BlendNodeView({ node, onDelete, onUpdate, onStartConnection, onE
         onPointerUp={onPointerUp}
       >
         <Port className="in" nodeId={node.id} isOutput={false} onEndConnection={onEndConnection} />
-        <div className="font-semibold text-sm flex-1 text-center">BLEND</div>
+        <div className="font-semibold text-sm flex-1 text-center">STYLE</div>
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
@@ -1008,55 +993,37 @@ export function BlendNodeView({ node, onDelete, onUpdate, onStartConnection, onE
             </Button>
           </div>
         )}
-        <div className="text-xs text-white/70">Style Reference Image</div>
-        <div className="text-xs text-white/50">Upload an artistic style image to blend with your input</div>
-        {node.styleImage ? (
-          <div className="relative">
-            <img src={node.styleImage} className="w-full rounded" alt="Style" />
-            <button 
-              className="absolute top-2 right-2 bg-red-500/80 text-white text-xs px-2 py-1 rounded"
-              onClick={() => onUpdate(node.id, { styleImage: null })}
-            >
-              Remove
-            </button>
-          </div>
-        ) : (
-          <label className="block">
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => {
-                if (e.target.files?.length) {
-                  const reader = new FileReader();
-                  reader.onload = () => onUpdate(node.id, { styleImage: reader.result });
-                  reader.readAsDataURL(e.target.files[0]);
-                }
-              }}
-            />
-            <div className="border-2 border-dashed border-white/20 rounded-lg p-4 text-center cursor-pointer hover:border-white/40">
-              <p className="text-xs text-white/60">Drop, upload, or paste style image</p>
-              <p className="text-xs text-white/40 mt-1">Art style will be applied to input</p>
-            </div>
-          </label>
-        )}
+        <div className="text-xs text-white/70">Art Style</div>
+        <div className="text-xs text-white/50 mb-2">Select an artistic style to apply to your image</div>
+        <Select
+          className="w-full bg-black border-white/20 text-white focus:border-white/40 [&>option]:bg-black [&>option]:text-white"
+          value={node.stylePreset || ""}
+          onChange={(e) => onUpdate(node.id, { stylePreset: (e.target as HTMLSelectElement).value })}
+        >
+          <option value="" className="bg-black">Select a style...</option>
+          {styleOptions.map(opt => (
+            <option key={opt.value} value={opt.value} className="bg-black">
+              {opt.label}
+            </option>
+          ))}
+        </Select>
         <div>
           <Slider
-            label="Blend Strength"
-            valueLabel={`${node.blendStrength || 50}%`}
+            label="Style Strength"
+            valueLabel={`${node.styleStrength || 50}%`}
             min={0}
             max={100}
-            value={node.blendStrength || 50}
-            onChange={(e) => onUpdate(node.id, { blendStrength: parseInt((e.target as HTMLInputElement).value) })}
+            value={node.styleStrength || 50}
+            onChange={(e) => onUpdate(node.id, { styleStrength: parseInt((e.target as HTMLInputElement).value) })}
           />
         </div>
         <Button 
           className="w-full"
           onClick={() => onProcess(node.id)}
-          disabled={node.isRunning || !node.styleImage}
-          title={!node.input ? "Connect an input first" : !node.styleImage ? "Add a style image first" : "Blend the style with your input image"}
+          disabled={node.isRunning || !node.stylePreset}
+          title={!node.input ? "Connect an input first" : !node.stylePreset ? "Select a style first" : "Apply the style to your input image"}
         >
-          {node.isRunning ? "Blending..." : "Blend Style Transfer"}
+          {node.isRunning ? "Applying Style..." : "Apply Style Transfer"}
         </Button>
         {node.output && (
           <div className="space-y-2">
@@ -1064,7 +1031,7 @@ export function BlendNodeView({ node, onDelete, onUpdate, onStartConnection, onE
             <Button
               className="w-full"
               variant="secondary"
-              onClick={() => downloadImage(node.output, `blend-${Date.now()}.png`)}
+              onClick={() => downloadImage(node.output, `style-${Date.now()}.png`)}
             >
               📥 Download Output
             </Button>

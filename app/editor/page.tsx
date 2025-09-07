@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   BackgroundNodeView,
   ClothesNodeView,
-  BlendNodeView,
+  StyleNodeView,
   EditNodeView,
   CameraNodeView,
   AgeNodeView,
@@ -56,7 +56,7 @@ The result should look like all subjects were photographed together in the same 
 }
 
 // Types
-type NodeType = "CHARACTER" | "MERGE" | "BACKGROUND" | "CLOTHES" | "BLEND" | "EDIT" | "CAMERA" | "AGE" | "FACE";
+type NodeType = "CHARACTER" | "MERGE" | "BACKGROUND" | "CLOTHES" | "STYLE" | "EDIT" | "CAMERA" | "AGE" | "FACE";
 
 type NodeBase = {
   id: string;
@@ -103,13 +103,12 @@ type ClothesNode = NodeBase & {
   error?: string | null;
 };
 
-type BlendNode = NodeBase & {
-  type: "BLEND";
+type StyleNode = NodeBase & {
+  type: "STYLE";
   input?: string;
   output?: string;
-  styleImage?: string;
-  stylePrompt?: string;
-  blendStrength?: number;
+  stylePreset?: string;
+  styleStrength?: number;
   isRunning?: boolean;
   error?: string | null;
 };
@@ -167,7 +166,7 @@ type FaceNode = NodeBase & {
   error?: string | null;
 };
 
-type AnyNode = CharacterNode | MergeNode | BackgroundNode | ClothesNode | BlendNode | EditNode | CameraNode | AgeNode | FaceNode;
+type AnyNode = CharacterNode | MergeNode | BackgroundNode | ClothesNode | StyleNode | EditNode | CameraNode | AgeNode | FaceNode;
 
 // Default placeholder portrait
 const DEFAULT_PERSON =
@@ -772,10 +771,10 @@ export default function EditorPage() {
           config.selectedPreset = (node as ClothesNode).selectedPreset;
         }
         break;
-      case "BLEND":
-        if ((node as BlendNode).styleImage) {
-          config.styleImage = (node as BlendNode).styleImage;
-          config.blendStrength = (node as BlendNode).blendStrength;
+      case "STYLE":
+        if ((node as StyleNode).stylePreset) {
+          config.stylePreset = (node as StyleNode).stylePreset;
+          config.styleStrength = (node as StyleNode).styleStrength;
         }
         break;
       case "EDIT":
@@ -1390,8 +1389,8 @@ export default function EditorPage() {
       case "BLEND":
         setNodes(prev => [...prev, { ...commonProps, type: "BLEND", blendStrength: 50 } as BlendNode]);
         break;
-      case "EDIT":
-        setNodes(prev => [...prev, { ...commonProps, type: "EDIT" } as EditNode]);
+      case "STYLE":
+        setNodes(prev => [...prev, { ...commonProps, type: "STYLE", styleStrength: 50 } as StyleNode]);
         break;
       case "CAMERA":
         setNodes(prev => [...prev, { ...commonProps, type: "CAMERA" } as CameraNode]);
@@ -1562,11 +1561,11 @@ export default function EditorPage() {
                       onUpdatePosition={updateNodePosition}
                     />
                   );
-                case "BLEND":
+                case "STYLE":
                   return (
-                    <BlendNodeView
+                    <StyleNodeView
                       key={node.id}
-                      node={node as BlendNode}
+                      node={node as StyleNode}
                       onDelete={deleteNode}
                       onUpdate={updateNode}
                       onStartConnection={handleStartConnection}
@@ -1646,7 +1645,7 @@ export default function EditorPage() {
               <button className="w-full text-left px-3 py-2 text-sm hover:bg-white/10 rounded-lg" onClick={() => addFromMenu("MERGE")}>MERGE</button>
               <button className="w-full text-left px-3 py-2 text-sm hover:bg-white/10 rounded-lg" onClick={() => addFromMenu("BACKGROUND")}>BACKGROUND</button>
               <button className="w-full text-left px-3 py-2 text-sm hover:bg-white/10 rounded-lg" onClick={() => addFromMenu("CLOTHES")}>CLOTHES</button>
-              <button className="w-full text-left px-3 py-2 text-sm hover:bg-white/10 rounded-lg" onClick={() => addFromMenu("BLEND")}>BLEND</button>
+              <button className="w-full text-left px-3 py-2 text-sm hover:bg-white/10 rounded-lg" onClick={() => addFromMenu("STYLE")}>STYLE</button>
               <button className="w-full text-left px-3 py-2 text-sm hover:bg-white/10 rounded-lg" onClick={() => addFromMenu("EDIT")}>EDIT</button>
               <button className="w-full text-left px-3 py-2 text-sm hover:bg-white/10 rounded-lg" onClick={() => addFromMenu("CAMERA")}>CAMERA</button>
               <button className="w-full text-left px-3 py-2 text-sm hover:bg-white/10 rounded-lg" onClick={() => addFromMenu("AGE")}>AGE</button>
