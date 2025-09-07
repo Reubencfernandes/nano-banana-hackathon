@@ -170,6 +170,9 @@ export function BackgroundNodeView({
         {node.output && (
           <img src={node.output} className="w-full rounded" alt="Output" />
         )}
+        {node.error && (
+          <div className="text-xs text-red-400 mt-2">{node.error}</div>
+        )}
       </div>
     </div>
   );
@@ -178,8 +181,52 @@ export function BackgroundNodeView({
 export function ClothesNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition }: any) {
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
   
+  const presetClothes = [
+    { name: "Sukajan", path: "/sukajan.png" },
+    { name: "Blazer", path: "/blazzer.png" },
+  ];
+
+  const onDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    const files = e.dataTransfer.files;
+    if (files && files.length) {
+      const reader = new FileReader();
+      reader.onload = () => onUpdate(node.id, { clothesImage: reader.result, selectedPreset: null });
+      reader.readAsDataURL(files[0]);
+    }
+  };
+
+  const onPaste = async (e: React.ClipboardEvent) => {
+    const items = e.clipboardData.items;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith("image/")) {
+        const file = items[i].getAsFile();
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = () => onUpdate(node.id, { clothesImage: reader.result, selectedPreset: null });
+          reader.readAsDataURL(file);
+          return;
+        }
+      }
+    }
+    const text = e.clipboardData.getData("text");
+    if (text && (text.startsWith("http") || text.startsWith("data:image"))) {
+      onUpdate(node.id, { clothesImage: text, selectedPreset: null });
+    }
+  };
+
+  const selectPreset = (presetPath: string, presetName: string) => {
+    onUpdate(node.id, { clothesImage: presetPath, selectedPreset: presetName });
+  };
+  
   return (
-    <div className="nb-node absolute text-white w-[320px]" style={{ left: localPos.x, top: localPos.y }}>
+    <div 
+      className="nb-node absolute text-white w-[320px]" 
+      style={{ left: localPos.x, top: localPos.y }}
+      onDrop={onDrop}
+      onDragOver={(e) => e.preventDefault()}
+      onPaste={onPaste}
+    >
       <div 
         className="nb-header px-3 py-2 flex items-center justify-between rounded-t-[14px] cursor-grab active:cursor-grabbing"
         onPointerDown={onPointerDown}
@@ -194,21 +241,70 @@ export function ClothesNodeView({ node, onDelete, onUpdate, onStartConnection, o
         </div>
       </div>
       <div className="p-3 space-y-3">
-        <textarea
-          className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs"
-          placeholder="Describe the clothes (e.g., 'red t-shirt and jeans')"
-          value={node.clothesPrompt || ""}
-          onChange={(e) => onUpdate(node.id, { clothesPrompt: e.target.value })}
-          rows={2}
-        />
+        <div className="text-xs text-white/70">Clothes Reference</div>
+        
+        {/* Preset clothes options */}
+        <div className="flex gap-2">
+          {presetClothes.map((preset) => (
+            <button
+              key={preset.name}
+              className={`flex-1 p-2 rounded border ${
+                node.selectedPreset === preset.name
+                  ? "border-indigo-400 bg-indigo-500/20"
+                  : "border-white/20 hover:border-white/40"
+              }`}
+              onClick={() => selectPreset(preset.path, preset.name)}
+            >
+              <img src={preset.path} alt={preset.name} className="w-full h-16 object-cover rounded mb-1" />
+              <div className="text-xs">{preset.name}</div>
+            </button>
+          ))}
+        </div>
+        
+        <div className="text-xs text-white/50 text-center">— or —</div>
+        
+        {/* Custom image upload */}
+        {node.clothesImage && !node.selectedPreset ? (
+          <div className="relative">
+            <img src={node.clothesImage} className="w-full rounded" alt="Clothes" />
+            <button 
+              className="absolute top-2 right-2 bg-red-500/80 text-white text-xs px-2 py-1 rounded"
+              onClick={() => onUpdate(node.id, { clothesImage: null, selectedPreset: null })}
+            >
+              Remove
+            </button>
+          </div>
+        ) : !node.selectedPreset ? (
+          <label className="block">
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files?.length) {
+                  const reader = new FileReader();
+                  reader.onload = () => onUpdate(node.id, { clothesImage: reader.result, selectedPreset: null });
+                  reader.readAsDataURL(e.target.files[0]);
+                }
+              }}
+            />
+            <div className="border-2 border-dashed border-white/20 rounded-lg p-4 text-center cursor-pointer hover:border-white/40">
+              <p className="text-xs text-white/60">Drop, upload, or paste clothes image</p>
+            </div>
+          </label>
+        ) : null}
+        
         <button 
           className="w-full text-xs bg-indigo-500 hover:bg-indigo-400 rounded px-3 py-1"
           onClick={() => onProcess(node.id)}
-          disabled={node.isRunning}
+          disabled={node.isRunning || !node.clothesImage}
         >
-          {node.isRunning ? "Processing..." : "Change Clothes"}
+          {node.isRunning ? "Processing..." : "Apply Clothes"}
         </button>
         {node.output && <img src={node.output} className="w-full rounded" alt="Output" />}
+        {node.error && (
+          <div className="text-xs text-red-400 mt-2">{node.error}</div>
+        )}
       </div>
     </div>
   );
@@ -240,7 +336,7 @@ export function AgeNodeView({ node, onDelete, onUpdate, onStartConnection, onEnd
           </label>
           <input
             type="range"
-            min={1}
+            min={18}
             max={100}
             value={node.targetAge || 30}
             onChange={(e) => onUpdate(node.id, { targetAge: parseInt(e.target.value) })}
@@ -255,6 +351,9 @@ export function AgeNodeView({ node, onDelete, onUpdate, onStartConnection, onEnd
           {node.isRunning ? "Processing..." : "Apply Age"}
         </button>
         {node.output && <img src={node.output} className="w-full rounded" alt="Output" />}
+        {node.error && (
+          <div className="text-xs text-red-400 mt-2">{node.error}</div>
+        )}
       </div>
     </div>
   );
@@ -262,11 +361,11 @@ export function AgeNodeView({ node, onDelete, onUpdate, onStartConnection, onEnd
 
 export function CameraNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition }: any) {
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
-  const focalLengths = ["12mm", "24mm", "35mm", "50mm", "85mm", "135mm", "200mm"];
-  const apertures = ["f/1.2", "f/1.8", "f/2.8", "f/5.6", "f/8", "f/11", "f/16"];
-  const shutterSpeeds = ["1/8000s", "1/250s", "1/30s", "5s"];
-  const whiteBalances = ["3200K tungsten", "5600K daylight", "7000K shade"];
-  const angles = ["eye level", "low angle", "high angle", "Dutch tilt", "bird's eye"];
+  const focalLengths = ["None", "8mm fisheye", "12mm", "24mm", "35mm", "50mm", "85mm", "135mm", "200mm"];
+  const apertures = ["None", "f/1.2", "f/1.8", "f/2.8", "f/5.6", "f/8", "f/11", "f/16"];
+  const shutterSpeeds = ["None", "1/8000s", "1/250s", "1/30s", "5s"];
+  const whiteBalances = ["None", "3200K tungsten", "5600K daylight", "7000K shade"];
+  const angles = ["None", "eye level", "low angle", "high angle", "Dutch tilt", "bird's eye"];
 
   return (
     <div className="nb-node absolute text-white w-[360px]" style={{ left: localPos.x, top: localPos.y }}>
@@ -289,7 +388,7 @@ export function CameraNodeView({ node, onDelete, onUpdate, onStartConnection, on
             <label className="text-xs text-white/70">Focal Length</label>
             <select 
               className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs"
-              value={node.focalLength || "50mm"}
+              value={node.focalLength || "None"}
               onChange={(e) => onUpdate(node.id, { focalLength: e.target.value })}
             >
               {focalLengths.map(f => <option key={f} value={f}>{f}</option>)}
@@ -299,7 +398,7 @@ export function CameraNodeView({ node, onDelete, onUpdate, onStartConnection, on
             <label className="text-xs text-white/70">Aperture</label>
             <select 
               className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs"
-              value={node.aperture || "f/2.8"}
+              value={node.aperture || "None"}
               onChange={(e) => onUpdate(node.id, { aperture: e.target.value })}
             >
               {apertures.map(a => <option key={a} value={a}>{a}</option>)}
@@ -309,7 +408,7 @@ export function CameraNodeView({ node, onDelete, onUpdate, onStartConnection, on
             <label className="text-xs text-white/70">Shutter</label>
             <select 
               className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs"
-              value={node.shutterSpeed || "1/250s"}
+              value={node.shutterSpeed || "None"}
               onChange={(e) => onUpdate(node.id, { shutterSpeed: e.target.value })}
             >
               {shutterSpeeds.map(s => <option key={s} value={s}>{s}</option>)}
@@ -319,7 +418,7 @@ export function CameraNodeView({ node, onDelete, onUpdate, onStartConnection, on
             <label className="text-xs text-white/70">White Balance</label>
             <select 
               className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs"
-              value={node.whiteBalance || "5600K daylight"}
+              value={node.whiteBalance || "None"}
               onChange={(e) => onUpdate(node.id, { whiteBalance: e.target.value })}
             >
               {whiteBalances.map(w => <option key={w} value={w}>{w}</option>)}
@@ -328,10 +427,10 @@ export function CameraNodeView({ node, onDelete, onUpdate, onStartConnection, on
         </div>
         <div>
           <label className="text-xs text-white/70">Camera Angle</label>
-          <select 
-            className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs"
-            value={node.angle || "eye level"}
-            onChange={(e) => onUpdate(node.id, { angle: e.target.value })}
+            <select 
+              className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs"
+              value={node.angle || "None"}
+              onChange={(e) => onUpdate(node.id, { angle: e.target.value })}
           >
             {angles.map(a => <option key={a} value={a}>{a}</option>)}
           </select>
@@ -344,6 +443,9 @@ export function CameraNodeView({ node, onDelete, onUpdate, onStartConnection, on
           {node.isRunning ? "Processing..." : "Apply Camera Settings"}
         </button>
         {node.output && <img src={node.output} className="w-full rounded mt-2" alt="Output" />}
+        {node.error && (
+          <div className="text-xs text-red-400 mt-2">{node.error}</div>
+        )}
       </div>
     </div>
   );
@@ -351,9 +453,9 @@ export function CameraNodeView({ node, onDelete, onUpdate, onStartConnection, on
 
 export function FaceNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition }: any) {
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
-  const hairstyles = ["short", "long", "curly", "straight", "bald", "mohawk", "ponytail"];
-  const expressions = ["happy", "serious", "smiling", "laughing", "sad", "surprised", "angry"];
-  const beardStyles = ["none", "stubble", "goatee", "full beard", "mustache", "clean shaven"];
+  const hairstyles = ["None", "short", "long", "curly", "straight", "bald", "mohawk", "ponytail"];
+  const expressions = ["None", "happy", "serious", "smiling", "laughing", "sad", "surprised", "angry"];
+  const beardStyles = ["None", "stubble", "goatee", "full beard", "mustache", "clean shaven"];
 
   return (
     <div className="nb-node absolute text-white w-[340px]" style={{ left: localPos.x, top: localPos.y }}>
@@ -408,12 +510,11 @@ export function FaceNodeView({ node, onDelete, onUpdate, onStartConnection, onEn
           <label className="text-xs text-white/70">Hairstyle</label>
           <select 
             className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs"
-            value={node.faceOptions?.changeHairstyle || ""}
+            value={node.faceOptions?.changeHairstyle || "None"}
             onChange={(e) => onUpdate(node.id, { 
               faceOptions: { ...node.faceOptions, changeHairstyle: e.target.value }
             })}
           >
-            <option value="">Keep current</option>
             {hairstyles.map(h => <option key={h} value={h}>{h}</option>)}
           </select>
         </div>
@@ -422,12 +523,11 @@ export function FaceNodeView({ node, onDelete, onUpdate, onStartConnection, onEn
           <label className="text-xs text-white/70">Expression</label>
           <select 
             className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs"
-            value={node.faceOptions?.facialExpression || ""}
+            value={node.faceOptions?.facialExpression || "None"}
             onChange={(e) => onUpdate(node.id, { 
               faceOptions: { ...node.faceOptions, facialExpression: e.target.value }
             })}
           >
-            <option value="">Keep current</option>
             {expressions.map(e => <option key={e} value={e}>{e}</option>)}
           </select>
         </div>
@@ -436,12 +536,11 @@ export function FaceNodeView({ node, onDelete, onUpdate, onStartConnection, onEn
           <label className="text-xs text-white/70">Beard</label>
           <select 
             className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs"
-            value={node.faceOptions?.beardStyle || ""}
+            value={node.faceOptions?.beardStyle || "None"}
             onChange={(e) => onUpdate(node.id, { 
               faceOptions: { ...node.faceOptions, beardStyle: e.target.value }
             })}
           >
-            <option value="">Keep current</option>
             {beardStyles.map(b => <option key={b} value={b}>{b}</option>)}
           </select>
         </div>
@@ -454,6 +553,9 @@ export function FaceNodeView({ node, onDelete, onUpdate, onStartConnection, onEn
           {node.isRunning ? "Processing..." : "Apply Face Changes"}
         </button>
         {node.output && <img src={node.output} className="w-full rounded mt-2" alt="Output" />}
+        {node.error && (
+          <div className="text-xs text-red-400 mt-2">{node.error}</div>
+        )}
       </div>
     </div>
   );
@@ -462,8 +564,43 @@ export function FaceNodeView({ node, onDelete, onUpdate, onStartConnection, onEn
 export function BlendNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition }: any) {
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
   
+  const onDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    const files = e.dataTransfer.files;
+    if (files && files.length) {
+      const reader = new FileReader();
+      reader.onload = () => onUpdate(node.id, { styleImage: reader.result });
+      reader.readAsDataURL(files[0]);
+    }
+  };
+
+  const onPaste = async (e: React.ClipboardEvent) => {
+    const items = e.clipboardData.items;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith("image/")) {
+        const file = items[i].getAsFile();
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = () => onUpdate(node.id, { styleImage: reader.result });
+          reader.readAsDataURL(file);
+          return;
+        }
+      }
+    }
+    const text = e.clipboardData.getData("text");
+    if (text && (text.startsWith("http") || text.startsWith("data:image"))) {
+      onUpdate(node.id, { styleImage: text });
+    }
+  };
+  
   return (
-    <div className="nb-node absolute text-white w-[300px]" style={{ left: localPos.x, top: localPos.y }}>
+    <div 
+      className="nb-node absolute text-white w-[320px]" 
+      style={{ left: localPos.x, top: localPos.y }}
+      onDrop={onDrop}
+      onDragOver={(e) => e.preventDefault()}
+      onPaste={onPaste}
+    >
       <div 
         className="nb-header px-3 py-2 flex items-center justify-between rounded-t-[14px] cursor-grab active:cursor-grabbing"
         onPointerDown={onPointerDown}
@@ -478,13 +615,36 @@ export function BlendNodeView({ node, onDelete, onUpdate, onStartConnection, onE
         </div>
       </div>
       <div className="p-3 space-y-3">
-        <textarea
-          className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs"
-          placeholder="Style to blend (e.g., 'oil painting', 'watercolor', 'anime')"
-          value={node.stylePrompt || ""}
-          onChange={(e) => onUpdate(node.id, { stylePrompt: e.target.value })}
-          rows={2}
-        />
+        <div className="text-xs text-white/70">Style Reference Image</div>
+        {node.styleImage ? (
+          <div className="relative">
+            <img src={node.styleImage} className="w-full rounded" alt="Style" />
+            <button 
+              className="absolute top-2 right-2 bg-red-500/80 text-white text-xs px-2 py-1 rounded"
+              onClick={() => onUpdate(node.id, { styleImage: null })}
+            >
+              Remove
+            </button>
+          </div>
+        ) : (
+          <label className="block">
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files?.length) {
+                  const reader = new FileReader();
+                  reader.onload = () => onUpdate(node.id, { styleImage: reader.result });
+                  reader.readAsDataURL(e.target.files[0]);
+                }
+              }}
+            />
+            <div className="border-2 border-dashed border-white/20 rounded-lg p-4 text-center cursor-pointer hover:border-white/40">
+              <p className="text-xs text-white/60">Drop, upload, or paste style image</p>
+            </div>
+          </label>
+        )}
         <div>
           <label className="flex items-center justify-between text-xs text-white/70 mb-1">
             <span>Blend Strength</span>
@@ -502,11 +662,14 @@ export function BlendNodeView({ node, onDelete, onUpdate, onStartConnection, onE
         <button 
           className="w-full text-xs bg-indigo-500 hover:bg-indigo-400 rounded px-3 py-1"
           onClick={() => onProcess(node.id)}
-          disabled={node.isRunning}
+          disabled={node.isRunning || !node.styleImage}
         >
-          {node.isRunning ? "Processing..." : "Apply Blend"}
+          {node.isRunning ? "Processing..." : "Apply Style"}
         </button>
         {node.output && <img src={node.output} className="w-full rounded" alt="Output" />}
+        {node.error && (
+          <div className="text-xs text-red-400 mt-2">{node.error}</div>
+        )}
       </div>
     </div>
   );

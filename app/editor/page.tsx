@@ -651,12 +651,17 @@ export default function EditorPage() {
   // Process node with API
   const processNode = async (nodeId: string) => {
     const node = nodes.find(n => n.id === nodeId);
-    if (!node) return;
+    if (!node) {
+      console.error("Node not found:", nodeId);
+      return;
+    }
 
     // Get input image
     let inputImage: string | null = null;
-    if ((node as any).input) {
-      const inputNode = nodes.find(n => n.id === (node as any).input);
+    const inputId = (node as any).input;
+    
+    if (inputId) {
+      const inputNode = nodes.find(n => n.id === inputId);
       if (inputNode) {
         if (inputNode.type === "CHARACTER") {
           inputImage = (inputNode as CharacterNode).image;
@@ -667,11 +672,16 @@ export default function EditorPage() {
     }
 
     if (!inputImage) {
+      const errorMsg = inputId 
+        ? "Connected node has no output image. Process the previous node first."
+        : "No input connected. Connect an image source to this node.";
       setNodes(prev => prev.map(n => 
-        n.id === nodeId ? { ...n, error: "No input image connected" } : n
+        n.id === nodeId ? { ...n, error: errorMsg, isRunning: false } : n
       ));
       return;
     }
+
+    console.log("Processing node:", node.type, "with image:", inputImage.substring(0, 50) + "...");
 
     // Set loading state
     setNodes(prev => prev.map(n => 

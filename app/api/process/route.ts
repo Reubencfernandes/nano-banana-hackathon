@@ -29,9 +29,27 @@ export async function POST(req: NextRequest) {
     const ai = new GoogleGenAI({ apiKey });
     
     // Parse input image
-    const parsed = parseDataUrl(body.image);
+    let parsed = null;
+    if (body.image) {
+      if (body.image.startsWith('data:')) {
+        // It's already a data URL
+        parsed = parseDataUrl(body.image);
+      } else if (body.image.startsWith('http')) {
+        // It's an HTTP URL, we need to fetch and convert it
+        try {
+          const imageResponse = await fetch(body.image);
+          const arrayBuffer = await imageResponse.arrayBuffer();
+          const base64 = Buffer.from(arrayBuffer).toString('base64');
+          const mimeType = imageResponse.headers.get('content-type') || 'image/jpeg';
+          parsed = { mimeType, data: base64 };
+        } catch (e) {
+          return NextResponse.json({ error: "Failed to fetch image from URL" }, { status: 400 });
+        }
+      }
+    }
+    
     if (!parsed) {
-      return NextResponse.json({ error: "Invalid image data" }, { status: 400 });
+      return NextResponse.json({ error: "Invalid or missing image data. Please ensure an input is connected." }, { status: 400 });
     }
 
     let prompt = "";
