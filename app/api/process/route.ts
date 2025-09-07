@@ -104,12 +104,30 @@ export async function POST(req: NextRequest) {
       if (clothesRef) referenceParts.push({ inlineData: clothesRef });
     }
     
-    // Style blending
-    if (params.styleImage) {
-      const strength = params.blendStrength || 50;
-      prompts.push(`Apply artistic style blending using the provided style reference image (attached below) at ${strength}% strength.`);
-      const styleRef = await toInlineDataFromAny(params.styleImage);
-      if (styleRef) referenceParts.push({ inlineData: styleRef });
+    // Style application
+    if (params.stylePreset) {
+      const strength = params.styleStrength || 50;
+      const styleMap: { [key: string]: string } = {
+        "90s-anime": "Convert the image to 90's anime art style with classic anime features: large expressive eyes, detailed hair, soft shading, nostalgic colors reminiscent of Studio Ghibli and classic anime productions",
+        "mha": "Transform the image into My Hero Academia anime style with modern crisp lines, vibrant colors, dynamic character design, and heroic aesthetics typical of the series",
+        "dbz": "Apply Dragon Ball Z anime style with sharp angular features, spiky hair, intense expressions, bold outlines, high contrast shading, and dramatic action-oriented aesthetics",
+        "ukiyo-e": "Render in traditional Japanese Ukiyo-e woodblock print style with flat colors, bold outlines, stylized waves and clouds, traditional Japanese artistic elements",
+        "cyberpunk": "Transform into cyberpunk aesthetic with neon colors (cyan, magenta, yellow), dark backgrounds, futuristic elements, holographic effects, tech-noir atmosphere",
+        "steampunk": "Apply steampunk style with Victorian-era brass and copper tones, mechanical gears, steam effects, vintage industrial aesthetic, sepia undertones",
+        "cubism": "Render in Cubist art style with geometric fragmentation, multiple perspectives shown simultaneously, abstract angular forms, Picasso-inspired decomposition",
+        "van-gogh": "Apply Post-Impressionist Van Gogh style with thick swirling brushstrokes, vibrant yellows and blues, expressive texture, starry night-like patterns",
+        "simpsons": "Convert to The Simpsons cartoon style with yellow skin tones, simple rounded features, bulging eyes, overbite, Matt Groening's distinctive character design",
+        "family-guy": "Transform into Family Guy animation style with rounded character design, simplified features, Seth MacFarlane's distinctive art style, bold outlines",
+        "arcane": "Apply Arcane (League of Legends) style with painterly brush-stroke textures, neon rim lighting, hand-painted feel, stylized realism, vibrant color grading",
+        "wildwest": "Render in Wild West style with dusty desert tones, sunset orange lighting, vintage film grain, cowboy aesthetic, sepia and brown color palette",
+        "stranger-things": "Apply Stranger Things 80s aesthetic with Kodak film push-process look, neon magenta backlight, grainy vignette, retro sci-fi horror atmosphere",
+        "breaking-bad": "Transform with Breaking Bad cinematography style featuring dusty New Mexico orange and teal color grading, 35mm film grain, desert atmosphere, dramatic lighting"
+      };
+      
+      const styleDescription = styleMap[params.stylePreset];
+      if (styleDescription) {
+        prompts.push(`${styleDescription}. Apply this style transformation at ${strength}% intensity while preserving the core subject matter.`);
+      }
     }
     
     // Edit prompt
