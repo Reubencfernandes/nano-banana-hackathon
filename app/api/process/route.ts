@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
     // Style blending
     if (params.styleImage) {
       const strength = params.blendStrength || 50;
-      prompts.push(`Apply artistic style blending using the provided style reference image (attached below) at ${strength}% strength.`);
+      prompts.push(`Apply artistic style transfer: Take the visual style, colors, textures, and artistic techniques from the provided style reference image (attached below) and apply them to the main subject image. Blend at ${strength}% strength - at 100% the output should look like it was painted/created in the exact style of the reference, at 0% it should look unchanged. Preserve the content and structure of the original image while adopting the artistic style.`);
       const styleRef = await toInlineDataFromAny(params.styleImage);
       if (styleRef) referenceParts.push({ inlineData: styleRef });
     }
