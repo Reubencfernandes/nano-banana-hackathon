@@ -40,8 +40,39 @@
   --chart-5: 27 87% 67%;
 }
 
+.dark {
+  --background: 240 10% 3.9%;
+  --foreground: 0 0% 98%;
+
+  --card: 240 10% 3.9%;
+  --card-foreground: 0 0% 98%;
+
+  --popover: 240 10% 3.9%;
+  --popover-foreground: 0 0% 98%;
+
+  /* Brand in dark mode */
+  --primary: 14 87% 60%;
+  --primary-foreground: 240 10% 3.9%;
+
+  --secondary: 240 3.7% 15.9%;
+  --secondary-foreground: 0 0% 98%;
+
+  --muted: 240 3.7% 15.9%;
+  --muted-foreground: 240 5% 64.9%;
+
+  --accent: 14 40% 20%;
+  --accent-foreground: 0 0% 98%;
+
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 0 85.7% 97.3%;
+
+  --border: 240 3.7% 15.9%;
+  --input: 240 3.7% 15.9%;
+  --ring: 14 87% 55%;
+}
+
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not(.light) {
     --background: 240 10% 3.9%;
     --foreground: 0 0% 98%;
 
@@ -146,6 +177,19 @@ body {
   backface-visibility: hidden;
   perspective: 1000px;
 }
+
+/* Prevent text selection on node elements except inputs */
+.nb-node * {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.nb-node input,
+.nb-node textarea,
+.nb-node select {
+  user-select: text;
+  -webkit-user-select: text;
+}
 .nb-node .nb-header {
   background: linear-gradient(to bottom, hsl(var(--muted) / 0.35), hsl(var(--muted) / 0.08));
 }
@@ -158,6 +202,8 @@ body {
   cursor: crosshair;
   transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
   position: relative;
+  user-select: none;
+  -webkit-user-select: none;
 }
 .nb-port:hover {
   transform: scale(1.25);

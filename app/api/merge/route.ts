@@ -60,25 +60,34 @@ export async function POST(req: NextRequest) {
     let prompt = body.prompt;
     
     if (!prompt) {
-      prompt = `MERGE TASK: You are provided with exactly ${imgs.length} source images.
+      prompt = `MERGE TASK: Create a natural, cohesive group photo combining ALL subjects from ${imgs.length} provided images.
 
-INSTRUCTIONS:
-1. EXTRACT the exact people/subjects from EACH provided image  
-2. DO NOT generate new people - use ONLY the people visible in the provided images
-3. COMBINE all extracted people into ONE single group photo
-4. The output must contain ALL people from ALL ${imgs.length} input images together
+CRITICAL REQUIREMENTS:
+1. Extract ALL people/subjects from EACH image exactly as they appear
+2. Place them together in a SINGLE UNIFIED SCENE with:
+   - Consistent lighting direction and color temperature
+   - Matching shadows and ambient lighting  
+   - Proper scale relationships (realistic relative sizes)
+   - Natural spacing as if they were photographed together
+   - Shared environment/background that looks cohesive
 
-Requirements:
-- Use the ACTUAL people from the provided images (do not create new ones)
-- If an image has multiple people, include ALL of them  
-- Arrange everyone naturally in the same scene
-- Match lighting and proportions realistically
-- Output exactly ONE image with everyone combined
+3. Composition guidelines:
+   - Arrange subjects at similar depth (not one far behind another)
+   - Use natural group photo positioning (slight overlap is ok)
+   - Ensure all faces are clearly visible
+   - Create visual balance in the composition
+   - Apply consistent color grading across all subjects
 
-DO NOT create artistic interpretations or new people. EXTRACT and COMBINE the actual subjects from the provided photographs.`;
+4. Environmental unity:
+   - Use a single, coherent background for all subjects
+   - Match the perspective as if taken with one camera
+   - Ensure ground plane continuity (all standing on same level)
+   - Apply consistent atmospheric effects (if any)
+
+The result should look like all subjects were photographed together in the same place at the same time, NOT like separate images placed side by side.`;
     } else {
-      // Even with custom prompt, append extraction requirements
-      const enforcement = `\n\nIMPORTANT: Extract and use the EXACT people from the provided images. Do not generate new people or artistic interpretations. Combine the actual subjects from all ${imgs.length} images into one output.`;
+      // Even with custom prompt, append cohesion requirements
+      const enforcement = `\n\nIMPORTANT: Create a COHESIVE group photo where all subjects appear to be in the same scene with consistent lighting, scale, and environment. The result should look naturally photographed together, not composited.`;
       prompt = `${prompt}${enforcement}`;
     }
 

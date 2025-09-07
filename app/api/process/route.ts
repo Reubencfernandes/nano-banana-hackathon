@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
     // Style blending
     if (params.styleImage) {
       const strength = params.blendStrength || 50;
-      prompts.push(`Apply artistic style transfer: Take the visual style, colors, textures, and artistic techniques from the provided style reference image (attached below) and apply them to the main subject image. Blend at ${strength}% strength - at 100% the output should look like it was painted/created in the exact style of the reference, at 0% it should look unchanged. Preserve the content and structure of the original image while adopting the artistic style.`);
+      prompts.push(`Apply artistic style blending using the provided style reference image (attached below) at ${strength}% strength.`);
       const styleRef = await toInlineDataFromAny(params.styleImage);
       if (styleRef) referenceParts.push({ inlineData: styleRef });
     }
@@ -119,7 +119,7 @@ export async function POST(req: NextRequest) {
     
     // Camera settings
     if (params.focalLength || params.aperture || params.shutterSpeed || params.whiteBalance || params.angle || 
-        params.iso || params.filmStyle || params.lighting || params.bokeh || params.composition || params.aspectRatio) {
+        params.iso || params.filmStyle || params.lighting || params.bokeh || params.composition) {
       const cameraSettings: string[] = [];
       if (params.focalLength) {
         if (params.focalLength === "8mm fisheye") {
@@ -137,7 +137,6 @@ export async function POST(req: NextRequest) {
       if (params.lighting) cameraSettings.push(`Lighting: ${params.lighting}`);
       if (params.bokeh) cameraSettings.push(`Bokeh effect: ${params.bokeh}`);
       if (params.composition) cameraSettings.push(`Composition: ${params.composition}`);
-      if (params.aspectRatio) cameraSettings.push(`Aspect Ratio: ${params.aspectRatio}`);
       
       if (cameraSettings.length > 0) {
         prompts.push(`Apply professional photography settings: ${cameraSettings.join(", ")}`);
