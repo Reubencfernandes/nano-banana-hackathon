@@ -206,7 +206,7 @@ export default function TryOnPage() {
   };
 
   return (
-    <div className="min-h-[100svh] bg-black text-white">
+    <div className="min-h-[100svh] bg-background text-foreground">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10">
         {/* Header */}
         <div className="flex items-center justify-between mb-10">

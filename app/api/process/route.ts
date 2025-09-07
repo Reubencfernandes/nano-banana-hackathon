@@ -28,24 +28,40 @@ export async function POST(req: NextRequest) {
 
     const ai = new GoogleGenAI({ apiKey });
     
-    // Parse input image
-    let parsed = null;
-    if (body.image) {
-      if (body.image.startsWith('data:')) {
-        // It's already a data URL
-        parsed = parseDataUrl(body.image);
-      } else if (body.image.startsWith('http')) {
-        // It's an HTTP URL, we need to fetch and convert it
-        try {
-          const imageResponse = await fetch(body.image);
-          const arrayBuffer = await imageResponse.arrayBuffer();
-          const base64 = Buffer.from(arrayBuffer).toString('base64');
-          const mimeType = imageResponse.headers.get('content-type') || 'image/jpeg';
-          parsed = { mimeType, data: base64 };
-        } catch (e) {
-          return NextResponse.json({ error: "Failed to fetch image from URL" }, { status: 400 });
+    // Helpers
+    const toInlineDataFromAny = async (url: string): Promise<{ mimeType: string; data: string } | null> => {
+      if (!url) return null;
+      try {
+        if (url.startsWith('data:')) {
+          return parseDataUrl(url);
         }
+        if (url.startsWith('http')) {
+          const res = await fetch(url);
+          const buf = await res.arrayBuffer();
+          const base64 = Buffer.from(buf).toString('base64');
+          const mimeType = res.headers.get('content-type') || 'image/jpeg';
+          return { mimeType, data: base64 };
+        }
+        if (url.startsWith('/')) {
+          const host = req.headers.get('host') ?? 'localhost:3000';
+          const proto = req.headers.get('x-forwarded-proto') ?? 'http';
+          const absolute = `${proto}://${host}${url}`;
+          const res = await fetch(absolute);
+          const buf = await res.arrayBuffer();
+          const base64 = Buffer.from(buf).toString('base64');
+          const mimeType = res.headers.get('content-type') || 'image/png';
+          return { mimeType, data: base64 };
+        }
+        return null;
+      } catch {
+        return null;
       }
+    };
+
+    // Parse input image
+    let parsed = null as null | { mimeType: string; data: string };
+    if (body.image) {
+      parsed = await toInlineDataFromAny(body.image);
     }
     
     if (!parsed) {
@@ -55,6 +71,9 @@ export async function POST(req: NextRequest) {
     // Build combined prompt from all accumulated parameters
     const prompts: string[] = [];
     const params = body.params || {};
+
+    // We'll collect additional inline image parts (references)
+    const referenceParts: { inlineData: { mimeType: string; data: string } }[] = [];
     
     // Background modifications
     if (params.backgroundType) {
@@ -64,7 +83,9 @@ export async function POST(req: NextRequest) {
       } else if (bgType === "image") {
         prompts.push(`Change the background to ${params.backgroundImage || "a beautiful beach scene"}.`);
       } else if (bgType === "upload" && params.customBackgroundImage) {
-        prompts.push(`Replace the background with the uploaded custom background image, ensuring proper lighting and perspective matching.`);
+        prompts.push(`Replace the background using the provided custom background reference image (attached below). Ensure perspective and lighting match.`);
+        const bgRef = await toInlineDataFromAny(params.customBackgroundImage);
+        if (bgRef) referenceParts.push({ inlineData: bgRef });
       } else if (params.customPrompt) {
         prompts.push(params.customPrompt);
       }
@@ -72,21 +93,23 @@ export async function POST(req: NextRequest) {
     
     // Clothes modifications
     if (params.clothesImage) {
-      // If clothesImage is provided, we need to handle it differently
-      // For now, we'll create a descriptive prompt
       if (params.selectedPreset === "Sukajan") {
-        prompts.push("Change the person's clothes to a Japanese sukajan jacket with embroidered designs.");
+        prompts.push("Replace the person's clothing with a Japanese sukajan jacket (embroidered designs). Use the clothes reference image if provided.");
       } else if (params.selectedPreset === "Blazer") {
-        prompts.push("Change the person's clothes to a professional blazer.");
-      } else if (params.clothesImage.startsWith('data:') || params.clothesImage.startsWith('http')) {
-        prompts.push("Change the person's clothes to match the provided reference image style.");
+        prompts.push("Replace the person's clothing with a professional blazer. Use the clothes reference image if provided.");
+      } else {
+        prompts.push("Replace the person's clothing to match the provided clothes reference image (attached below). Preserve body pose and identity.");
       }
+      const clothesRef = await toInlineDataFromAny(params.clothesImage);
+      if (clothesRef) referenceParts.push({ inlineData: clothesRef });
     }
     
     // Style blending
     if (params.styleImage) {
       const strength = params.blendStrength || 50;
-      prompts.push(`Apply artistic style blending at ${strength}% strength.`);
+      prompts.push(`Apply artistic style blending using the provided style reference image (attached below) at ${strength}% strength.`);
+      const styleRef = await toInlineDataFromAny(params.styleImage);
+      if (styleRef) referenceParts.push({ inlineData: styleRef });
     }
     
     // Edit prompt
@@ -96,7 +119,7 @@ export async function POST(req: NextRequest) {
     
     // Camera settings
     if (params.focalLength || params.aperture || params.shutterSpeed || params.whiteBalance || params.angle || 
-        params.iso || params.filmStyle || params.lighting || params.bokeh || params.composition) {
+        params.iso || params.filmStyle || params.lighting || params.bokeh || params.composition || params.aspectRatio) {
       const cameraSettings: string[] = [];
       if (params.focalLength) {
         if (params.focalLength === "8mm fisheye") {
@@ -114,6 +137,7 @@ export async function POST(req: NextRequest) {
       if (params.lighting) cameraSettings.push(`Lighting: ${params.lighting}`);
       if (params.bokeh) cameraSettings.push(`Bokeh effect: ${params.bokeh}`);
       if (params.composition) cameraSettings.push(`Composition: ${params.composition}`);
+      if (params.aspectRatio) cameraSettings.push(`Aspect Ratio: ${params.aspectRatio}`);
       
       if (cameraSettings.length > 0) {
         prompts.push(`Apply professional photography settings: ${cameraSettings.join(", ")}`);
@@ -154,7 +178,10 @@ export async function POST(req: NextRequest) {
     // Generate with Gemini
     const parts = [
       { text: prompt },
-      { inlineData: { mimeType: parsed.mimeType, data: parsed.data } }
+      // Primary subject image (input)
+      { inlineData: { mimeType: parsed.mimeType, data: parsed.data } },
+      // Additional reference images to guide modifications
+      ...referenceParts,
     ];
 
     const response = await ai.models.generateContent({

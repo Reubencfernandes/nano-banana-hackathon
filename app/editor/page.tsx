@@ -10,6 +10,7 @@ import {
   AgeNodeView,
   FaceNodeView
 } from "./nodes";
+import { Button } from "../../components/ui/button";
 
 function cx(...args: Array<string | false | null | undefined>) {
   return args.filter(Boolean).join(" ");
@@ -22,19 +23,27 @@ const uid = () => Math.random().toString(36).slice(2, 9);
 function generateMergePrompt(characterData: { image: string; label: string }[]): string {
   const count = characterData.length;
   
-  if (count === 2) {
-    return `You are provided with 2 images. Each image may contain one or more people. Create a single new photorealistic image that combines ALL people from BOTH images into one scene. If image 1 has multiple people, include all of them. If image 2 has multiple people, include all of them. Place everyone together in the same scene, standing side by side or in a natural group arrangement. Ensure all people are clearly visible with consistent lighting, proper sizing, and natural shadows. The result should look like a genuine group photo.`;
-  }
+  const labels = characterData.map((d, i) => `Image ${i + 1} (${d.label})`).join(", ");
   
-  return `You are provided with ${count} images. Each image may contain one or more people. Create a single new photorealistic image that combines ALL people from ALL ${count} images into one comprehensive group photo. 
-  
-  Important instructions:
-  - Include EVERY person from EVERY input image
-  - If an image has multiple people, include all of them
-  - Arrange everyone in a natural group formation
-  - Ensure all people are clearly visible and recognizable
-  - Match lighting, shadows, and proportions realistically
-  - The final image should look like an authentic group photo with everyone together`;
+  return `MERGE TASK: You are provided with exactly ${count} source images.
+
+Images provided:
+${characterData.map((d, i) => `- Image ${i + 1}: ${d.label}`).join("\n")}
+
+INSTRUCTIONS:
+1. EXTRACT the exact people/subjects from EACH provided image
+2. DO NOT generate new people - use ONLY the people visible in the provided images
+3. COMBINE all extracted people into ONE single group photo
+4. The output must contain ALL people from ALL ${count} input images together
+
+Requirements:
+- Use the ACTUAL people from the provided images (do not create new ones)
+- If an image has multiple people, include ALL of them
+- Arrange everyone naturally in the same scene
+- Match lighting and proportions realistically
+- Output exactly ONE image with everyone combined
+
+DO NOT create artistic interpretations or new people. EXTRACT and COMBINE the actual subjects from the provided photographs.`;
 }
 
 // Types
@@ -56,7 +65,7 @@ type CharacterNode = NodeBase & {
 type MergeNode = NodeBase & {
   type: "MERGE";
   inputs: string[]; // node ids
-  output?: string; // data URL from merge
+  output?: string | null; // data URL from merge
   isRunning?: boolean;
   error?: string | null;
 };
@@ -119,6 +128,7 @@ type CameraNode = NodeBase & {
   lighting?: string;
   bokeh?: string;
   composition?: string;
+  aspectRatio?: string;
   isRunning?: boolean;
   error?: string | null;
 };
@@ -333,18 +343,19 @@ function CharacterNodeView({
           onChange={(e) => onChangeLabel(node.id, e.target.value)}
         />
         <div className="flex items-center gap-2">
-          <button
-            className="text-2xl leading-none font-bold text-red-400 hover:text-red-300 opacity-50 hover:opacity-100 transition-all hover:scale-110 px-1"
+          <Button 
+            variant="ghost" size="icon" className="text-destructive"
             onClick={(e) => {
               e.stopPropagation();
-              if (confirm(`Delete ${node.label || 'CHARACTER'} node?`)) {
+              if (confirm('Delete MERGE node?')) {
                 onDelete(node.id);
               }
             }}
             title="Delete node"
+            aria-label="Delete node"
           >
             ×
-          </button>
+          </Button>
           <Port 
             className="out" 
             nodeId={node.id}
@@ -354,11 +365,11 @@ function CharacterNodeView({
         </div>
       </div>
       <div className="p-3 space-y-3">
-        <div className="aspect-[4/5] w-full overflow-hidden rounded-xl bg-black/40 grid place-items-center">
+        <div className="aspect-[4/5] w-full rounded-xl bg-black/40 grid place-items-center overflow-hidden">
           <img
             src={node.image}
             alt="character"
-            className="h-full w-full object-cover"
+            className="h-full w-full object-contain"
             draggable={false}
           />
         </div>
@@ -433,7 +444,7 @@ function MergeNodeView({
 
 
   return (
-    <div className="nb-node absolute text-white w-[380px]" style={{ left: pos.x, top: pos.y }}>
+    <div className="nb-node absolute text-white w-[420px]" style={{ left: pos.x, top: pos.y }}>
       <div
         className="nb-header cursor-grab active:cursor-grabbing rounded-t-[14px] px-3 py-2 flex items-center justify-between"
         onPointerDown={onPointerDown}
@@ -476,8 +487,8 @@ function MergeNodeView({
             if (!c) return null;
             return (
               <div key={id} className="flex items-center gap-2 bg-white/10 rounded px-2 py-1">
-                <div className="w-6 h-6 rounded overflow-hidden">
-                  <img src={c.image} className="w-full h-full object-cover" alt="inp" />
+                <div className="w-6 h-6 rounded overflow-hidden bg-black/20">
+                  <img src={c.image} className="w-full h-full object-contain" alt="inp" />
                 </div>
                 <span className="text-xs">{c.label || `Character ${id.slice(-3)}`}</span>
                 <button
@@ -495,35 +506,37 @@ function MergeNodeView({
         )}
         <div className="flex items-center gap-2">
           {node.inputs.length > 0 && (
-            <button
-              className="text-xs bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded px-3 py-1"
+            <Button
+              variant="destructive"
+              size="sm"
               onClick={() => onClearConnections(node.id)}
               title="Clear all connections"
             >
               Clear
-            </button>
+            </Button>
           )}
-          <button
-            className="text-xs bg-indigo-500 hover:bg-indigo-400 rounded px-3 py-1 disabled:opacity-60"
+          <Button
+            size="sm"
             onClick={() => onRun(node.id)}
             disabled={node.isRunning || node.inputs.length < 2}
           >
             {node.isRunning ? "Merging…" : "Merge"}
-          </button>
+          </Button>
         </div>
 
         <div className="mt-2">
           <div className="text-xs text-white/70 mb-1">Output</div>
-          <div className="aspect-[4/3] w-full overflow-hidden rounded-xl bg-black/40 grid place-items-center">
+          <div className="w-full min-h-[200px] max-h-[400px] rounded-xl bg-black/40 grid place-items-center">
             {node.output ? (
-              <img src={node.output} className="w-full h-full object-contain" alt="output" />
+              <img src={node.output} className="w-full h-auto max-h-[400px] object-contain rounded-xl" alt="output" />
             ) : (
-              <span className="text-white/40 text-xs">Run merge to see result</span>
+              <span className="text-white/40 text-xs py-16">Run merge to see result</span>
             )}
           </div>
           {node.output && (
-            <button
-              className="w-full text-xs bg-green-600 hover:bg-green-500 rounded px-3 py-1 mt-2 transition-all"
+            <Button
+              className="w-full mt-2"
+              variant="secondary"
               onClick={() => {
                 const link = document.createElement('a');
                 link.href = node.output as string;
@@ -534,7 +547,7 @@ function MergeNodeView({
               }}
             >
               📥 Download Merged Image
-            </button>
+            </Button>
           )}
           {node.error && (
             <div className="mt-2">
@@ -758,6 +771,7 @@ export default function EditorPage() {
         if (cam.lighting && cam.lighting !== "None") config.lighting = cam.lighting;
         if (cam.bokeh && cam.bokeh !== "None") config.bokeh = cam.bokeh;
         if (cam.composition && cam.composition !== "None") config.composition = cam.composition;
+        if (cam.aspectRatio && cam.aspectRatio !== "None") config.aspectRatio = cam.aspectRatio;
         break;
       case "AGE":
         if ((node as AgeNode).targetAge) {
@@ -823,7 +837,7 @@ export default function EditorPage() {
         
         // If this is a MERGE node with output, return its output
         if (currentNode.type === "MERGE" && (currentNode as MergeNode).output) {
-          return (currentNode as MergeNode).output;
+          return (currentNode as MergeNode).output || null;
         }
         
         // If any node has been processed, return its output
@@ -1125,16 +1139,33 @@ export default function EditorPage() {
       // Get character nodes with their labels
       const characterData = merge.inputs
         .map((id, index) => {
-          const char = nodes.find((c) => c.id === id) as CharacterNode | undefined;
+          const char = nodes.find((c) => c.id === id);
           if (!char) return null;
-          return {
-            image: char.image,
-            label: char.label || `CHARACTER${index + 1}`
-          };
+          
+          // Support both CHARACTER nodes and any node with output
+          let image: string | null = null;
+          let label = "";
+          
+          if (char.type === "CHARACTER") {
+            image = (char as CharacterNode).image;
+            label = (char as CharacterNode).label || `CHARACTER${index + 1}`;
+          } else if ((char as any).output) {
+            // If it's a processed node, use its output
+            image = (char as any).output;
+            label = `Input ${index + 1}`;
+          }
+          
+          if (!image) return null;
+          
+          return { image, label };
         })
         .filter(Boolean) as { image: string; label: string }[];
       
       if (characterData.length < 2) throw new Error("Connect at least two CHARACTER nodes.");
+      
+      // Debug: Log what we're sending
+      console.log("🔄 Merging nodes:", characterData.map(d => d.label).join(", "));
+      console.log("📷 Image URLs being sent:", characterData.map(d => d.image.substring(0, 100) + "..."));
       
       // Generate dynamic prompt based on number of inputs
       const prompt = generateMergePrompt(characterData);
@@ -1162,13 +1193,30 @@ export default function EditorPage() {
     }
   };
 
+  // Calculate SVG bounds for connection lines
+  const svgBounds = useMemo(() => {
+    let minX = 0, minY = 0, maxX = 1000, maxY = 1000;
+    nodes.forEach(node => {
+      minX = Math.min(minX, node.x - 100);
+      minY = Math.min(minY, node.y - 100);
+      maxX = Math.max(maxX, node.x + 500);
+      maxY = Math.max(maxY, node.y + 500);
+    });
+    return { 
+      x: minX, 
+      y: minY, 
+      width: maxX - minX, 
+      height: maxY - minY 
+    };
+  }, [nodes]);
+
   // Connection paths with bezier curves
   const connectionPaths = useMemo(() => {
     const getNodeOutputPort = (n: AnyNode) => {
       // Different nodes have different widths
       const widths: Record<string, number> = {
         CHARACTER: 340,
-        MERGE: 380,
+        MERGE: 420,
         BACKGROUND: 320,
         CLOTHES: 320,
         BLEND: 320,
@@ -1326,13 +1374,9 @@ export default function EditorPage() {
   };
 
   return (
-    <div className="min-h-[100svh] bg-[#0b0b0b] text-white">
-      <header className="flex items-center justify-between px-6 py-4 border-b border-white/10">
-        <h1 className="text-lg font-semibold tracking-wide">Nano Banana Editor</h1>
-        <div className="flex items-center gap-2">
-          <button className="text-xs bg-white/10 hover:bg-white/20 rounded px-3 py-1" onClick={() => addCharacter()}>+ CHARACTER</button>
-          <button className="text-xs bg-white/10 hover:bg-white/20 rounded px-3 py-1" onClick={() => addMerge()}>+ MERGE</button>
-        </div>
+    <div className="min-h-[100svh] bg-background text-foreground">
+      <header className="flex items-center justify-between px-6 py-4 border-b border-border/60 bg-card/70 backdrop-blur">
+<h1 className="text-lg font-semibold tracking-wide"><span className="mr-2" aria-hidden>🍌</span>Nano Banana Editor</h1>
       </header>
 
       <div
@@ -1368,7 +1412,16 @@ export default function EditorPage() {
             backfaceVisibility: "hidden"
           }}
         >
-          <svg className="absolute inset-0 pointer-events-none z-0" width="4800" height="3200">
+          <svg 
+            className="absolute pointer-events-none z-0" 
+            style={{ 
+              left: `${svgBounds.x}px`, 
+              top: `${svgBounds.y}px`,
+              width: `${svgBounds.width}px`,
+              height: `${svgBounds.height}px`
+            }}
+            viewBox={`${svgBounds.x} ${svgBounds.y} ${svgBounds.width} ${svgBounds.height}`}
+          >
             <defs>
               <filter id="glow">
                 <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
@@ -1383,11 +1436,10 @@ export default function EditorPage() {
                 key={idx}
                 d={p.path}
                 fill="none"
-                stroke={p.active ? "#8b5cf6" : "#7c7c7c"}
+                stroke={p.active ? "hsl(var(--primary))" : "hsl(var(--muted-foreground))"}
                 strokeWidth="2.5"
                 strokeDasharray={p.active ? "5,5" : undefined}
-                filter={p.active ? "url(#glow)" : undefined}
-                opacity={p.active ? 0.8 : 1}
+                style={p.active ? undefined : { opacity: 0.9 }}
               />
             ))}
           </svg>

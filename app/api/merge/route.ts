@@ -10,6 +10,26 @@ function parseDataUrl(dataUrl: string): { mimeType: string; data: string } | nul
   return { mimeType: match[1] || "image/png", data: match[2] };
 }
 
+async function toInlineData(url: string): Promise<{ mimeType: string; data: string } | null> {
+  try {
+    if (url.startsWith('data:')) {
+      return parseDataUrl(url);
+    }
+    if (url.startsWith('http')) {
+      // Fetch HTTP URL and convert to base64
+      const res = await fetch(url);
+      const buf = await res.arrayBuffer();
+      const base64 = Buffer.from(buf).toString('base64');
+      const mimeType = res.headers.get('content-type') || 'image/jpeg';
+      return { mimeType, data: base64 };
+    }
+    return null;
+  } catch (e) {
+    console.error('Failed to process image URL:', url.substring(0, 100), e);
+    return null;
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as {
@@ -36,29 +56,52 @@ export async function POST(req: NextRequest) {
     const ai = new GoogleGenAI({ apiKey });
 
     // Build parts array: first the text prompt, then image inlineData parts
-    // Use provided prompt or generate a default one
-    const prompt = body.prompt || 
-      `You are provided with ${imgs.length} images. Each image may contain one or more people.
-      
-      Your task: Create a single new photorealistic image that combines ALL people from ALL ${imgs.length} provided images into one cohesive group photo.
-      
-      Requirements:
-      - Include EVERY person from EVERY input image (if an image has multiple people, include all of them)
-      - Combine all people into a single scene where they appear together
-      - Arrange them naturally (standing side by side, in rows, or in a natural group formation)
-      - Ensure all people are clearly visible and recognizable
-      - Match the lighting, shadows, and proportions to look realistic
-      - Preserve each person's original appearance, clothing, and characteristics
-      - The final composition should look like a genuine group photograph
-      
-      Output: One photorealistic image containing ALL people from ALL input images combined together.`;
+    // If no custom prompt, use default extraction-focused prompt
+    let prompt = body.prompt;
+    
+    if (!prompt) {
+      prompt = `MERGE TASK: You are provided with exactly ${imgs.length} source images.
 
+INSTRUCTIONS:
+1. EXTRACT the exact people/subjects from EACH provided image  
+2. DO NOT generate new people - use ONLY the people visible in the provided images
+3. COMBINE all extracted people into ONE single group photo
+4. The output must contain ALL people from ALL ${imgs.length} input images together
+
+Requirements:
+- Use the ACTUAL people from the provided images (do not create new ones)
+- If an image has multiple people, include ALL of them  
+- Arrange everyone naturally in the same scene
+- Match lighting and proportions realistically
+- Output exactly ONE image with everyone combined
+
+DO NOT create artistic interpretations or new people. EXTRACT and COMBINE the actual subjects from the provided photographs.`;
+    } else {
+      // Even with custom prompt, append extraction requirements
+      const enforcement = `\n\nIMPORTANT: Extract and use the EXACT people from the provided images. Do not generate new people or artistic interpretations. Combine the actual subjects from all ${imgs.length} images into one output.`;
+      prompt = `${prompt}${enforcement}`;
+    }
+
+    // Debug: Log what we're receiving
+    console.log(`[MERGE API] Received ${imgs.length} images to merge`);
+    console.log(`[MERGE API] Image types:`, imgs.map(img => {
+      if (img.startsWith('data:')) return 'data URL';
+      if (img.startsWith('http')) return 'HTTP URL';
+      return 'unknown';
+    }));
+    
     const parts: any[] = [{ text: prompt }];
     for (const url of imgs) {
-      const parsed = parseDataUrl(url);
-      if (!parsed) continue;
+      const parsed = await toInlineData(url);
+      if (!parsed) {
+        console.error('[MERGE API] Failed to parse image:', url.substring(0, 100));
+        continue;
+      }
       parts.push({ inlineData: { mimeType: parsed.mimeType, data: parsed.data } });
     }
+    
+    console.log(`[MERGE API] Sending ${parts.length - 1} images to model (prompt + images)`);
+    console.log(`[MERGE API] Prompt preview:`, prompt.substring(0, 200));
 
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-image-preview",
