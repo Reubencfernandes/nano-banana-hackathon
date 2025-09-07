@@ -32,6 +32,15 @@ body {
   box-shadow: 0 10px 30px rgba(0,0,0,0.35);
   border-radius: 14px;
   backdrop-filter: blur(6px);
+  /* Prevent blurring on zoom */
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+  transform: translateZ(0);
+  will-change: transform;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  backface-visibility: hidden;
+  perspective: 1000px;
 }
 .nb-node .nb-header {
   background: linear-gradient(to bottom, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
@@ -79,4 +88,38 @@ body {
     radial-gradient(circle at 1px 1px, rgba(255,255,255,0.08) 1px, transparent 0),
     radial-gradient(circle at 1px 1px, rgba(255,255,255,0.04) 1px, transparent 0);
   background-size: 20px 20px, 100px 100px;
+}
+
+/* Ensure crisp text and images at all zoom levels */
+.nb-node * {
+  text-rendering: optimizeLegibility;
+  shape-rendering: crispEdges;
+}
+
+.nb-node img {
+  image-rendering: auto; /* Keep images smooth */
+  image-rendering: -webkit-optimize-contrast;
+}
+
+.nb-node input,
+.nb-node select,
+.nb-node textarea,
+.nb-node button {
+  transform: translateZ(0);
+  -webkit-font-smoothing: subpixel-antialiased;
+  font-smoothing: subpixel-antialiased;
+}
+
+/* Force GPU acceleration for transforms */
+.nb-canvas > div {
+  transform-style: preserve-3d;
+  -webkit-transform-style: preserve-3d;
+}
+
+/* Prevent blur on scaled elements */
+@media screen and (-webkit-min-device-pixel-ratio: 0) {
+  .nb-node {
+    -webkit-backface-visibility: hidden;
+    -webkit-transform: translateZ(0) scale(1.0, 1.0);
+  }
 }

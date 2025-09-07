@@ -1338,6 +1338,11 @@ export default function EditorPage() {
       <div
         ref={containerRef}
         className="relative w-full h-[calc(100svh-56px)] overflow-hidden nb-canvas"
+        style={{
+          imageRendering: "auto",
+          transform: "translateZ(0)",
+          willChange: "contents"
+        }}
         onContextMenu={onContextMenu}
         onPointerDown={onBackgroundPointerDown}
         onPointerMove={(e) => {
@@ -1356,7 +1361,12 @@ export default function EditorPage() {
       >
         <div
           className="absolute left-0 top-0 will-change-transform"
-          style={{ transform: `translate(${tx}px, ${ty}px) scale(${scale})`, transformOrigin: "0 0" }}
+          style={{ 
+            transform: `translate3d(${tx}px, ${ty}px, 0) scale(${scale})`, 
+            transformOrigin: "0 0",
+            transformStyle: "preserve-3d",
+            backfaceVisibility: "hidden"
+          }}
         >
           <svg className="absolute inset-0 pointer-events-none z-0" width="4800" height="3200">
             <defs>
