@@ -24,3 +24,59 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Nano Banana Editor - node visuals */
+.nb-node {
+  background: rgba(15,15,16,0.9);
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+  border-radius: 14px;
+  backdrop-filter: blur(6px);
+}
+.nb-node .nb-header {
+  background: linear-gradient(to bottom, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+}
+.nb-port {
+  width: 20px;
+  height: 20px;
+  border-radius: 9999px;
+  border: 3px solid rgba(255,255,255,0.6);
+  background: #111;
+  cursor: crosshair;
+  transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+  position: relative;
+}
+.nb-port:hover {
+  transform: scale(1.4);
+  background: #222;
+  box-shadow: 0 0 12px rgba(255,255,255,0.3);
+}
+.nb-port.out { 
+  border-color: #8b5cf6; 
+}
+.nb-port.out:hover { 
+  background: #8b5cf6;
+  box-shadow: 0 0 16px rgba(139,92,246,0.6);
+}
+.nb-port.in { 
+  border-color: #34d399; 
+}
+.nb-port.in:hover { 
+  background: #34d399;
+  box-shadow: 0 0 16px rgba(52,211,153,0.6);
+}
+
+.nb-line {
+  stroke: #7c7c7c;
+  stroke-width: 2.5;
+}
+.nb-line.active { stroke: #8b5cf6; }
+
+/* Canvas grid */
+.nb-canvas {
+  background-color: #0b0b0b;
+  background-image:
+    radial-gradient(circle at 1px 1px, rgba(255,255,255,0.08) 1px, transparent 0),
+    radial-gradient(circle at 1px 1px, rgba(255,255,255,0.04) 1px, transparent 0);
+  background-size: 20px 20px, 100px 100px;
+}
