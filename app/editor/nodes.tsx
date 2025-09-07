@@ -2,6 +2,16 @@
 
 import React, { useState, useRef, useEffect } from "react";
 
+// Helper function to download image
+function downloadImage(dataUrl: string, filename: string) {
+  const link = document.createElement('a');
+  link.href = dataUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
 // Import types (we'll need to export these from page.tsx)
 type BackgroundNode = any;
 type ClothesNode = any;
@@ -98,9 +108,59 @@ export function BackgroundNodeView({
   onUpdatePosition,
 }: any) {
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
+  const hasConfig = node.backgroundType && !node.output;
+  
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files?.length) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        onUpdate(node.id, { customBackgroundImage: reader.result });
+      };
+      reader.readAsDataURL(e.target.files[0]);
+    }
+  };
+  
+  const handleImagePaste = (e: React.ClipboardEvent) => {
+    const items = e.clipboardData.items;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith("image/")) {
+        const file = items[i].getAsFile();
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = () => {
+            onUpdate(node.id, { customBackgroundImage: reader.result });
+          };
+          reader.readAsDataURL(file);
+          return;
+        }
+      }
+    }
+    const text = e.clipboardData.getData("text");
+    if (text && (text.startsWith("http") || text.startsWith("data:image"))) {
+      onUpdate(node.id, { customBackgroundImage: text });
+    }
+  };
+  
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const files = e.dataTransfer.files;
+    if (files && files.length) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        onUpdate(node.id, { customBackgroundImage: reader.result });
+      };
+      reader.readAsDataURL(files[0]);
+    }
+  };
   
   return (
-    <div className="nb-node absolute text-white w-[320px]" style={{ left: localPos.x, top: localPos.y }}>
+    <div 
+      className={`nb-node absolute text-white w-[320px] ${hasConfig ? 'ring-2 ring-yellow-500/50' : ''}`} 
+      style={{ left: localPos.x, top: localPos.y }}
+      onDrop={handleDrop}
+      onDragOver={(e) => e.preventDefault()}
+      onPaste={handleImagePaste}
+    >
       <div 
         className="nb-header px-3 py-2 flex items-center justify-between rounded-t-[14px] cursor-grab active:cursor-grabbing"
         onPointerDown={onPointerDown}
@@ -122,6 +182,7 @@ export function BackgroundNodeView({
         >
           <option value="color">Solid Color</option>
           <option value="image">Preset Background</option>
+          <option value="upload">Upload Image</option>
           <option value="custom">Custom Prompt</option>
         </select>
         
@@ -149,6 +210,35 @@ export function BackgroundNodeView({
           </select>
         )}
         
+        {node.backgroundType === "upload" && (
+          <div className="space-y-2">
+            {node.customBackgroundImage ? (
+              <div className="relative">
+                <img src={node.customBackgroundImage} className="w-full rounded" alt="Custom Background" />
+                <button 
+                  className="absolute top-2 right-2 bg-red-500/80 text-white text-xs px-2 py-1 rounded"
+                  onClick={() => onUpdate(node.id, { customBackgroundImage: null })}
+                >
+                  Remove
+                </button>
+              </div>
+            ) : (
+              <label className="block">
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleImageUpload}
+                />
+                <div className="border-2 border-dashed border-white/20 rounded-lg p-4 text-center cursor-pointer hover:border-white/40">
+                  <p className="text-xs text-white/60">Drop, upload, or paste background image</p>
+                  <p className="text-xs text-white/40 mt-1">JPG, PNG, WEBP</p>
+                </div>
+              </label>
+            )}
+          </div>
+        )}
+        
         {node.backgroundType === "custom" && (
           <textarea
             className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs"
@@ -160,15 +250,24 @@ export function BackgroundNodeView({
         )}
         
         <button 
-          className="w-full text-xs bg-indigo-500 hover:bg-indigo-400 rounded px-3 py-1"
+          className="w-full text-xs bg-indigo-500 hover:bg-indigo-400 rounded px-3 py-1 transition-all"
           onClick={() => onProcess(node.id)}
           disabled={node.isRunning}
+          title={!node.input ? "Connect an input first" : "Process all unprocessed nodes in chain"}
         >
           {node.isRunning ? "Processing..." : "Apply Background"}
         </button>
         
         {node.output && (
-          <img src={node.output} className="w-full rounded" alt="Output" />
+          <div className="space-y-2">
+            <img src={node.output} className="w-full rounded" alt="Output" />
+            <button
+              className="w-full text-xs bg-green-600 hover:bg-green-500 rounded px-3 py-1 transition-all"
+              onClick={() => downloadImage(node.output, `background-${Date.now()}.png`)}
+            >
+              📥 Download Output
+            </button>
+          </div>
         )}
         {node.error && (
           <div className="text-xs text-red-400 mt-2">{node.error}</div>
@@ -180,6 +279,7 @@ export function BackgroundNodeView({
 
 export function ClothesNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition }: any) {
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
+  const hasConfig = node.clothesImage && !node.output;
   
   const presetClothes = [
     { name: "Sukajan", path: "/sukajan.png" },
@@ -221,11 +321,12 @@ export function ClothesNodeView({ node, onDelete, onUpdate, onStartConnection, o
   
   return (
     <div 
-      className="nb-node absolute text-white w-[320px]" 
+      className={`nb-node absolute text-white w-[320px] ${hasConfig ? 'ring-2 ring-yellow-500/50' : ''}`}
       style={{ left: localPos.x, top: localPos.y }}
       onDrop={onDrop}
       onDragOver={(e) => e.preventDefault()}
       onPaste={onPaste}
+      title={hasConfig ? "Has unsaved configuration - will be applied when processing downstream" : ""}
     >
       <div 
         className="nb-header px-3 py-2 flex items-center justify-between rounded-t-[14px] cursor-grab active:cursor-grabbing"
@@ -241,6 +342,11 @@ export function ClothesNodeView({ node, onDelete, onUpdate, onStartConnection, o
         </div>
       </div>
       <div className="p-3 space-y-3">
+        {hasConfig && (
+          <div className="text-xs bg-yellow-500/20 border border-yellow-500/50 rounded px-2 py-1 text-yellow-300">
+            ⚡ Config pending - will apply when downstream node processes
+          </div>
+        )}
         <div className="text-xs text-white/70">Clothes Reference</div>
         
         {/* Preset clothes options */}
@@ -295,13 +401,24 @@ export function ClothesNodeView({ node, onDelete, onUpdate, onStartConnection, o
         ) : null}
         
         <button 
-          className="w-full text-xs bg-indigo-500 hover:bg-indigo-400 rounded px-3 py-1"
+          className="w-full text-xs bg-indigo-500 hover:bg-indigo-400 rounded px-3 py-1 transition-all"
           onClick={() => onProcess(node.id)}
           disabled={node.isRunning || !node.clothesImage}
+          title={!node.input ? "Connect an input first" : "Process all unprocessed nodes in chain"}
         >
           {node.isRunning ? "Processing..." : "Apply Clothes"}
         </button>
-        {node.output && <img src={node.output} className="w-full rounded" alt="Output" />}
+        {node.output && (
+          <div className="space-y-2">
+            <img src={node.output} className="w-full rounded" alt="Output" />
+            <button
+              className="w-full text-xs bg-green-600 hover:bg-green-500 rounded px-3 py-1 transition-all"
+              onClick={() => downloadImage(node.output, `clothes-${Date.now()}.png`)}
+            >
+              📥 Download Output
+            </button>
+          </div>
+        )}
         {node.error && (
           <div className="text-xs text-red-400 mt-2">{node.error}</div>
         )}
@@ -312,9 +429,10 @@ export function ClothesNodeView({ node, onDelete, onUpdate, onStartConnection, o
 
 export function AgeNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition }: any) {
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
+  const hasConfig = node.targetAge && node.targetAge !== 30 && !node.output;
   
   return (
-    <div className="nb-node absolute text-white w-[280px]" style={{ left: localPos.x, top: localPos.y }}>
+    <div className={`nb-node absolute text-white w-[280px] ${hasConfig ? 'ring-2 ring-yellow-500/50' : ''}`} style={{ left: localPos.x, top: localPos.y }}>
       <div 
         className="nb-header px-3 py-2 flex items-center justify-between rounded-t-[14px] cursor-grab active:cursor-grabbing"
         onPointerDown={onPointerDown}
@@ -344,13 +462,24 @@ export function AgeNodeView({ node, onDelete, onUpdate, onStartConnection, onEnd
           />
         </div>
         <button 
-          className="w-full text-xs bg-indigo-500 hover:bg-indigo-400 rounded px-3 py-1"
+          className="w-full text-xs bg-indigo-500 hover:bg-indigo-400 rounded px-3 py-1 transition-all"
           onClick={() => onProcess(node.id)}
           disabled={node.isRunning}
+          title={!node.input ? "Connect an input first" : "Process all unprocessed nodes in chain"}
         >
           {node.isRunning ? "Processing..." : "Apply Age"}
         </button>
-        {node.output && <img src={node.output} className="w-full rounded" alt="Output" />}
+        {node.output && (
+          <div className="space-y-2">
+            <img src={node.output} className="w-full rounded" alt="Output" />
+            <button
+              className="w-full text-xs bg-green-600 hover:bg-green-500 rounded px-3 py-1 transition-all"
+              onClick={() => downloadImage(node.output, `age-${Date.now()}.png`)}
+            >
+              📥 Download Output
+            </button>
+          </div>
+        )}
         {node.error && (
           <div className="text-xs text-red-400 mt-2">{node.error}</div>
         )}
@@ -361,11 +490,16 @@ export function AgeNodeView({ node, onDelete, onUpdate, onStartConnection, onEnd
 
 export function CameraNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition }: any) {
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
-  const focalLengths = ["None", "8mm fisheye", "12mm", "24mm", "35mm", "50mm", "85mm", "135mm", "200mm"];
-  const apertures = ["None", "f/1.2", "f/1.8", "f/2.8", "f/5.6", "f/8", "f/11", "f/16"];
-  const shutterSpeeds = ["None", "1/8000s", "1/250s", "1/30s", "5s"];
-  const whiteBalances = ["None", "3200K tungsten", "5600K daylight", "7000K shade"];
-  const angles = ["None", "eye level", "low angle", "high angle", "Dutch tilt", "bird's eye"];
+  const focalLengths = ["None", "8mm fisheye", "12mm", "24mm", "35mm", "50mm", "85mm", "135mm", "200mm", "300mm", "400mm"];
+  const apertures = ["None", "f/0.95", "f/1.2", "f/1.4", "f/1.8", "f/2", "f/2.8", "f/4", "f/5.6", "f/8", "f/11", "f/16", "f/22"];
+  const shutterSpeeds = ["None", "1/8000s", "1/4000s", "1/2000s", "1/1000s", "1/500s", "1/250s", "1/125s", "1/60s", "1/30s", "1/15s", "1/8s", "1/4s", "1/2s", "1s", "2s", "5s", "10s", "30s"];
+  const whiteBalances = ["None", "2800K candlelight", "3200K tungsten", "4000K fluorescent", "5600K daylight", "6500K cloudy", "7000K shade", "8000K blue sky"];
+  const angles = ["None", "eye level", "low angle", "high angle", "Dutch tilt", "bird's eye", "worm's eye", "over the shoulder", "POV"];
+  const isoValues = ["None", "ISO 50", "ISO 100", "ISO 200", "ISO 400", "ISO 800", "ISO 1600", "ISO 3200", "ISO 6400", "ISO 12800"];
+  const filmStyles = ["None", "Kodak Portra", "Fuji Velvia", "Ilford HP5", "Cinestill 800T", "Lomography", "Cross Process", "Black & White", "Sepia", "Vintage", "Film Noir"];
+  const lightingTypes = ["None", "Natural Light", "Golden Hour", "Blue Hour", "Studio Lighting", "Rembrandt", "Split Lighting", "Butterfly Lighting", "Loop Lighting", "Rim Lighting", "Silhouette", "High Key", "Low Key"];
+  const bokehStyles = ["None", "Smooth Bokeh", "Swirly Bokeh", "Hexagonal Bokeh", "Cat Eye Bokeh", "Bubble Bokeh", "Creamy Bokeh"];
+  const compositions = ["None", "Rule of Thirds", "Golden Ratio", "Symmetrical", "Leading Lines", "Frame in Frame", "Fill the Frame", "Negative Space", "Patterns", "Diagonal"];
 
   return (
     <div className="nb-node absolute text-white w-[360px]" style={{ left: localPos.x, top: localPos.y }}>
@@ -382,7 +516,9 @@ export function CameraNodeView({ node, onDelete, onUpdate, onStartConnection, on
           <Port className="out" nodeId={node.id} isOutput={true} onStartConnection={onStartConnection} />
         </div>
       </div>
-      <div className="p-3 space-y-2">
+      <div className="p-3 space-y-2 max-h-[500px] overflow-y-auto">
+        {/* Basic Camera Settings */}
+        <div className="text-xs text-white/50 font-semibold mb-1">Basic Settings</div>
         <div className="grid grid-cols-2 gap-2">
           <div>
             <label className="text-xs text-white/70">Focal Length</label>
@@ -405,7 +541,7 @@ export function CameraNodeView({ node, onDelete, onUpdate, onStartConnection, on
             </select>
           </div>
           <div>
-            <label className="text-xs text-white/70">Shutter</label>
+            <label className="text-xs text-white/70">Shutter Speed</label>
             <select 
               className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs"
               value={node.shutterSpeed || "None"}
@@ -414,6 +550,21 @@ export function CameraNodeView({ node, onDelete, onUpdate, onStartConnection, on
               {shutterSpeeds.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
+          <div>
+            <label className="text-xs text-white/70">ISO</label>
+            <select 
+              className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs"
+              value={node.iso || "None"}
+              onChange={(e) => onUpdate(node.id, { iso: e.target.value })}
+            >
+              {isoValues.map(i => <option key={i} value={i}>{i}</option>)}
+            </select>
+          </div>
+        </div>
+        
+        {/* Creative Settings */}
+        <div className="text-xs text-white/50 font-semibold mb-1 mt-3">Creative Settings</div>
+        <div className="grid grid-cols-2 gap-2">
           <div>
             <label className="text-xs text-white/70">White Balance</label>
             <select 
@@ -424,25 +575,81 @@ export function CameraNodeView({ node, onDelete, onUpdate, onStartConnection, on
               {whiteBalances.map(w => <option key={w} value={w}>{w}</option>)}
             </select>
           </div>
+          <div>
+            <label className="text-xs text-white/70">Film Style</label>
+            <select 
+              className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs"
+              value={node.filmStyle || "None"}
+              onChange={(e) => onUpdate(node.id, { filmStyle: e.target.value })}
+            >
+              {filmStyles.map(f => <option key={f} value={f}>{f}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-white/70">Lighting</label>
+            <select 
+              className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs"
+              value={node.lighting || "None"}
+              onChange={(e) => onUpdate(node.id, { lighting: e.target.value })}
+            >
+              {lightingTypes.map(l => <option key={l} value={l}>{l}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-white/70">Bokeh Style</label>
+            <select 
+              className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs"
+              value={node.bokeh || "None"}
+              onChange={(e) => onUpdate(node.id, { bokeh: e.target.value })}
+            >
+              {bokehStyles.map(b => <option key={b} value={b}>{b}</option>)}
+            </select>
+          </div>
         </div>
-        <div>
-          <label className="text-xs text-white/70">Camera Angle</label>
+        
+        {/* Composition Settings */}
+        <div className="text-xs text-white/50 font-semibold mb-1 mt-3">Composition</div>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="text-xs text-white/70">Camera Angle</label>
             <select 
               className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs"
               value={node.angle || "None"}
               onChange={(e) => onUpdate(node.id, { angle: e.target.value })}
-          >
-            {angles.map(a => <option key={a} value={a}>{a}</option>)}
-          </select>
+            >
+              {angles.map(a => <option key={a} value={a}>{a}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-white/70">Composition</label>
+            <select 
+              className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs"
+              value={node.composition || "None"}
+              onChange={(e) => onUpdate(node.id, { composition: e.target.value })}
+            >
+              {compositions.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
         </div>
         <button 
-          className="w-full text-xs bg-indigo-500 hover:bg-indigo-400 rounded px-3 py-1"
+          className="w-full text-xs bg-indigo-500 hover:bg-indigo-400 rounded px-3 py-1 transition-all"
           onClick={() => onProcess(node.id)}
           disabled={node.isRunning}
+          title={!node.input ? "Connect an input first" : "Process all unprocessed nodes in chain"}
         >
           {node.isRunning ? "Processing..." : "Apply Camera Settings"}
         </button>
-        {node.output && <img src={node.output} className="w-full rounded mt-2" alt="Output" />}
+        {node.output && (
+          <div className="space-y-2 mt-2">
+            <img src={node.output} className="w-full rounded" alt="Output" />
+            <button
+              className="w-full text-xs bg-green-600 hover:bg-green-500 rounded px-3 py-1 transition-all"
+              onClick={() => downloadImage(node.output, `camera-${Date.now()}.png`)}
+            >
+              📥 Download Output
+            </button>
+          </div>
+        )}
         {node.error && (
           <div className="text-xs text-red-400 mt-2">{node.error}</div>
         )}
@@ -546,13 +753,24 @@ export function FaceNodeView({ node, onDelete, onUpdate, onStartConnection, onEn
         </div>
         
         <button 
-          className="w-full text-xs bg-indigo-500 hover:bg-indigo-400 rounded px-3 py-1"
+          className="w-full text-xs bg-indigo-500 hover:bg-indigo-400 rounded px-3 py-1 transition-all"
           onClick={() => onProcess(node.id)}
           disabled={node.isRunning}
+          title={!node.input ? "Connect an input first" : "Process all unprocessed nodes in chain"}
         >
           {node.isRunning ? "Processing..." : "Apply Face Changes"}
         </button>
-        {node.output && <img src={node.output} className="w-full rounded mt-2" alt="Output" />}
+        {node.output && (
+          <div className="space-y-2 mt-2">
+            <img src={node.output} className="w-full rounded" alt="Output" />
+            <button
+              className="w-full text-xs bg-green-600 hover:bg-green-500 rounded px-3 py-1 transition-all"
+              onClick={() => downloadImage(node.output, `face-${Date.now()}.png`)}
+            >
+              📥 Download Output
+            </button>
+          </div>
+        )}
         {node.error && (
           <div className="text-xs text-red-400 mt-2">{node.error}</div>
         )}
@@ -660,13 +878,24 @@ export function BlendNodeView({ node, onDelete, onUpdate, onStartConnection, onE
           />
         </div>
         <button 
-          className="w-full text-xs bg-indigo-500 hover:bg-indigo-400 rounded px-3 py-1"
+          className="w-full text-xs bg-indigo-500 hover:bg-indigo-400 rounded px-3 py-1 transition-all"
           onClick={() => onProcess(node.id)}
           disabled={node.isRunning || !node.styleImage}
+          title={!node.input ? "Connect an input first" : !node.styleImage ? "Add a style image first" : "Process all unprocessed nodes in chain"}
         >
           {node.isRunning ? "Processing..." : "Apply Style"}
         </button>
-        {node.output && <img src={node.output} className="w-full rounded" alt="Output" />}
+        {node.output && (
+          <div className="space-y-2">
+            <img src={node.output} className="w-full rounded" alt="Output" />
+            <button
+              className="w-full text-xs bg-green-600 hover:bg-green-500 rounded px-3 py-1 transition-all"
+              onClick={() => downloadImage(node.output, `blend-${Date.now()}.png`)}
+            >
+              📥 Download Output
+            </button>
+          </div>
+        )}
         {node.error && (
           <div className="text-xs text-red-400 mt-2">{node.error}</div>
         )}
@@ -702,13 +931,24 @@ export function EditNodeView({ node, onDelete, onUpdate, onStartConnection, onEn
           rows={3}
         />
         <button 
-          className="w-full text-xs bg-indigo-500 hover:bg-indigo-400 rounded px-3 py-1"
+          className="w-full text-xs bg-indigo-500 hover:bg-indigo-400 rounded px-3 py-1 transition-all"
           onClick={() => onProcess(node.id)}
           disabled={node.isRunning}
+          title={!node.input ? "Connect an input first" : "Process all unprocessed nodes in chain"}
         >
           {node.isRunning ? "Processing..." : "Apply Edit"}
         </button>
-        {node.output && <img src={node.output} className="w-full rounded" alt="Output" />}
+        {node.output && (
+          <div className="space-y-2">
+            <img src={node.output} className="w-full rounded" alt="Output" />
+            <button
+              className="w-full text-xs bg-green-600 hover:bg-green-500 rounded px-3 py-1 transition-all"
+              onClick={() => downloadImage(node.output, `edit-${Date.now()}.png`)}
+            >
+              📥 Download Output
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
