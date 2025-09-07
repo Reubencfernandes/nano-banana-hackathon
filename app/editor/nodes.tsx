@@ -180,8 +180,15 @@ export function BackgroundNodeView({
           <Button
             variant="ghost"
             size="icon"
-            className="text-destructive"
-            onClick={() => onDelete(node.id)}
+            className="text-destructive hover:bg-destructive/20"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              if (confirm('Delete this node?')) {
+                onDelete(node.id);
+              }
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
             title="Delete node"
             aria-label="Delete node"
           >
@@ -358,8 +365,15 @@ export function ClothesNodeView({ node, onDelete, onUpdate, onStartConnection, o
           <Button
             variant="ghost"
             size="icon"
-            className="text-destructive"
-            onClick={() => onDelete(node.id)}
+            className="text-destructive hover:bg-destructive/20"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              if (confirm('Delete this node?')) {
+                onDelete(node.id);
+              }
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
             title="Delete node"
             aria-label="Delete node"
           >
@@ -487,8 +501,15 @@ export function AgeNodeView({ node, onDelete, onUpdate, onStartConnection, onEnd
           <Button
             variant="ghost"
             size="icon"
-            className="text-destructive"
-            onClick={() => onDelete(node.id)}
+            className="text-destructive hover:bg-destructive/20"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              if (confirm('Delete this node?')) {
+                onDelete(node.id);
+              }
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
             title="Delete node"
             aria-label="Delete node"
           >
@@ -576,8 +597,15 @@ export function CameraNodeView({ node, onDelete, onUpdate, onStartConnection, on
           <Button
             variant="ghost"
             size="icon"
-            className="text-destructive"
-            onClick={() => onDelete(node.id)}
+            className="text-destructive hover:bg-destructive/20"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              if (confirm('Delete this node?')) {
+                onDelete(node.id);
+              }
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
             title="Delete node"
             aria-label="Delete node"
           >
@@ -771,8 +799,15 @@ export function FaceNodeView({ node, onDelete, onUpdate, onStartConnection, onEn
           <Button
             variant="ghost"
             size="icon"
-            className="text-destructive"
-            onClick={() => onDelete(node.id)}
+            className="text-destructive hover:bg-destructive/20"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              if (confirm('Delete this node?')) {
+                onDelete(node.id);
+              }
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
             title="Delete node"
             aria-label="Delete node"
           >
@@ -943,8 +978,15 @@ export function BlendNodeView({ node, onDelete, onUpdate, onStartConnection, onE
           <Button
             variant="ghost"
             size="icon"
-            className="text-destructive"
-            onClick={() => onDelete(node.id)}
+            className="text-destructive hover:bg-destructive/20"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              if (confirm('Delete this node?')) {
+                onDelete(node.id);
+              }
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
             title="Delete node"
             aria-label="Delete node"
           >

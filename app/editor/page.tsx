@@ -25,25 +25,34 @@ function generateMergePrompt(characterData: { image: string; label: string }[]):
   
   const labels = characterData.map((d, i) => `Image ${i + 1} (${d.label})`).join(", ");
   
-  return `MERGE TASK: You are provided with exactly ${count} source images.
+  return `MERGE TASK: Create a natural, cohesive group photo combining ALL subjects from ${count} provided images.
 
 Images provided:
 ${characterData.map((d, i) => `- Image ${i + 1}: ${d.label}`).join("\n")}
 
-INSTRUCTIONS:
-1. EXTRACT the exact people/subjects from EACH provided image
-2. DO NOT generate new people - use ONLY the people visible in the provided images
-3. COMBINE all extracted people into ONE single group photo
-4. The output must contain ALL people from ALL ${count} input images together
+CRITICAL REQUIREMENTS:
+1. Extract ALL people/subjects from EACH image exactly as they appear
+2. Place them together in a SINGLE UNIFIED SCENE with:
+   - Consistent lighting direction and color temperature
+   - Matching shadows and ambient lighting
+   - Proper scale relationships (realistic relative sizes)
+   - Natural spacing as if they were photographed together
+   - Shared environment/background that looks cohesive
 
-Requirements:
-- Use the ACTUAL people from the provided images (do not create new ones)
-- If an image has multiple people, include ALL of them
-- Arrange everyone naturally in the same scene
-- Match lighting and proportions realistically
-- Output exactly ONE image with everyone combined
+3. Composition guidelines:
+   - Arrange subjects at similar depth (not one far behind another)
+   - Use natural group photo positioning (slight overlap is ok)
+   - Ensure all faces are clearly visible
+   - Create visual balance in the composition
+   - Apply consistent color grading across all subjects
 
-DO NOT create artistic interpretations or new people. EXTRACT and COMBINE the actual subjects from the provided photographs.`;
+4. Environmental unity:
+   - Use a single, coherent background for all subjects
+   - Match the perspective as if taken with one camera
+   - Ensure ground plane continuity (all standing on same level)
+   - Apply consistent atmospheric effects (if any)
+
+The result should look like all subjects were photographed together in the same place at the same time, NOT like separate images placed side by side.`;
 }
 
 // Types
@@ -583,6 +592,18 @@ export default function EditorPage() {
     } as CharacterNode,
   ]);
 
+  // Theme state
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  
+  // Apply theme to document
+  useEffect(() => {
+    if (theme === 'light') {
+      document.documentElement.classList.remove('dark');
+    } else {
+      document.documentElement.classList.add('dark');
+    }
+  }, [theme]);
+
   // Viewport state
   const [scale, setScale] = useState(1);
   const [tx, setTx] = useState(0);
@@ -694,6 +715,9 @@ export default function EditorPage() {
       }
       setDraggingFrom(null);
       setDragPos(null);
+      // Re-enable text selection
+      document.body.style.userSelect = '';
+      document.body.style.webkitUserSelect = '';
     }
   };
 
@@ -1051,6 +1075,9 @@ export default function EditorPage() {
   // Connection drag handlers
   const handleStartConnection = (characterId: string) => {
     setDraggingFrom(characterId);
+    // Prevent text selection during dragging
+    document.body.style.userSelect = 'none';
+    document.body.style.webkitUserSelect = 'none';
   };
 
   const handleEndConnection = (mergeId: string) => {
@@ -1058,6 +1085,9 @@ export default function EditorPage() {
       connectToMerge(mergeId, draggingFrom);
       setDraggingFrom(null);
       setDragPos(null);
+      // Re-enable text selection
+      document.body.style.userSelect = '';
+      document.body.style.webkitUserSelect = '';
     }
   };
 
@@ -1073,6 +1103,9 @@ export default function EditorPage() {
     if (draggingFrom) {
       setDraggingFrom(null);
       setDragPos(null);
+      // Re-enable text selection
+      document.body.style.userSelect = '';
+      document.body.style.webkitUserSelect = '';
     }
   };
   const disconnectFromMerge = (mergeId: string, characterId: string) => {
@@ -1376,7 +1409,34 @@ export default function EditorPage() {
   return (
     <div className="min-h-[100svh] bg-background text-foreground">
       <header className="flex items-center justify-between px-6 py-4 border-b border-border/60 bg-card/70 backdrop-blur">
-<h1 className="text-lg font-semibold tracking-wide"><span className="mr-2" aria-hidden>🍌</span>Nano Banana Editor</h1>
+        <h1 className="text-lg font-semibold tracking-wide">
+          <span className="mr-2" aria-hidden>🍌</span>Nano Banana Editor
+        </h1>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+          title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+          className="rounded-lg"
+        >
+          {theme === 'dark' ? (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="5"/>
+              <line x1="12" y1="1" x2="12" y2="3"/>
+              <line x1="12" y1="21" x2="12" y2="23"/>
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+              <line x1="1" y1="12" x2="3" y2="12"/>
+              <line x1="21" y1="12" x2="23" y2="12"/>
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+            </svg>
+          ) : (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+            </svg>
+          )}
+        </Button>
       </header>
 
       <div
