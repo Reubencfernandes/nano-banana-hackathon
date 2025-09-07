@@ -52,72 +52,99 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid or missing image data. Please ensure an input is connected." }, { status: 400 });
     }
 
-    let prompt = "";
+    // Build combined prompt from all accumulated parameters
+    const prompts: string[] = [];
+    const params = body.params || {};
     
-    // Generate appropriate prompt based on node type
-    switch (body.type) {
-      case "BACKGROUND":
-        const bgType = body.params?.backgroundType || "color";
-        if (bgType === "color") {
-          prompt = `Change the background of this image to a solid ${body.params?.backgroundColor || "white"} background. Keep the person/subject exactly as they are, only change the background.`;
-        } else if (bgType === "image") {
-          prompt = `Change the background to ${body.params?.backgroundImage || "a beautiful beach scene"}. Keep the person/subject exactly as they are with proper lighting to match the new background.`;
-        } else {
-          prompt = body.params?.customPrompt || "Change the background to a professional studio background.";
-        }
-        break;
-        
-      case "CLOTHES":
-        prompt = body.params?.clothesPrompt || 
-          "Change the person's clothes to " + (body.params?.clothesDescription || "formal business attire") + 
-          ". Keep their face, pose, and everything else exactly the same.";
-        break;
-        
-      case "BLEND":
-        prompt = `Blend this image with the style: ${body.params?.stylePrompt || "oil painting style"}. ` +
-          `Strength: ${body.params?.blendStrength || 50}%. Keep the subject recognizable while applying the style.`;
-        break;
-        
-      case "EDIT":
-        prompt = body.params?.editPrompt || "Make subtle improvements to this image.";
-        break;
-        
-      case "CAMERA":
-        const camera = body.params || {};
-        prompt = `Apply these camera settings to the image:\n` +
-          `Focal Length: ${camera.focalLength || "50mm"}\n` +
-          `Aperture: ${camera.aperture || "f/2.8"}\n` +
-          `Shutter Speed: ${camera.shutterSpeed || "1/250s"}\n` +
-          `White Balance: ${camera.whiteBalance || "5600K daylight"}\n` +
-          `Camera Angle: ${camera.angle || "eye level"}\n` +
-          `Make the image look like it was shot with these exact camera settings.`;
-        break;
-        
-      case "AGE":
-        const targetAge = body.params?.targetAge || 30;
-        prompt = `Transform the person in this image to look exactly ${targetAge} years old. ` +
-          `Adjust their facial features, skin texture, hair, and overall appearance to match that age naturally. ` +
-          `Keep their identity recognizable but age-appropriate.`;
-        break;
-        
-      case "FACE":
-        const face = body.params?.faceOptions || {};
-        const modifications = [];
-        if (face.removePimples) modifications.push("remove all pimples and blemishes");
-        if (face.addSunglasses) modifications.push("add stylish sunglasses");
-        if (face.addHat) modifications.push("add a fashionable hat");
-        if (face.changeHairstyle) modifications.push(`change hairstyle to ${face.changeHairstyle}`);
-        if (face.facialExpression) modifications.push(`change facial expression to ${face.facialExpression}`);
-        if (face.beardStyle) modifications.push(`add/change beard to ${face.beardStyle}`);
-        
-        prompt = modifications.length > 0
-          ? `Modify the person's face: ${modifications.join(", ")}. Keep everything else the same.`
-          : "Enhance the person's face subtly.";
-        break;
-        
-      default:
-        return NextResponse.json({ error: "Unknown node type" }, { status: 400 });
+    // Background modifications
+    if (params.backgroundType) {
+      const bgType = params.backgroundType;
+      if (bgType === "color") {
+        prompts.push(`Change the background to a solid ${params.backgroundColor || "white"} background.`);
+      } else if (bgType === "image") {
+        prompts.push(`Change the background to ${params.backgroundImage || "a beautiful beach scene"}.`);
+      } else if (bgType === "upload" && params.customBackgroundImage) {
+        prompts.push(`Replace the background with the uploaded custom background image, ensuring proper lighting and perspective matching.`);
+      } else if (params.customPrompt) {
+        prompts.push(params.customPrompt);
+      }
     }
+    
+    // Clothes modifications
+    if (params.clothesImage) {
+      // If clothesImage is provided, we need to handle it differently
+      // For now, we'll create a descriptive prompt
+      if (params.selectedPreset === "Sukajan") {
+        prompts.push("Change the person's clothes to a Japanese sukajan jacket with embroidered designs.");
+      } else if (params.selectedPreset === "Blazer") {
+        prompts.push("Change the person's clothes to a professional blazer.");
+      } else if (params.clothesImage.startsWith('data:') || params.clothesImage.startsWith('http')) {
+        prompts.push("Change the person's clothes to match the provided reference image style.");
+      }
+    }
+    
+    // Style blending
+    if (params.styleImage) {
+      const strength = params.blendStrength || 50;
+      prompts.push(`Apply artistic style blending at ${strength}% strength.`);
+    }
+    
+    // Edit prompt
+    if (params.editPrompt) {
+      prompts.push(params.editPrompt);
+    }
+    
+    // Camera settings
+    if (params.focalLength || params.aperture || params.shutterSpeed || params.whiteBalance || params.angle || 
+        params.iso || params.filmStyle || params.lighting || params.bokeh || params.composition) {
+      const cameraSettings: string[] = [];
+      if (params.focalLength) {
+        if (params.focalLength === "8mm fisheye") {
+          cameraSettings.push("Apply 8mm fisheye lens effect with 180-degree circular distortion");
+        } else {
+          cameraSettings.push(`Focal Length: ${params.focalLength}`);
+        }
+      }
+      if (params.aperture) cameraSettings.push(`Aperture: ${params.aperture}`);
+      if (params.shutterSpeed) cameraSettings.push(`Shutter Speed: ${params.shutterSpeed}`);
+      if (params.whiteBalance) cameraSettings.push(`White Balance: ${params.whiteBalance}`);
+      if (params.angle) cameraSettings.push(`Camera Angle: ${params.angle}`);
+      if (params.iso) cameraSettings.push(`${params.iso}`);
+      if (params.filmStyle) cameraSettings.push(`Film style: ${params.filmStyle}`);
+      if (params.lighting) cameraSettings.push(`Lighting: ${params.lighting}`);
+      if (params.bokeh) cameraSettings.push(`Bokeh effect: ${params.bokeh}`);
+      if (params.composition) cameraSettings.push(`Composition: ${params.composition}`);
+      
+      if (cameraSettings.length > 0) {
+        prompts.push(`Apply professional photography settings: ${cameraSettings.join(", ")}`);
+      }
+    }
+    
+    // Age transformation
+    if (params.targetAge) {
+      prompts.push(`Transform the person to look exactly ${params.targetAge} years old with age-appropriate features.`);
+    }
+    
+    // Face modifications
+    if (params.faceOptions) {
+      const face = params.faceOptions;
+      const modifications: string[] = [];
+      if (face.removePimples) modifications.push("remove all pimples and blemishes");
+      if (face.addSunglasses) modifications.push("add stylish sunglasses");
+      if (face.addHat) modifications.push("add a fashionable hat");
+      if (face.changeHairstyle) modifications.push(`change hairstyle to ${face.changeHairstyle}`);
+      if (face.facialExpression) modifications.push(`change facial expression to ${face.facialExpression}`);
+      if (face.beardStyle) modifications.push(`add/change beard to ${face.beardStyle}`);
+      
+      if (modifications.length > 0) {
+        prompts.push(`Face modifications: ${modifications.join(", ")}`);
+      }
+    }
+    
+    // Combine all prompts
+    let prompt = prompts.length > 0 
+      ? prompts.join("\n\n") + "\n\nApply all these modifications while maintaining the person's identity and keeping unspecified aspects unchanged."
+      : "Process this image with high quality output.";
 
     // Add the custom prompt if provided
     if (body.prompt) {

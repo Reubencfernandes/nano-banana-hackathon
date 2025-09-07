@@ -65,9 +65,11 @@ type BackgroundNode = NodeBase & {
   type: "BACKGROUND";
   input?: string; // node id
   output?: string;
-  backgroundType: "color" | "image" | "custom";
+  backgroundType: "color" | "image" | "upload" | "custom";
   backgroundColor?: string;
   backgroundImage?: string;
+  customBackgroundImage?: string;
+  customPrompt?: string;
   isRunning?: boolean;
   error?: string | null;
 };
@@ -77,6 +79,7 @@ type ClothesNode = NodeBase & {
   input?: string;
   output?: string;
   clothesImage?: string;
+  selectedPreset?: string;
   clothesPrompt?: string;
   isRunning?: boolean;
   error?: string | null;
@@ -86,6 +89,7 @@ type BlendNode = NodeBase & {
   type: "BLEND";
   input?: string;
   output?: string;
+  styleImage?: string;
   stylePrompt?: string;
   blendStrength?: number;
   isRunning?: boolean;
@@ -110,6 +114,11 @@ type CameraNode = NodeBase & {
   shutterSpeed?: string;
   whiteBalance?: string;
   angle?: string;
+  iso?: string;
+  filmStyle?: string;
+  lighting?: string;
+  bokeh?: string;
+  composition?: string;
   isRunning?: boolean;
   error?: string | null;
 };
@@ -399,6 +408,7 @@ function MergeNodeView({
   onDisconnect,
   onRun,
   onEndConnection,
+  onStartConnection,
   onUpdatePosition,
   onDelete,
   onClearConnections,
@@ -409,6 +419,7 @@ function MergeNodeView({
   onDisconnect: (mergeId: string, characterId: string) => void;
   onRun: (mergeId: string) => void;
   onEndConnection: (mergeId: string) => void;
+  onStartConnection: (nodeId: string) => void;
   onUpdatePosition: (id: string, x: number, y: number) => void;
   onDelete: (id: string) => void;
   onClearConnections: (mergeId: string) => void;
@@ -435,19 +446,27 @@ function MergeNodeView({
           isOutput={false}
           onEndConnection={onEndConnection}
         />
-        <div className="font-semibold tracking-wide text-sm flex-1">MERGE</div>
-        <button
-          className="text-2xl leading-none font-bold text-red-400 hover:text-red-300 opacity-50 hover:opacity-100 transition-all hover:scale-110 px-1"
-          onClick={(e) => {
-            e.stopPropagation();
-            if (confirm('Delete MERGE node?')) {
-              onDelete(node.id);
-            }
-          }}
-          title="Delete node"
-        >
-          ×
-        </button>
+        <div className="font-semibold tracking-wide text-sm flex-1 text-center">MERGE</div>
+        <div className="flex items-center gap-2">
+          <button
+            className="text-2xl leading-none font-bold text-red-400 hover:text-red-300 opacity-50 hover:opacity-100 transition-all hover:scale-110 px-1"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (confirm('Delete MERGE node?')) {
+                onDelete(node.id);
+              }
+            }}
+            title="Delete node"
+          >
+            ×
+          </button>
+          <Port 
+            className="out" 
+            nodeId={node.id}
+            isOutput={true}
+            onStartConnection={onStartConnection}
+          />
+        </div>
       </div>
       <div className="p-3 space-y-3">
         <div className="text-xs text-white/70">Inputs</div>
@@ -502,6 +521,21 @@ function MergeNodeView({
               <span className="text-white/40 text-xs">Run merge to see result</span>
             )}
           </div>
+          {node.output && (
+            <button
+              className="w-full text-xs bg-green-600 hover:bg-green-500 rounded px-3 py-1 mt-2 transition-all"
+              onClick={() => {
+                const link = document.createElement('a');
+                link.href = node.output as string;
+                link.download = `merge-${Date.now()}.png`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+              }}
+            >
+              📥 Download Merged Image
+            </button>
+          )}
           {node.error && (
             <div className="mt-2">
               <div className="text-xs text-red-400">{node.error}</div>
@@ -630,15 +664,17 @@ export default function EditorPage() {
   // Handle single input connections for new nodes
   const handleEndSingleConnection = (nodeId: string) => {
     if (draggingFrom) {
-      // Find the source node to get its output
+      // Find the source node
       const sourceNode = nodes.find(n => n.id === draggingFrom);
-      if (sourceNode && (sourceNode as any).output) {
-        // Connect the output to this node's input
-        setNodes(prev => prev.map(n => 
-          n.id === nodeId ? { ...n, input: draggingFrom } : n
-        ));
-      } else if (sourceNode?.type === "CHARACTER") {
-        // Direct connection from CHARACTER node
+      if (sourceNode) {
+        // Allow connections from ANY node that has an output port
+        // This includes:
+        // - CHARACTER nodes (always have an image)
+        // - MERGE nodes (can have output after merging)
+        // - Any processing node (BACKGROUND, CLOTHES, BLEND, etc.)
+        // - Even unprocessed nodes (for configuration chaining)
+        
+        // All nodes can be connected for chaining
         setNodes(prev => prev.map(n => 
           n.id === nodeId ? { ...n, input: draggingFrom } : n
         ));
@@ -646,6 +682,112 @@ export default function EditorPage() {
       setDraggingFrom(null);
       setDragPos(null);
     }
+  };
+
+  // Helper to count pending configurations in chain
+  const countPendingConfigurations = (startNodeId: string): number => {
+    let count = 0;
+    const visited = new Set<string>();
+    
+    const traverse = (nodeId: string) => {
+      if (visited.has(nodeId)) return;
+      visited.add(nodeId);
+      
+      const node = nodes.find(n => n.id === nodeId);
+      if (!node) return;
+      
+      // Check if this node has configuration but no output
+      if (!(node as any).output && node.type !== "CHARACTER" && node.type !== "MERGE") {
+        const config = getNodeConfiguration(node);
+        if (Object.keys(config).length > 0) {
+          count++;
+        }
+      }
+      
+      // Check upstream
+      const upstreamId = (node as any).input;
+      if (upstreamId) {
+        traverse(upstreamId);
+      }
+    };
+    
+    traverse(startNodeId);
+    return count;
+  };
+  
+  // Helper to extract configuration from a node
+  const getNodeConfiguration = (node: AnyNode): any => {
+    const config: any = {};
+    
+    switch (node.type) {
+      case "BACKGROUND":
+        if ((node as BackgroundNode).backgroundType) {
+          config.backgroundType = (node as BackgroundNode).backgroundType;
+          config.backgroundColor = (node as BackgroundNode).backgroundColor;
+          config.backgroundImage = (node as BackgroundNode).backgroundImage;
+          config.customBackgroundImage = (node as BackgroundNode).customBackgroundImage;
+          config.customPrompt = (node as BackgroundNode).customPrompt;
+        }
+        break;
+      case "CLOTHES":
+        if ((node as ClothesNode).clothesImage) {
+          config.clothesImage = (node as ClothesNode).clothesImage;
+          config.selectedPreset = (node as ClothesNode).selectedPreset;
+        }
+        break;
+      case "BLEND":
+        if ((node as BlendNode).styleImage) {
+          config.styleImage = (node as BlendNode).styleImage;
+          config.blendStrength = (node as BlendNode).blendStrength;
+        }
+        break;
+      case "EDIT":
+        if ((node as EditNode).editPrompt) {
+          config.editPrompt = (node as EditNode).editPrompt;
+        }
+        break;
+      case "CAMERA":
+        const cam = node as CameraNode;
+        if (cam.focalLength && cam.focalLength !== "None") config.focalLength = cam.focalLength;
+        if (cam.aperture && cam.aperture !== "None") config.aperture = cam.aperture;
+        if (cam.shutterSpeed && cam.shutterSpeed !== "None") config.shutterSpeed = cam.shutterSpeed;
+        if (cam.whiteBalance && cam.whiteBalance !== "None") config.whiteBalance = cam.whiteBalance;
+        if (cam.angle && cam.angle !== "None") config.angle = cam.angle;
+        if (cam.iso && cam.iso !== "None") config.iso = cam.iso;
+        if (cam.filmStyle && cam.filmStyle !== "None") config.filmStyle = cam.filmStyle;
+        if (cam.lighting && cam.lighting !== "None") config.lighting = cam.lighting;
+        if (cam.bokeh && cam.bokeh !== "None") config.bokeh = cam.bokeh;
+        if (cam.composition && cam.composition !== "None") config.composition = cam.composition;
+        break;
+      case "AGE":
+        if ((node as AgeNode).targetAge) {
+          config.targetAge = (node as AgeNode).targetAge;
+        }
+        break;
+      case "FACE":
+        const face = node as FaceNode;
+        if (face.faceOptions) {
+          const opts: any = {};
+          if (face.faceOptions.removePimples) opts.removePimples = true;
+          if (face.faceOptions.addSunglasses) opts.addSunglasses = true;
+          if (face.faceOptions.addHat) opts.addHat = true;
+          if (face.faceOptions.changeHairstyle && face.faceOptions.changeHairstyle !== "None") {
+            opts.changeHairstyle = face.faceOptions.changeHairstyle;
+          }
+          if (face.faceOptions.facialExpression && face.faceOptions.facialExpression !== "None") {
+            opts.facialExpression = face.faceOptions.facialExpression;
+          }
+          if (face.faceOptions.beardStyle && face.faceOptions.beardStyle !== "None") {
+            opts.beardStyle = face.faceOptions.beardStyle;
+          }
+          if (Object.keys(opts).length > 0) {
+            config.faceOptions = opts;
+          }
+        }
+        break;
+    }
+    
+    return config;
   };
 
   // Process node with API
@@ -656,24 +798,156 @@ export default function EditorPage() {
       return;
     }
 
-    // Get input image
+    // Get input image and collect all configurations from chain
     let inputImage: string | null = null;
+    let accumulatedParams: any = {};
+    const processedNodes: string[] = []; // Track which nodes' configs we're applying
     const inputId = (node as any).input;
     
     if (inputId) {
-      const inputNode = nodes.find(n => n.id === inputId);
-      if (inputNode) {
-        if (inputNode.type === "CHARACTER") {
-          inputImage = (inputNode as CharacterNode).image;
-        } else if ((inputNode as any).output) {
-          inputImage = (inputNode as any).output;
+      // Track unprocessed MERGE nodes that need to be executed
+      const unprocessedMerges: MergeNode[] = [];
+      
+      // Find the source image by traversing the chain backwards
+      const findSourceImage = (currentNodeId: string, visited: Set<string> = new Set()): string | null => {
+        if (visited.has(currentNodeId)) return null;
+        visited.add(currentNodeId);
+        
+        const currentNode = nodes.find(n => n.id === currentNodeId);
+        if (!currentNode) return null;
+        
+        // If this is a CHARACTER node, return its image
+        if (currentNode.type === "CHARACTER") {
+          return (currentNode as CharacterNode).image;
+        }
+        
+        // If this is a MERGE node with output, return its output
+        if (currentNode.type === "MERGE" && (currentNode as MergeNode).output) {
+          return (currentNode as MergeNode).output;
+        }
+        
+        // If any node has been processed, return its output
+        if ((currentNode as any).output) {
+          return (currentNode as any).output;
+        }
+        
+        // For MERGE nodes without output, we need to process them first
+        if (currentNode.type === "MERGE") {
+          const merge = currentNode as MergeNode;
+          if (!merge.output && merge.inputs.length >= 2) {
+            // Mark this merge for processing
+            unprocessedMerges.push(merge);
+            // For now, return null - we'll process the merge first
+            return null;
+          } else if (merge.inputs.length > 0) {
+            // Try to get image from first input if merge can't be executed
+            const firstInput = merge.inputs[0];
+            const inputImage = findSourceImage(firstInput, visited);
+            if (inputImage) return inputImage;
+          }
+        }
+        
+        // Otherwise, check upstream
+        const upstreamId = (currentNode as any).input;
+        if (upstreamId) {
+          return findSourceImage(upstreamId, visited);
+        }
+        
+        return null;
+      };
+      
+      // Collect all configurations from unprocessed nodes in the chain
+      const collectConfigurations = (currentNodeId: string, visited: Set<string> = new Set()): any => {
+        if (visited.has(currentNodeId)) return {};
+        visited.add(currentNodeId);
+        
+        const currentNode = nodes.find(n => n.id === currentNodeId);
+        if (!currentNode) return {};
+        
+        let configs: any = {};
+        
+        // First, collect from upstream nodes
+        const upstreamId = (currentNode as any).input;
+        if (upstreamId) {
+          configs = collectConfigurations(upstreamId, visited);
+        }
+        
+        // Add this node's configuration only if:
+        // 1. It's the current node being processed, OR
+        // 2. It hasn't been processed yet (no output) AND it's not the current node
+        const shouldIncludeConfig = 
+          currentNodeId === nodeId || // Always include current node's config
+          (!(currentNode as any).output && currentNodeId !== nodeId); // Include unprocessed intermediate nodes
+        
+        if (shouldIncludeConfig) {
+          const nodeConfig = getNodeConfiguration(currentNode);
+          if (Object.keys(nodeConfig).length > 0) {
+            configs = { ...configs, ...nodeConfig };
+            // Track unprocessed intermediate nodes
+            if (currentNodeId !== nodeId && !(currentNode as any).output) {
+              processedNodes.push(currentNodeId);
+            }
+          }
+        }
+        
+        return configs;
+      };
+      
+      // Find the source image
+      inputImage = findSourceImage(inputId);
+      
+      // If we found unprocessed merges, we need to execute them first
+      if (unprocessedMerges.length > 0 && !inputImage) {
+        console.log(`Found ${unprocessedMerges.length} unprocessed MERGE nodes in chain. Processing them first...`);
+        
+        // Process each merge node
+        for (const merge of unprocessedMerges) {
+          // Set loading state for the merge
+          setNodes(prev => prev.map(n => 
+            n.id === merge.id ? { ...n, isRunning: true, error: null } : n
+          ));
+          
+          try {
+            const mergeOutput = await executeMerge(merge);
+            
+            // Update the merge node with output
+            setNodes(prev => prev.map(n => 
+              n.id === merge.id ? { ...n, output: mergeOutput, isRunning: false, error: null } : n
+            ));
+            
+            // Track that we processed this merge as part of the chain
+            processedNodes.push(merge.id);
+            
+            // Now use this as our input image if it's the direct input
+            if (inputId === merge.id) {
+              inputImage = mergeOutput;
+            }
+          } catch (e: any) {
+            console.error("Auto-merge error:", e);
+            setNodes(prev => prev.map(n => 
+              n.id === merge.id ? { ...n, isRunning: false, error: e?.message || "Merge failed" } : n
+            ));
+            // Abort the main processing if merge failed
+            setNodes(prev => prev.map(n => 
+              n.id === nodeId ? { ...n, error: "Failed to process upstream MERGE node", isRunning: false } : n
+            ));
+            return;
+          }
+        }
+        
+        // After processing merges, try to find the source image again
+        if (!inputImage) {
+          inputImage = findSourceImage(inputId);
         }
       }
+      
+      // Collect configurations from the chain
+      accumulatedParams = collectConfigurations(inputId, new Set());
     }
 
     if (!inputImage) {
       const errorMsg = inputId 
-        ? "Connected node has no output image. Process the previous node first."
+        ? "No source image found in the chain. Connect to a CHARACTER node or processed node."
         : "No input connected. Connect an image source to this node.";
       setNodes(prev => prev.map(n => 
         n.id === nodeId ? { ...n, error: errorMsg, isRunning: false } : n
@@ -681,54 +955,37 @@ export default function EditorPage() {
       return;
     }
 
-    console.log("Processing node:", node.type, "with image:", inputImage.substring(0, 50) + "...");
+    // Add current node's configuration
+    const currentNodeConfig = getNodeConfiguration(node);
+    const params = { ...accumulatedParams, ...currentNodeConfig };
+    
+    // Count how many unprocessed nodes we're combining
+    const unprocessedNodeCount = Object.keys(params).length > 0 ? 
+      (processedNodes.length + 1) : 1;
+    
+    // Show info about batch processing
+    if (unprocessedNodeCount > 1) {
+      console.log(`🚀 Combining ${unprocessedNodeCount} node transformations into ONE API call`);
+      console.log("Combined parameters:", params);
+    } else {
+      console.log("Processing single node:", node.type);
+    }
 
-    // Set loading state
-    setNodes(prev => prev.map(n => 
-      n.id === nodeId ? { ...n, isRunning: true, error: null } : n
-    ));
+    // Set loading state for all nodes being processed
+    setNodes(prev => prev.map(n => {
+      if (n.id === nodeId || processedNodes.includes(n.id)) {
+        return { ...n, isRunning: true, error: null };
+      }
+      return n;
+    }));
 
     try {
-      const params: any = {};
-      
-      // Build params based on node type
-      switch (node.type) {
-        case "BACKGROUND":
-          params.backgroundType = (node as BackgroundNode).backgroundType;
-          params.backgroundColor = (node as BackgroundNode).backgroundColor;
-          params.backgroundImage = (node as BackgroundNode).backgroundImage;
-          params.customPrompt = (node as BackgroundNode).customPrompt;
-          break;
-        case "CLOTHES":
-          params.clothesPrompt = (node as ClothesNode).clothesPrompt;
-          break;
-        case "BLEND":
-          params.stylePrompt = (node as BlendNode).stylePrompt;
-          params.blendStrength = (node as BlendNode).blendStrength;
-          break;
-        case "EDIT":
-          params.editPrompt = (node as EditNode).editPrompt;
-          break;
-        case "CAMERA":
-          params.focalLength = (node as CameraNode).focalLength;
-          params.aperture = (node as CameraNode).aperture;
-          params.shutterSpeed = (node as CameraNode).shutterSpeed;
-          params.whiteBalance = (node as CameraNode).whiteBalance;
-          params.angle = (node as CameraNode).angle;
-          break;
-        case "AGE":
-          params.targetAge = (node as AgeNode).targetAge;
-          break;
-        case "FACE":
-          params.faceOptions = (node as FaceNode).faceOptions;
-          break;
-      }
-
+      // Make a SINGLE API call with all accumulated parameters
       const res = await fetch("/api/process", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          type: node.type,
+          type: "COMBINED", // Indicate this is a combined processing
           image: inputImage,
           params
         }),
@@ -737,14 +994,33 @@ export default function EditorPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Processing failed");
 
-      setNodes(prev => prev.map(n => 
-        n.id === nodeId ? { ...n, output: data.image, isRunning: false, error: null } : n
-      ));
+      // Only update the current node with the output
+      // Don't show output in intermediate nodes - they were just used for configuration
+      setNodes(prev => prev.map(n => {
+        if (n.id === nodeId) {
+          // Only the current node gets the final output displayed
+          return { ...n, output: data.image, isRunning: false, error: null };
+        } else if (processedNodes.includes(n.id)) {
+          // Mark intermediate nodes as no longer running but don't give them output
+          // This way they remain unprocessed visually but their configs were used
+          return { ...n, isRunning: false, error: null };
+        }
+        return n;
+      }));
+      
+      if (unprocessedNodeCount > 1) {
+        console.log(`✅ Successfully applied ${unprocessedNodeCount} transformations in ONE API call!`);
+        console.log(`Saved ${unprocessedNodeCount - 1} API calls by combining transformations`);
+      }
     } catch (e: any) {
       console.error("Process error:", e);
-      setNodes(prev => prev.map(n => 
-        n.id === nodeId ? { ...n, isRunning: false, error: e?.message || "Error" } : n
-      ));
+      // Clear loading state for all nodes
+      setNodes(prev => prev.map(n => {
+        if (n.id === nodeId || processedNodes.includes(n.id)) {
+          return { ...n, isRunning: false, error: e?.message || "Error" };
+        }
+        return n;
+      }));
     }
   };
 
@@ -795,6 +1071,51 @@ export default function EditorPage() {
     );
   };
 
+  const executeMerge = async (merge: MergeNode): Promise<string | null> => {
+    // Get images from merge inputs
+    const mergeImages: string[] = [];
+    const characterData: { image: string; label: string }[] = [];
+    
+    for (const inputId of merge.inputs) {
+      const inputNode = nodes.find(n => n.id === inputId);
+      if (inputNode) {
+        let image: string | null = null;
+        let label = "";
+        
+        if (inputNode.type === "CHARACTER") {
+          image = (inputNode as CharacterNode).image;
+          label = (inputNode as CharacterNode).label || "";
+        } else if ((inputNode as any).output) {
+          image = (inputNode as any).output;
+        }
+        
+        if (image) {
+          mergeImages.push(image);
+          characterData.push({ image, label: label || `Input ${mergeImages.length}` });
+        }
+      }
+    }
+    
+    if (mergeImages.length < 2) {
+      throw new Error("Not enough valid inputs for merge");
+    }
+    
+    const prompt = generateMergePrompt(characterData);
+    
+    const res = await fetch("/api/merge", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ images: mergeImages, prompt }),
+    });
+    
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || "Merge failed");
+    }
+    
+    return (data.images?.[0] as string) || null;
+  };
+  
   const runMerge = async (mergeId: string) => {
     setNodes((prev) => prev.map((n) => (n.id === mergeId && n.type === "MERGE" ? { ...n, isRunning: true, error: null } : n)));
     try {
@@ -850,7 +1171,7 @@ export default function EditorPage() {
         MERGE: 380,
         BACKGROUND: 320,
         CLOTHES: 320,
-        BLEND: 300,
+        BLEND: 320,
         EDIT: 320,
         CAMERA: 360,
         AGE: 280,
@@ -1087,6 +1408,7 @@ export default function EditorPage() {
                       onDisconnect={disconnectFromMerge}
                       onRun={runMerge}
                       onEndConnection={handleEndConnection}
+                      onStartConnection={handleStartConnection}
                       onUpdatePosition={updateNodePosition}
                       onDelete={deleteNode}
                       onClearConnections={clearMergeConnections}
