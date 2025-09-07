@@ -14,9 +14,9 @@ export async function POST(req: NextRequest) {
     }
 
     const apiKey = process.env.GOOGLE_API_KEY;
-    if (!apiKey) {
+    if (!apiKey || apiKey === 'your_api_key_here') {
       return NextResponse.json(
-        { error: "Server is not configured: GOOGLE_API_KEY is missing" },
+        { error: "API key not configured. Please add GOOGLE_API_KEY to .env.local file. Get your key from: https://aistudio.google.com/app/apikey" },
         { status: 500 }
       );
     }
