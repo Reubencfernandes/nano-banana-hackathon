@@ -57,7 +57,7 @@ The result should look like all subjects were photographed together in the same 
 }
 
 // Types
-type NodeType = "CHARACTER" | "MERGE" | "BACKGROUND" | "CLOTHES" | "STYLE" | "EDIT" | "CAMERA" | "AGE" | "FACE";
+type NodeType = "CHARACTER" | "MERGE" | "BACKGROUND" | "CLOTHES" | "STYLE" | "EDIT" | "CAMERA" | "AGE" | "FACE" | "BLEND";
 
 type NodeBase = {
   id: string;
@@ -167,7 +167,16 @@ type FaceNode = NodeBase & {
   error?: string | null;
 };
 
-type AnyNode = CharacterNode | MergeNode | BackgroundNode | ClothesNode | StyleNode | EditNode | CameraNode | AgeNode | FaceNode;
+type BlendNode = NodeBase & {
+  type: "BLEND";
+  input?: string;
+  output?: string;
+  blendStrength?: number;
+  isRunning?: boolean;
+  error?: string | null;
+};
+
+type AnyNode = CharacterNode | MergeNode | BackgroundNode | ClothesNode | StyleNode | EditNode | CameraNode | AgeNode | FaceNode | BlendNode;
 
 // Default placeholder portrait
 const DEFAULT_PERSON =
@@ -506,7 +515,8 @@ function MergeNodeView({
               image = (inputNode as any).output;
               label = `${inputNode.type}`;
             } else if (inputNode.type === "MERGE" && (inputNode as MergeNode).output) {
-              image = (inputNode as MergeNode).output;
+              const mergeOutput = (inputNode as MergeNode).output;
+              image = mergeOutput !== undefined ? mergeOutput : null;
               label = "Merged";
             } else {
               // Node without output yet
@@ -960,7 +970,7 @@ export default function EditorPage() {
             
             // Update the merge node with output
             setNodes(prev => prev.map(n => 
-              n.id === merge.id ? { ...n, output: mergeOutput, isRunning: false, error: null } : n
+              n.id === merge.id ? { ...n, output: mergeOutput || undefined, isRunning: false, error: null } : n
             ));
             
             // Track that we processed this merge as part of the chain
@@ -1028,6 +1038,36 @@ export default function EditorPage() {
     }));
 
     try {
+      // Validate image data before sending
+      if (inputImage && inputImage.length > 10 * 1024 * 1024) { // 10MB limit warning
+        console.warn("Large input image detected, size:", (inputImage.length / (1024 * 1024)).toFixed(2) + "MB");
+      }
+      
+      // Check if params contains custom images and validate them
+      if (params.clothesImage) {
+        console.log("[Process] Clothes image size:", (params.clothesImage.length / 1024).toFixed(2) + "KB");
+        // Validate it's a proper data URL
+        if (!params.clothesImage.startsWith('data:') && !params.clothesImage.startsWith('http') && !params.clothesImage.startsWith('/')) {
+          throw new Error("Invalid clothes image format. Please upload a valid image.");
+        }
+      }
+      
+      if (params.customBackgroundImage) {
+        console.log("[Process] Custom background size:", (params.customBackgroundImage.length / 1024).toFixed(2) + "KB");
+        // Validate it's a proper data URL
+        if (!params.customBackgroundImage.startsWith('data:') && !params.customBackgroundImage.startsWith('http') && !params.customBackgroundImage.startsWith('/')) {
+          throw new Error("Invalid background image format. Please upload a valid image.");
+        }
+      }
+      
+      // Log request details for debugging
+      console.log("[Process] Sending request with:", {
+        hasImage: !!inputImage,
+        imageSize: inputImage ? (inputImage.length / 1024).toFixed(2) + "KB" : 0,
+        paramsKeys: Object.keys(params),
+        nodeType: node.type
+      });
+      
       // Make a SINGLE API call with all accumulated parameters
       const res = await fetch("/api/process", {
         method: "POST",
@@ -1038,6 +1078,14 @@ export default function EditorPage() {
           params
         }),
       });
+
+      // Check if response is actually JSON before parsing
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const textResponse = await res.text();
+        console.error("Non-JSON response received:", textResponse);
+        throw new Error("Server returned an error page instead of JSON. Check your API key configuration.");
+      }
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Processing failed");
@@ -1156,11 +1204,17 @@ export default function EditorPage() {
           label = `${inputNode.type} Output`;
         } else if (inputNode.type === "MERGE" && (inputNode as MergeNode).output) {
           // Another merge node's output
-          image = (inputNode as MergeNode).output;
+          const mergeOutput = (inputNode as MergeNode).output;
+          image = mergeOutput !== undefined ? mergeOutput : null;
           label = "Merged Image";
         }
         
         if (image) {
+          // Validate image format
+          if (!image.startsWith('data:') && !image.startsWith('http') && !image.startsWith('/')) {
+            console.error(`Invalid image format for ${label}:`, image.substring(0, 100));
+            continue; // Skip invalid images
+          }
           mergeImages.push(image);
           inputData.push({ image, label: label || `Input ${mergeImages.length}` });
         }
@@ -1170,6 +1224,13 @@ export default function EditorPage() {
     if (mergeImages.length < 2) {
       throw new Error("Not enough valid inputs for merge. Need at least 2 images.");
     }
+    
+    // Log merge details for debugging
+    console.log("[Merge] Processing merge with:", {
+      imageCount: mergeImages.length,
+      imageSizes: mergeImages.map(img => (img.length / 1024).toFixed(2) + "KB"),
+      labels: inputData.map(d => d.label)
+    });
     
     const prompt = generateMergePrompt(inputData);
     
@@ -1183,6 +1244,14 @@ export default function EditorPage() {
         prompt 
       }),
     });
+    
+    // Check if response is actually JSON before parsing
+    const contentType = res.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) {
+      const textResponse = await res.text();
+      console.error("Non-JSON response received:", textResponse);
+      throw new Error("Server returned an error page instead of JSON. Check your API key configuration.");
+    }
     
     const data = await res.json();
     if (!res.ok) {
@@ -1217,7 +1286,8 @@ export default function EditorPage() {
             label = `${inputNode.type} Output ${index + 1}`;
           } else if (inputNode.type === "MERGE" && (inputNode as MergeNode).output) {
             // Another merge node's output
-            image = (inputNode as MergeNode).output;
+            const mergeOutput = (inputNode as MergeNode).output;
+            image = mergeOutput !== undefined ? mergeOutput : null;
             label = `Merged Image ${index + 1}`;
           }
           
@@ -1247,6 +1317,15 @@ export default function EditorPage() {
           prompt 
         }),
       });
+      
+      // Check if response is actually JSON before parsing
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const textResponse = await res.text();
+        console.error("Non-JSON response received:", textResponse);
+        throw new Error("Server returned an error page instead of JSON. Check your API key configuration.");
+      }
+      
       const js = await res.json();
       if (!res.ok) {
         // Show more helpful error messages
