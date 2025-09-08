@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import "./editor.css";
 import {
   BackgroundNodeView,
   ClothesNodeView,
@@ -423,7 +424,7 @@ function CharacterNodeView({
 function MergeNodeView({
   node,
   scaleRef,
-  characters,
+  allNodes,
   onDisconnect,
   onRun,
   onEndConnection,
@@ -434,8 +435,8 @@ function MergeNodeView({
 }: {
   node: MergeNode;
   scaleRef: React.MutableRefObject<number>;
-  characters: CharacterNode[];
-  onDisconnect: (mergeId: string, characterId: string) => void;
+  allNodes: AnyNode[];
+  onDisconnect: (mergeId: string, nodeId: string) => void;
   onRun: (mergeId: string) => void;
   onEndConnection: (mergeId: string) => void;
   onStartConnection: (nodeId: string) => void;
@@ -491,14 +492,35 @@ function MergeNodeView({
         <div className="text-xs text-white/70">Inputs</div>
         <div className="flex flex-wrap gap-2">
           {node.inputs.map((id) => {
-            const c = characters.find((x) => x.id === id);
-            if (!c) return null;
+            const inputNode = allNodes.find((n) => n.id === id);
+            if (!inputNode) return null;
+            
+            // Get image and label based on node type
+            let image: string | null = null;
+            let label = "";
+            
+            if (inputNode.type === "CHARACTER") {
+              image = (inputNode as CharacterNode).image;
+              label = (inputNode as CharacterNode).label || "Character";
+            } else if ((inputNode as any).output) {
+              image = (inputNode as any).output;
+              label = `${inputNode.type}`;
+            } else if (inputNode.type === "MERGE" && (inputNode as MergeNode).output) {
+              image = (inputNode as MergeNode).output;
+              label = "Merged";
+            } else {
+              // Node without output yet
+              label = `${inputNode.type} (pending)`;
+            }
+            
             return (
               <div key={id} className="flex items-center gap-2 bg-white/10 rounded px-2 py-1">
-                <div className="w-6 h-6 rounded overflow-hidden bg-black/20">
-                  <img src={c.image} className="w-full h-full object-contain" alt="inp" />
-                </div>
-                <span className="text-xs">{c.label || `Character ${id.slice(-3)}`}</span>
+                {image && (
+                  <div className="w-6 h-6 rounded overflow-hidden bg-black/20">
+                    <img src={image} className="w-full h-full object-contain" alt="inp" />
+                  </div>
+                )}
+                <span className="text-xs">{label}</span>
                 <button
                   className="text-[10px] text-red-300 hover:text-red-200"
                   onClick={() => onDisconnect(node.id, id)}
@@ -510,7 +532,7 @@ function MergeNodeView({
           })}
         </div>
         {node.inputs.length === 0 && (
-          <p className="text-xs text-white/40">Drag from CHARACTER output port to connect</p>
+          <p className="text-xs text-white/40">Drag from any node's output port to connect</p>
         )}
         <div className="flex items-center gap-2">
           {node.inputs.length > 0 && (
@@ -591,17 +613,6 @@ export default function EditorPage() {
     } as CharacterNode,
   ]);
 
-  // Theme state
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
-  
-  // Apply theme to document
-  useEffect(() => {
-    if (theme === 'light') {
-      document.documentElement.classList.remove('dark');
-    } else {
-      document.documentElement.classList.add('dark');
-    }
-  }, [theme]);
 
   // Viewport state
   const [scale, setScale] = useState(1);
@@ -1061,19 +1072,19 @@ export default function EditorPage() {
     }
   };
 
-  const connectToMerge = (mergeId: string, characterId: string) => {
+  const connectToMerge = (mergeId: string, nodeId: string) => {
     setNodes((prev) =>
       prev.map((n) =>
         n.id === mergeId && n.type === "MERGE"
-          ? { ...n, inputs: Array.from(new Set([...(n as MergeNode).inputs, characterId])) }
+          ? { ...n, inputs: Array.from(new Set([...(n as MergeNode).inputs, nodeId])) }
           : n
       )
     );
   };
 
   // Connection drag handlers
-  const handleStartConnection = (characterId: string) => {
-    setDraggingFrom(characterId);
+  const handleStartConnection = (nodeId: string) => {
+    setDraggingFrom(nodeId);
     // Prevent text selection during dragging
     document.body.style.userSelect = 'none';
     document.body.style.webkitUserSelect = 'none';
@@ -1081,7 +1092,15 @@ export default function EditorPage() {
 
   const handleEndConnection = (mergeId: string) => {
     if (draggingFrom) {
-      connectToMerge(mergeId, draggingFrom);
+      // Allow connections from any node type that could have an output
+      const sourceNode = nodes.find(n => n.id === draggingFrom);
+      if (sourceNode) {
+        // Allow connections from:
+        // - CHARACTER nodes (always have an image)
+        // - Any node with an output (processed nodes)
+        // - Any processing node (for future processing)
+        connectToMerge(mergeId, draggingFrom);
+      }
       setDraggingFrom(null);
       setDragPos(null);
       // Re-enable text selection
@@ -1107,20 +1126,20 @@ export default function EditorPage() {
       document.body.style.webkitUserSelect = '';
     }
   };
-  const disconnectFromMerge = (mergeId: string, characterId: string) => {
+  const disconnectFromMerge = (mergeId: string, nodeId: string) => {
     setNodes((prev) =>
       prev.map((n) =>
         n.id === mergeId && n.type === "MERGE"
-          ? { ...n, inputs: (n as MergeNode).inputs.filter((i) => i !== characterId) }
+          ? { ...n, inputs: (n as MergeNode).inputs.filter((i) => i !== nodeId) }
           : n
       )
     );
   };
 
   const executeMerge = async (merge: MergeNode): Promise<string | null> => {
-    // Get images from merge inputs
+    // Get images from merge inputs - now accepts any node type
     const mergeImages: string[] = [];
-    const characterData: { image: string; label: string }[] = [];
+    const inputData: { image: string; label: string }[] = [];
     
     for (const inputId of merge.inputs) {
       const inputNode = nodes.find(n => n.id === inputId);
@@ -1132,26 +1151,37 @@ export default function EditorPage() {
           image = (inputNode as CharacterNode).image;
           label = (inputNode as CharacterNode).label || "";
         } else if ((inputNode as any).output) {
+          // Any processed node with output
           image = (inputNode as any).output;
+          label = `${inputNode.type} Output`;
+        } else if (inputNode.type === "MERGE" && (inputNode as MergeNode).output) {
+          // Another merge node's output
+          image = (inputNode as MergeNode).output;
+          label = "Merged Image";
         }
         
         if (image) {
           mergeImages.push(image);
-          characterData.push({ image, label: label || `Input ${mergeImages.length}` });
+          inputData.push({ image, label: label || `Input ${mergeImages.length}` });
         }
       }
     }
     
     if (mergeImages.length < 2) {
-      throw new Error("Not enough valid inputs for merge");
+      throw new Error("Not enough valid inputs for merge. Need at least 2 images.");
     }
     
-    const prompt = generateMergePrompt(characterData);
+    const prompt = generateMergePrompt(inputData);
     
-    const res = await fetch("/api/merge", {
+    // Use the process route instead of merge route
+    const res = await fetch("/api/process", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ images: mergeImages, prompt }),
+      body: JSON.stringify({ 
+        type: "MERGE",
+        images: mergeImages, 
+        prompt 
+      }),
     });
     
     const data = await res.json();
@@ -1159,7 +1189,7 @@ export default function EditorPage() {
       throw new Error(data.error || "Merge failed");
     }
     
-    return (data.images?.[0] as string) || null;
+    return data.image || (data.images?.[0] as string) || null;
   };
   
   const runMerge = async (mergeId: string) => {
@@ -1168,23 +1198,27 @@ export default function EditorPage() {
       const merge = (nodes.find((n) => n.id === mergeId) as MergeNode) || null;
       if (!merge) return;
       
-      // Get character nodes with their labels
-      const characterData = merge.inputs
+      // Get input nodes with their labels - now accepts any node type
+      const inputData = merge.inputs
         .map((id, index) => {
-          const char = nodes.find((c) => c.id === id);
-          if (!char) return null;
+          const inputNode = nodes.find((n) => n.id === id);
+          if (!inputNode) return null;
           
-          // Support both CHARACTER nodes and any node with output
+          // Support CHARACTER nodes, processed nodes, and MERGE outputs
           let image: string | null = null;
           let label = "";
           
-          if (char.type === "CHARACTER") {
-            image = (char as CharacterNode).image;
-            label = (char as CharacterNode).label || `CHARACTER${index + 1}`;
-          } else if ((char as any).output) {
-            // If it's a processed node, use its output
-            image = (char as any).output;
-            label = `Input ${index + 1}`;
+          if (inputNode.type === "CHARACTER") {
+            image = (inputNode as CharacterNode).image;
+            label = (inputNode as CharacterNode).label || `CHARACTER ${index + 1}`;
+          } else if ((inputNode as any).output) {
+            // Any processed node with output
+            image = (inputNode as any).output;
+            label = `${inputNode.type} Output ${index + 1}`;
+          } else if (inputNode.type === "MERGE" && (inputNode as MergeNode).output) {
+            // Another merge node's output
+            image = (inputNode as MergeNode).output;
+            label = `Merged Image ${index + 1}`;
           }
           
           if (!image) return null;
@@ -1193,20 +1227,25 @@ export default function EditorPage() {
         })
         .filter(Boolean) as { image: string; label: string }[];
       
-      if (characterData.length < 2) throw new Error("Connect at least two CHARACTER nodes.");
+      if (inputData.length < 2) throw new Error("Connect at least two nodes with images (CHARACTER nodes or processed nodes).");
       
       // Debug: Log what we're sending
-      console.log("🔄 Merging nodes:", characterData.map(d => d.label).join(", "));
-      console.log("📷 Image URLs being sent:", characterData.map(d => d.image.substring(0, 100) + "..."));
+      console.log("🔄 Merging nodes:", inputData.map(d => d.label).join(", "));
+      console.log("📷 Image URLs being sent:", inputData.map(d => d.image.substring(0, 100) + "..."));
       
       // Generate dynamic prompt based on number of inputs
-      const prompt = generateMergePrompt(characterData);
-      const imgs = characterData.map(d => d.image);
+      const prompt = generateMergePrompt(inputData);
+      const imgs = inputData.map(d => d.image);
 
-      const res = await fetch("/api/merge", {
+      // Use the process route with MERGE type
+      const res = await fetch("/api/process", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ images: imgs, prompt }),
+        body: JSON.stringify({ 
+          type: "MERGE",
+          images: imgs, 
+          prompt 
+        }),
       });
       const js = await res.json();
       if (!res.ok) {
@@ -1217,7 +1256,7 @@ export default function EditorPage() {
         }
         throw new Error(errorMsg);
       }
-      const out = (js.images?.[0] as string) || null;
+      const out = js.image || (js.images?.[0] as string) || null;
       setNodes((prev) => prev.map((n) => (n.id === mergeId && n.type === "MERGE" ? { ...n, output: out, isRunning: false } : n)));
     } catch (e: any) {
       console.error("Merge error:", e);
@@ -1271,7 +1310,7 @@ export default function EditorPage() {
       return `M ${x1} ${y1} C ${x1 + controlOffset} ${y1}, ${x2 - controlOffset} ${y2}, ${x2} ${y2}`;
     };
     
-    const paths: { path: string; active?: boolean }[] = [];
+    const paths: { path: string; active?: boolean; processing?: boolean }[] = [];
     
     // Handle all connections
     for (const node of nodes) {
@@ -1283,7 +1322,11 @@ export default function EditorPage() {
           if (inputNode) {
             const start = getNodeOutputPort(inputNode);
             const end = getNodeInputPort(node);
-            paths.push({ path: createPath(start.x, start.y, end.x, end.y) });
+            const isProcessing = merge.isRunning || (inputNode as any).isRunning;
+            paths.push({ 
+              path: createPath(start.x, start.y, end.x, end.y),
+              processing: isProcessing
+            });
           }
         }
       } else if ((node as any).input) {
@@ -1293,7 +1336,11 @@ export default function EditorPage() {
         if (inputNode) {
           const start = getNodeOutputPort(inputNode);
           const end = getNodeInputPort(node);
-          paths.push({ path: createPath(start.x, start.y, end.x, end.y) });
+          const isProcessing = (node as any).isRunning || (inputNode as any).isRunning;
+          paths.push({ 
+            path: createPath(start.x, start.y, end.x, end.y),
+            processing: isProcessing
+          });
         }
       }
     }
@@ -1407,35 +1454,10 @@ export default function EditorPage() {
 
   return (
     <div className="min-h-[100svh] bg-background text-foreground">
-      <header className="flex items-center justify-between px-6 py-4 border-b border-border/60 bg-card/70 backdrop-blur">
+      <header className="flex items-center px-6 py-4 border-b border-border/60 bg-card/70 backdrop-blur">
         <h1 className="text-lg font-semibold tracking-wide">
           <span className="mr-2" aria-hidden>🍌</span>Nano Banana Editor
         </h1>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-          title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-          className="rounded-lg"
-        >
-          {theme === 'dark' ? (
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="5"/>
-              <line x1="12" y1="1" x2="12" y2="3"/>
-              <line x1="12" y1="21" x2="12" y2="23"/>
-              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
-              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
-              <line x1="1" y1="12" x2="3" y2="12"/>
-              <line x1="21" y1="12" x2="23" y2="12"/>
-              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
-              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
-            </svg>
-          ) : (
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-            </svg>
-          )}
-        </Button>
       </header>
 
       <div
@@ -1493,12 +1515,13 @@ export default function EditorPage() {
             {connectionPaths.map((p, idx) => (
               <path
                 key={idx}
+                className={p.processing ? "connection-processing connection-animated" : ""}
                 d={p.path}
                 fill="none"
-                stroke={p.active ? "hsl(var(--primary))" : "hsl(var(--muted-foreground))"}
-                strokeWidth="2.5"
-                strokeDasharray={p.active ? "5,5" : undefined}
-                style={p.active ? undefined : { opacity: 0.9 }}
+                stroke={p.processing ? undefined : (p.active ? "hsl(var(--primary))" : "hsl(var(--muted-foreground))")}
+                strokeWidth={p.processing ? undefined : "2.5"}
+                strokeDasharray={p.active && !p.processing ? "5,5" : undefined}
+                style={p.active && !p.processing ? undefined : (!p.processing ? { opacity: 0.9 } : {})}
               />
             ))}
           </svg>
@@ -1525,7 +1548,7 @@ export default function EditorPage() {
                       key={node.id}
                       node={node as MergeNode}
                       scaleRef={scaleRef}
-                      characters={nodes.filter((n) => n.type === "CHARACTER") as CharacterNode[]}
+                      allNodes={nodes}
                       onDisconnect={disconnectFromMerge}
                       onRun={runMerge}
                       onEndConnection={handleEndConnection}
