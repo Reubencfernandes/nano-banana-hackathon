@@ -3,6 +3,9 @@ import { GoogleGenAI } from "@google/genai";
 
 export const runtime = "nodejs";
 
+// Increase the body size limit to 50MB for large images
+export const maxDuration = 60; // 60 seconds timeout
+
 function parseDataUrl(dataUrl: string): { mimeType: string; data: string } | null {
   const match = dataUrl.match(/^data:(.*?);base64,(.*)$/);
   if (!match) return null;
@@ -11,13 +14,26 @@ function parseDataUrl(dataUrl: string): { mimeType: string; data: string } | nul
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json() as {
-      type: string;
-      image?: string;
-      images?: string[];
-      prompt?: string;
-      params?: any;
-    };
+    // Log request size for debugging
+    const contentLength = req.headers.get('content-length');
+    console.log(`[API] Request size: ${contentLength} bytes`);
+    
+    let body: any;
+    try {
+      body = await req.json() as {
+        type: string;
+        image?: string;
+        images?: string[];
+        prompt?: string;
+        params?: any;
+      };
+    } catch (jsonError) {
+      console.error('[API] Failed to parse JSON:', jsonError);
+      return NextResponse.json(
+        { error: "Invalid JSON in request body. This might be due to large image data or special characters." },
+        { status: 400 }
+      );
+    }
 
     const apiKey = process.env.GOOGLE_API_KEY;
     if (!apiKey || apiKey === 'your_actual_api_key_here') {
@@ -105,13 +121,21 @@ The result should look like all subjects were photographed together in the same 
       }
 
       const mergeParts: any[] = [{ text: mergePrompt }];
-      for (const url of imgs) {
-        const parsed = await toInlineDataFromAny(url);
-        if (!parsed) {
-          console.error('[MERGE] Failed to parse image:', url.substring(0, 100));
-          continue;
+      for (let i = 0; i < imgs.length; i++) {
+        const url = imgs[i];
+        console.log(`[MERGE] Processing image ${i + 1}/${imgs.length}, type: ${typeof url}, length: ${url?.length || 0}`);
+        
+        try {
+          const parsed = await toInlineDataFromAny(url);
+          if (!parsed) {
+            console.error(`[MERGE] Failed to parse image ${i + 1}:`, url.substring(0, 100));
+            continue;
+          }
+          mergeParts.push({ inlineData: { mimeType: parsed.mimeType, data: parsed.data } });
+          console.log(`[MERGE] Successfully processed image ${i + 1}`);
+        } catch (error) {
+          console.error(`[MERGE] Error processing image ${i + 1}:`, error);
         }
-        mergeParts.push({ inlineData: { mimeType: parsed.mimeType, data: parsed.data } });
       }
       
       console.log(`[MERGE] Sending ${mergeParts.length - 1} images to model`);
@@ -177,15 +201,27 @@ The result should look like all subjects were photographed together in the same 
     
     // Clothes modifications
     if (params.clothesImage) {
+      console.log(`[API] Processing clothes image, type: ${typeof params.clothesImage}, length: ${params.clothesImage?.length || 0}`);
+      
       if (params.selectedPreset === "Sukajan") {
         prompts.push("Replace the person's clothing with a Japanese sukajan jacket (embroidered designs). Use the clothes reference image if provided.");
       } else if (params.selectedPreset === "Blazer") {
         prompts.push("Replace the person's clothing with a professional blazer. Use the clothes reference image if provided.");
       } else {
-        prompts.push("Replace the person's clothing to match the provided clothes reference image (attached below). Preserve body pose and identity.");
+        prompts.push("Replace the clothes of person from Image 1 to match the provided clothes reference image (attached below). Preserve body pose and identity.");
       }
-      const clothesRef = await toInlineDataFromAny(params.clothesImage);
-      if (clothesRef) referenceParts.push({ inlineData: clothesRef });
+      
+      try {
+        const clothesRef = await toInlineDataFromAny(params.clothesImage);
+        if (clothesRef) {
+          console.log(`[API] Successfully processed clothes image`);
+          referenceParts.push({ inlineData: clothesRef });
+        } else {
+          console.error('[API] Failed to process clothes image - toInlineDataFromAny returned null');
+        }
+      } catch (error) {
+        console.error('[API] Error processing clothes image:', error);
+      }
     }
     
     // Style application
@@ -307,8 +343,28 @@ The result should look like all subjects were photographed together in the same 
     }
 
     return NextResponse.json({ image: images[0] });
-  } catch (err) {
-    console.error("/api/process error", err);
-    return NextResponse.json({ error: "Failed to process image" }, { status: 500 });
+  } catch (err: any) {
+    console.error("/api/process error:", err);
+    console.error("Error stack:", err?.stack);
+    
+    // Provide more specific error messages
+    if (err?.message?.includes('payload size')) {
+      return NextResponse.json(
+        { error: "Image data too large. Please use smaller images or reduce image quality." },
+        { status: 413 }
+      );
+    }
+    
+    if (err?.message?.includes('JSON')) {
+      return NextResponse.json(
+        { error: "Invalid data format. Please ensure images are properly encoded." },
+        { status: 400 }
+      );
+    }
+    
+    return NextResponse.json(
+      { error: `Failed to process image: ${err?.message || 'Unknown error'}` },
+      { status: 500 }
+    );
   }
 }
