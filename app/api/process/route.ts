@@ -208,7 +208,7 @@ The result should look like all subjects were photographed together in the same 
       } else if (params.selectedPreset === "Blazer") {
         prompts.push("Replace the person's clothing with a professional blazer. Use the clothes reference image if provided.");
       } else {
-        prompts.push("Replace the clothes of person from Image 1 to match the provided clothes reference image (attached below). Preserve body pose and identity.");
+        prompts.push(`Take the person shown in the first image and replace their entire outfit with the clothing items shown in the second reference image. The person's face, hair, body pose, and background should remain exactly the same. Only the clothing should change to match the reference clothing image. Ensure the new clothes fit naturally on the person's body with realistic proportions, proper fabric draping, and lighting that matches the original photo environment.`);
       }
       
       try {
@@ -315,9 +315,9 @@ The result should look like all subjects were photographed together in the same 
     // Generate with Gemini
     const parts = [
       { text: prompt },
-      // Primary subject image (input)
+      // Primary subject image (input) - this is the person whose clothes will be changed
       { inlineData: { mimeType: parsed.mimeType, data: parsed.data } },
-      // Additional reference images to guide modifications
+      // Additional reference images to guide modifications (e.g., clothes to copy)
       ...referenceParts,
     ];
 
