@@ -115,7 +115,6 @@ export function BackgroundNodeView({
   onUpdatePosition,
 }: any) {
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
-  const hasConfig = node.backgroundType && !node.output;
   
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.length) {
@@ -162,7 +161,7 @@ export function BackgroundNodeView({
   
   return (
     <div 
-      className={`nb-node absolute text-white w-[320px] ${hasConfig ? 'ring-2 ring-yellow-500/50' : ''}`} 
+      className="nb-node absolute text-white w-[320px]" 
       style={{ left: localPos.x, top: localPos.y }}
       onDrop={handleDrop}
       onDragOver={(e) => e.preventDefault()}
@@ -176,11 +175,11 @@ export function BackgroundNodeView({
       >
         <Port className="in" nodeId={node.id} isOutput={false} onEndConnection={onEndConnection} />
         <div className="font-semibold text-sm flex-1 text-center">BACKGROUND</div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           <Button
             variant="ghost"
             size="icon"
-            className="text-destructive hover:bg-destructive/20"
+            className="text-destructive hover:bg-destructive/20 h-6 w-6"
             onClick={(e) => {
               e.stopPropagation();
               e.preventDefault();
@@ -304,7 +303,6 @@ export function BackgroundNodeView({
 
 export function ClothesNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition }: any) {
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
-  const hasConfig = node.clothesImage && !node.output;
   
   const presetClothes = [
     { name: "Sukajan", path: "/sukajan.png" },
@@ -346,12 +344,11 @@ export function ClothesNodeView({ node, onDelete, onUpdate, onStartConnection, o
   
   return (
     <div 
-      className={`nb-node absolute text-white w-[320px] ${hasConfig ? 'ring-2 ring-yellow-500/50' : ''}`}
+      className="nb-node absolute text-white w-[320px]"
       style={{ left: localPos.x, top: localPos.y }}
       onDrop={onDrop}
       onDragOver={(e) => e.preventDefault()}
       onPaste={onPaste}
-      title={hasConfig ? "Has unsaved configuration - will be applied when processing downstream" : ""}
     >
       <div 
         className="nb-header px-3 py-2 flex items-center justify-between rounded-t-[14px] cursor-grab active:cursor-grabbing"
@@ -361,11 +358,11 @@ export function ClothesNodeView({ node, onDelete, onUpdate, onStartConnection, o
       >
         <Port className="in" nodeId={node.id} isOutput={false} onEndConnection={onEndConnection} />
         <div className="font-semibold text-sm flex-1 text-center">CLOTHES</div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           <Button
             variant="ghost"
             size="icon"
-            className="text-destructive hover:bg-destructive/20"
+            className="text-destructive hover:bg-destructive/20 h-6 w-6"
             onClick={(e) => {
               e.stopPropagation();
               e.preventDefault();
@@ -393,11 +390,6 @@ export function ClothesNodeView({ node, onDelete, onUpdate, onStartConnection, o
             >
               Clear Connection
             </Button>
-          </div>
-        )}
-        {hasConfig && (
-          <div className="text-xs bg-yellow-500/20 border border-yellow-500/50 rounded px-2 py-1 text-yellow-300">
-            ⚡ Config pending - will apply when downstream node processes
           </div>
         )}
         <div className="text-xs text-white/70">Clothes Reference</div>
@@ -485,10 +477,9 @@ export function ClothesNodeView({ node, onDelete, onUpdate, onStartConnection, o
 
 export function AgeNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition }: any) {
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
-  const hasConfig = node.targetAge && node.targetAge !== 30 && !node.output;
   
   return (
-    <div className={`nb-node absolute text-white w-[280px] ${hasConfig ? 'ring-2 ring-yellow-500/50' : ''}`} style={{ left: localPos.x, top: localPos.y }}>
+    <div className="nb-node absolute text-white w-[280px]" style={{ left: localPos.x, top: localPos.y }}>
       <div 
         className="nb-header px-3 py-2 flex items-center justify-between rounded-t-[14px] cursor-grab active:cursor-grabbing"
         onPointerDown={onPointerDown}
@@ -497,11 +488,11 @@ export function AgeNodeView({ node, onDelete, onUpdate, onStartConnection, onEnd
       >
         <Port className="in" nodeId={node.id} isOutput={false} onEndConnection={onEndConnection} />
         <div className="font-semibold text-sm flex-1 text-center">AGE</div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           <Button
             variant="ghost"
             size="icon"
-            className="text-destructive hover:bg-destructive/20"
+            className="text-destructive hover:bg-destructive/20 h-6 w-6"
             onClick={(e) => {
               e.stopPropagation();
               e.preventDefault();
@@ -593,11 +584,11 @@ export function CameraNodeView({ node, onDelete, onUpdate, onStartConnection, on
       >
         <Port className="in" nodeId={node.id} isOutput={false} onEndConnection={onEndConnection} />
         <div className="font-semibold text-sm flex-1 text-center">CAMERA</div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           <Button
             variant="ghost"
             size="icon"
-            className="text-destructive hover:bg-destructive/20"
+            className="text-destructive hover:bg-destructive/20 h-6 w-6"
             onClick={(e) => {
               e.stopPropagation();
               e.preventDefault();
@@ -795,11 +786,11 @@ export function FaceNodeView({ node, onDelete, onUpdate, onStartConnection, onEn
       >
         <Port className="in" nodeId={node.id} isOutput={false} onEndConnection={onEndConnection} />
         <div className="font-semibold text-sm flex-1 text-center">FACE</div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           <Button
             variant="ghost"
             size="icon"
-            className="text-destructive hover:bg-destructive/20"
+            className="text-destructive hover:bg-destructive/20 h-6 w-6"
             onClick={(e) => {
               e.stopPropagation();
               e.preventDefault();
@@ -959,11 +950,11 @@ export function StyleNodeView({ node, onDelete, onUpdate, onStartConnection, onE
       >
         <Port className="in" nodeId={node.id} isOutput={false} onEndConnection={onEndConnection} />
         <div className="font-semibold text-sm flex-1 text-center">STYLE</div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           <Button
             variant="ghost"
             size="icon"
-            className="text-destructive hover:bg-destructive/20"
+            className="text-destructive hover:bg-destructive/20 h-6 w-6"
             onClick={(e) => {
               e.stopPropagation();
               e.preventDefault();
@@ -1058,11 +1049,11 @@ export function EditNodeView({ node, onDelete, onUpdate, onStartConnection, onEn
       >
         <Port className="in" nodeId={node.id} isOutput={false} onEndConnection={onEndConnection} />
         <div className="font-semibold text-sm flex-1 text-center">EDIT</div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           <Button
             variant="ghost"
             size="icon"
-            className="text-destructive"
+            className="text-destructive hover:bg-destructive/20 h-6 w-6"
             onClick={() => onDelete(node.id)}
             title="Delete node"
             aria-label="Delete node"
