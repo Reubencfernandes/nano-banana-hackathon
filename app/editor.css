@@ -1,64 +1,81 @@
 /* Node editor custom styles and animations */
 
-/* Animated connection lines */
+/* ========================================
+   CONNECTION LINE ANIMATIONS
+   ======================================== */
+
+/* Animation for regular connection lines when dragging */
 @keyframes flow {
   0% {
-    stroke-dashoffset: 0;
+    stroke-dashoffset: 0;    /* Start with dashes at their original position */
   }
   100% {
-    stroke-dashoffset: -20;
+    stroke-dashoffset: -20;  /* Move dashes 20 units to the left, creating flow effect */
   }
 }
 
+/* Applied to connection lines when user is actively dragging to connect nodes */
 .connection-animated {
-  animation: flow 1s linear infinite;
-  stroke-dasharray: 5, 5;
+  animation: flow 1s linear infinite;  /* Run the flow animation continuously for 1 second cycles */
+  stroke-dasharray: 5, 5;             /* Create dashed line: 5px dash, 5px gap pattern */
 }
 
-/* Processing pulse effect */
-@keyframes processingPulse {
-  0%, 100% {
-    opacity: 1;
+/* Animation for processing connections - shows data flowing through active connections */
+@keyframes processingFlow {
+  0% {
+    stroke-dashoffset: 0;    /* Start position of the moving dashes */
   }
-  50% {
-    opacity: 0.6;
+  100% {
+    stroke-dashoffset: -40;  /* End position - larger offset for more visible movement */
   }
 }
 
+/* Applied to connection lines when nodes are actively processing data */
 .connection-processing {
-  animation: processingPulse 1.5s ease-in-out infinite;
-  stroke: #22c55e;
-  stroke-width: 3;
-  filter: drop-shadow(0 0 3px rgba(34, 197, 94, 0.5));
+  animation: processingFlow 1.2s linear infinite;  /* Smooth continuous animation, slightly slower than drag */
+  stroke: #22c55e;                                 /* Green color to indicate active processing */
+  stroke-width: 3;                                 /* Thicker line to make it more prominent */
+  stroke-dasharray: 8, 4;                          /* Longer dashes (8px) with smaller gaps (4px) for better visibility */
 }
 
-/* Flow particles effect */
+/* ========================================
+   PARTICLE FLOW EFFECT (EXPERIMENTAL)
+   ======================================== */
+
+/* Animation for particles flowing along paths - uses CSS motion path */
 @keyframes flowParticle {
   0% {
-    offset-distance: 0%;
-    opacity: 0;
+    offset-distance: 0%;     /* Start at beginning of path */
+    opacity: 0;              /* Fade in from transparent */
   }
   10% {
-    opacity: 1;
+    opacity: 1;              /* Fully visible after 10% of animation */
   }
   90% {
-    opacity: 1;
+    opacity: 1;              /* Stay visible until 90% of animation */
   }
   100% {
-    offset-distance: 100%;
-    opacity: 0;
+    offset-distance: 100%;   /* End at end of path */
+    opacity: 0;              /* Fade out to transparent */
   }
 }
 
+/* Class for individual particles flowing along connection paths */
 .flow-particle {
-  animation: flowParticle 2s linear infinite;
+  animation: flowParticle 2s linear infinite;  /* 2 second cycle for particle to travel full path */
 }
 
-/* Node processing state */
+/* ========================================
+   NODE PROCESSING STATES
+   ======================================== */
+
+/* Animation for nodes themselves when they're processing */
 .nb-node.processing {
-  animation: processingPulse 1.5s ease-in-out infinite;
+  animation: processingPulse 1.5s ease-in-out infinite;  /* Gentle pulsing effect */
 }
 
+/* Special styling for processing node headers */
 .nb-node.processing .nb-header {
+  /* Subtle green gradient background to indicate processing state */
   background: linear-gradient(90deg, rgba(34, 197, 94, 0.2), rgba(34, 197, 94, 0.1));
 }

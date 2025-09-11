@@ -1,32 +1,77 @@
+/**
+ * API ROUTE: /api/process
+ * 
+ * Main image processing endpoint for the Nano Banana Editor.
+ * Handles all image transformation operations using Google's Gemini AI model.
+ * 
+ * Supported Operations:
+ * - MERGE: Combine multiple character images into a cohesive group photo
+ * - COMBINED: Apply multiple transformations in a single API call
+ * - Background changes (color, preset, custom, AI-generated)
+ * - Clothing modifications using reference images
+ * - Artistic style transfers (anime, cyberpunk, van gogh, etc.)
+ * - Text-based editing with natural language prompts
+ * - Camera effects and photographic settings
+ * - Age transformations
+ * - Face modifications (expressions, accessories, hair, etc.)
+ * 
+ * Input: JSON with image data, operation type, and parameters
+ * Output: JSON with processed image(s) as base64 data URLs
+ */
+
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/genai";
+import { cookies } from "next/headers";
 
+// Configure Next.js runtime for Node.js (required for Google AI SDK)
 export const runtime = "nodejs";
 
-// Increase the body size limit to 50MB for large images
-export const maxDuration = 60; // 60 seconds timeout
+// Set maximum execution time to 60 seconds for complex AI operations
+export const maxDuration = 60;
 
+/**
+ * Parse base64 data URL into components
+ * 
+ * Extracts MIME type and base64 data from data URLs like:
+ * "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAA..."
+ * 
+ * @param dataUrl The data URL string to parse
+ * @returns Object with mimeType and data, or null if invalid
+ */
 function parseDataUrl(dataUrl: string): { mimeType: string; data: string } | null {
-  const match = dataUrl.match(/^data:(.*?);base64,(.*)$/);
-  if (!match) return null;
-  return { mimeType: match[1] || "image/png", data: match[2] };
+  const match = dataUrl.match(/^data:(.*?);base64,(.*)$/);  // Regex to capture MIME type and data
+  if (!match) return null;                                   // Invalid format
+  return { 
+    mimeType: match[1] || "image/png",  // Default to PNG if no MIME type
+    data: match[2]                      // Base64 image data
+  };
 }
 
+/**
+ * Main POST handler for image processing requests
+ * 
+ * Processes incoming image transformation requests through Google's Gemini AI.
+ * Handles both single-image operations and multi-image merging.
+ * 
+ * @param req NextJS request object containing JSON body with image data and parameters
+ * @returns JSON response with processed image(s) or error message
+ */
 export async function POST(req: NextRequest) {
   try {
-    // Log request size for debugging
+    // Log incoming request size for debugging and monitoring
     const contentLength = req.headers.get('content-length');
     console.log(`[API] Request size: ${contentLength} bytes`);
     
+    // Parse and validate the JSON request body
     let body: any;
     try {
       body = await req.json() as {
-        type: string;
-        image?: string;
-        images?: string[];
-        prompt?: string;
-        params?: any;
-        apiToken?: string;
+        type: string;        // Operation type: "MERGE", "COMBINED", etc.
+        image?: string;      // Single image for processing (base64 data URL)
+        images?: string[];   // Multiple images for merge operations
+        prompt?: string;     // Custom text prompt for AI
+        params?: any;        // Node-specific parameters (background, clothes, etc.)
+        apiToken?: string;   // User's Google AI API token
       };
     } catch (jsonError) {
       console.error('[API] Failed to parse JSON:', jsonError);
@@ -36,50 +81,90 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Use user-provided API token or fall back to environment variable
+    // Check if user is logged in with HF Pro (for premium features)
+    let isHfProUser = false;
+    try {
+      const cookieStore = await cookies();
+      const hfToken = cookieStore.get('hf_token');
+      isHfProUser = !!hfToken?.value;
+    } catch (error) {
+      console.error('Error reading HF token from cookies:', error);
+    }
+
+    // Validate and retrieve Google API key from user input or environment
     const apiKey = body.apiToken || process.env.GOOGLE_API_KEY;
     if (!apiKey || apiKey === 'your_actual_api_key_here') {
       return NextResponse.json(
-        { error: "API key not provided. Please enter your Hugging Face API token in the top right corner or add GOOGLE_API_KEY to .env.local file." },
+        { error: `API key not provided. Please ${isHfProUser ? 'enter your Google Gemini API token in the top right' : 'login with HF Pro or enter your Google Gemini API token'}.` },
         { status: 500 }
       );
     }
 
+    // Initialize Google AI client with the validated API key
     const ai = new GoogleGenAI({ apiKey });
     
-    // Helpers
+    /**
+     * Universal image data converter
+     * 
+     * Converts various image input formats to the inline data format required by Gemini AI.
+     * Handles multiple input types for maximum flexibility:
+     * 
+     * @param url Image source: data URL, HTTP URL, or relative path
+     * @returns Promise resolving to {mimeType, data} object or null if conversion fails
+     */
     const toInlineDataFromAny = async (url: string): Promise<{ mimeType: string; data: string } | null> => {
-      if (!url) return null;
+      if (!url) return null;  // Handle empty/null input
+      
       try {
+        // Case 1: Data URL (data:image/png;base64,...)
         if (url.startsWith('data:')) {
-          return parseDataUrl(url);
+          return parseDataUrl(url);  // Use existing parser for data URLs
         }
+        
+        // Case 2: HTTP/HTTPS URL (external image)
         if (url.startsWith('http')) {
-          const res = await fetch(url);
-          const buf = await res.arrayBuffer();
-          const base64 = Buffer.from(buf).toString('base64');
-          const mimeType = res.headers.get('content-type') || 'image/jpeg';
+          const res = await fetch(url);                                    // Fetch external image
+          const buf = await res.arrayBuffer();                             // Get binary data
+          const base64 = Buffer.from(buf).toString('base64');              // Convert to base64
+          const mimeType = res.headers.get('content-type') || 'image/jpeg'; // Get MIME type from headers
           return { mimeType, data: base64 };
         }
+        
+        // Case 3: Relative path (local image on server)
         if (url.startsWith('/')) {
-          const host = req.headers.get('host') ?? 'localhost:3000';
-          const proto = req.headers.get('x-forwarded-proto') ?? 'http';
-          const absolute = `${proto}://${host}${url}`;
-          const res = await fetch(absolute);
-          const buf = await res.arrayBuffer();
-          const base64 = Buffer.from(buf).toString('base64');
-          const mimeType = res.headers.get('content-type') || 'image/png';
+          const host = req.headers.get('host') ?? 'localhost:3000';        // Get current host
+          const proto = req.headers.get('x-forwarded-proto') ?? 'http';    // Determine protocol
+          const absolute = `${proto}://${host}${url}`;                     // Build absolute URL
+          const res = await fetch(absolute);                               // Fetch local image
+          const buf = await res.arrayBuffer();                             // Get binary data
+          const base64 = Buffer.from(buf).toString('base64');              // Convert to base64
+          const mimeType = res.headers.get('content-type') || 'image/png'; // Get MIME type
           return { mimeType, data: base64 };
         }
-        return null;
+        
+        return null;  // Unsupported URL format
       } catch {
-        return null;
+        return null;  // Handle any conversion errors gracefully
       }
     };
 
-    // Handle MERGE node type separately
+    /* ========================================
+       MERGE OPERATION - MULTI-IMAGE PROCESSING
+       ======================================== */
+    
+    /**
+     * Handle MERGE node type separately from single-image operations
+     * 
+     * MERGE operations combine multiple character images into a single cohesive group photo.
+     * This requires special handling because:
+     * - Multiple input images need to be processed simultaneously
+     * - AI must understand how to naturally blend subjects together
+     * - Lighting, perspective, and scale must be consistent across all subjects
+     */
     if (body.type === "MERGE") {
-      const imgs = body.images?.filter(Boolean) ?? [];
+      const imgs = body.images?.filter(Boolean) ?? [];  // Remove any null/undefined images
+      
+      // Validate minimum input requirement for merge operations
       if (imgs.length < 2) {
         return NextResponse.json(
           { error: "MERGE requires at least two images" },
@@ -87,8 +172,8 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // Build parts array for merge: first the text prompt, then image inlineData parts
-      let mergePrompt = body.prompt;
+      // Determine the AI prompt for merge operation
+      let mergePrompt = body.prompt;  // Use custom prompt if provided
       
       if (!mergePrompt) {
         mergePrompt = `MERGE TASK: Create a natural, cohesive group photo combining ALL subjects from ${imgs.length} provided images.

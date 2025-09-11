@@ -1,6 +1,28 @@
+/**
+ * NODE COMPONENT VIEWS
+ * 
+ * This file contains all the visual node components for the Nano Banana Editor.
+ * Each node type has its own React component that handles:
+ * - User interface and controls
+ * - Drag and drop functionality
+ * - Connection port rendering
+ * - Processing status display
+ * - Image upload/preview
+ * 
+ * Node Types Available:
+ * - BackgroundNodeView: Change/generate image backgrounds
+ * - ClothesNodeView: Add/modify clothing on subjects
+ * - StyleNodeView: Apply artistic styles and filters
+ * - EditNodeView: General text-based image editing
+ * - CameraNodeView: Apply camera effects and settings
+ * - AgeNodeView: Transform subject age
+ * - FaceNodeView: Modify facial features and accessories
+ */
 "use client";
 
+// React imports for component functionality
 import React, { useState, useRef, useEffect } from "react";
+// UI component imports from shadcn/ui library
 import { Button } from "../components/ui/button";
 import { Select } from "../components/ui/select";
 import { Textarea } from "../components/ui/textarea";
@@ -9,17 +31,26 @@ import { Slider } from "../components/ui/slider";
 import { ColorPicker } from "../components/ui/color-picker";
 import { Checkbox } from "../components/ui/checkbox";
 
-// Helper function to download image
+/**
+ * Helper function to download processed images
+ * Creates a temporary download link and triggers the browser's download mechanism
+ * 
+ * @param dataUrl Base64 data URL of the image to download
+ * @param filename Desired filename for the downloaded image
+ */
 function downloadImage(dataUrl: string, filename: string) {
-  const link = document.createElement('a');
-  link.href = dataUrl;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  const link = document.createElement('a');  // Create temporary download link
+  link.href = dataUrl;                       // Set the image data as href
+  link.download = filename;                  // Set the download filename
+  document.body.appendChild(link);           // Add link to DOM (required for Firefox)
+  link.click();                             // Trigger download
+  document.body.removeChild(link);          // Clean up temporary link
 }
 
-// Import types (we'll need to export these from page.tsx)
+/* ========================================
+   TYPE DEFINITIONS (TEMPORARY)
+   ======================================== */
+// Temporary type definitions - these should be imported from page.tsx in production
 type BackgroundNode = any;
 type ClothesNode = any;
 type BlendNode = any;
@@ -28,46 +59,100 @@ type CameraNode = any;
 type AgeNode = any;
 type FaceNode = any;
 
+/**
+ * Utility function to combine CSS class names conditionally
+ * Same implementation as in page.tsx for consistent styling
+ */
 function cx(...args: Array<string | false | null | undefined>) {
   return args.filter(Boolean).join(" ");
 }
 
-// Reusable drag hook for all nodes
+/* ========================================
+   SHARED COMPONENTS AND HOOKS
+   ======================================== */
+
+/**
+ * Custom React hook for node dragging functionality
+ * 
+ * Handles the complex pointer event logic for dragging nodes around the editor.
+ * Maintains local position state for smooth dragging while updating the parent
+ * component's position when the drag operation completes.
+ * 
+ * Key Features:
+ * - Smooth local position updates during drag
+ * - Pointer capture for reliable drag behavior
+ * - Prevents event bubbling to avoid conflicts
+ * - Syncs with parent position updates
+ * 
+ * @param node The node object containing current position
+ * @param onUpdatePosition Callback to update node position in parent state
+ * @returns Object with position and event handlers for dragging
+ */
 function useNodeDrag(node: any, onUpdatePosition?: (id: string, x: number, y: number) => void) {
-  const [localPos, setLocalPos] = useState({ x: node.x, y: node.y });
-  const dragging = useRef(false);
-  const start = useRef<{ sx: number; sy: number; ox: number; oy: number } | null>(null);
+  const [localPos, setLocalPos] = useState({ x: node.x, y: node.y });  // Local position for smooth dragging
+  const dragging = useRef(false);                                      // Track drag state
+  const start = useRef<{ sx: number; sy: number; ox: number; oy: number } | null>(null);  // Drag start coordinates
   
+  // Sync local position when parent position changes
   useEffect(() => {
     setLocalPos({ x: node.x, y: node.y });
   }, [node.x, node.y]);
   
+  /**
+   * Handle pointer down - start dragging
+   * Captures the pointer and records starting positions
+   */
   const onPointerDown = (e: React.PointerEvent) => {
-    e.stopPropagation();
-    dragging.current = true;
-    start.current = { sx: e.clientX, sy: e.clientY, ox: localPos.x, oy: localPos.y };
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    e.stopPropagation();                                             // Prevent event bubbling
+    dragging.current = true;                                         // Mark as dragging
+    start.current = { sx: e.clientX, sy: e.clientY, ox: localPos.x, oy: localPos.y };  // Record start positions
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); // Capture pointer for reliable tracking
   };
   
+  /**
+   * Handle pointer move - update position during drag
+   * Calculates new position based on mouse movement delta
+   */
   const onPointerMove = (e: React.PointerEvent) => {
-    if (!dragging.current || !start.current) return;
-    const dx = e.clientX - start.current.sx;
-    const dy = e.clientY - start.current.sy;
-    const newX = start.current.ox + dx;
-    const newY = start.current.oy + dy;
-    setLocalPos({ x: newX, y: newY });
-    if (onUpdatePosition) onUpdatePosition(node.id, newX, newY);
+    if (!dragging.current || !start.current) return;  // Only process if actively dragging
+    const dx = e.clientX - start.current.sx;           // Calculate horizontal movement
+    const dy = e.clientY - start.current.sy;           // Calculate vertical movement
+    const newX = start.current.ox + dx;                // New X position
+    const newY = start.current.oy + dy;                // New Y position
+    setLocalPos({ x: newX, y: newY });                 // Update local position for immediate visual feedback
+    if (onUpdatePosition) onUpdatePosition(node.id, newX, newY);  // Update parent state
   };
   
+  /**
+   * Handle pointer up - end dragging
+   * Releases pointer capture and resets drag state
+   */
   const onPointerUp = (e: React.PointerEvent) => {
-    dragging.current = false;
-    start.current = null;
-    (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    dragging.current = false;                                         // End dragging
+    start.current = null;                                            // Clear start position
+    (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);  // Release pointer
   };
   
   return { localPos, onPointerDown, onPointerMove, onPointerUp };
 }
 
+/**
+ * Port component for node connections
+ * 
+ * Renders the small circular connection points on nodes that users can
+ * drag between to create connections. Handles the pointer events for
+ * starting and ending connection operations.
+ * 
+ * Types of ports:
+ * - Input ports (left side): Receive connections from other nodes
+ * - Output ports (right side): Send connections to other nodes
+ * 
+ * @param className Additional CSS classes to apply
+ * @param nodeId The ID of the node this port belongs to
+ * @param isOutput Whether this is an output port (true) or input port (false)
+ * @param onStartConnection Callback when starting a connection from this port
+ * @param onEndConnection Callback when ending a connection at this port
+ */
 function Port({ 
   className, 
   nodeId,
@@ -81,26 +166,32 @@ function Port({
   onStartConnection?: (nodeId: string) => void;
   onEndConnection?: (nodeId: string) => void;
 }) {
+  /**
+   * Handle starting a connection (pointer down on output port)
+   */
   const handlePointerDown = (e: React.PointerEvent) => {
-    e.stopPropagation();
+    e.stopPropagation();  // Prevent triggering node drag
     if (isOutput && nodeId && onStartConnection) {
-      onStartConnection(nodeId);
+      onStartConnection(nodeId);  // Start connection from this output port
     }
   };
   
+  /**
+   * Handle ending a connection (pointer up on input port)
+   */
   const handlePointerUp = (e: React.PointerEvent) => {
-    e.stopPropagation();
+    e.stopPropagation();  // Prevent bubbling
     if (!isOutput && nodeId && onEndConnection) {
-      onEndConnection(nodeId);
+      onEndConnection(nodeId);  // End connection at this input port
     }
   };
 
   return (
     <div 
-      className={cx("nb-port", className)} 
-      onPointerDown={handlePointerDown}
-      onPointerUp={handlePointerUp}
-      onPointerEnter={handlePointerUp}
+      className={cx("nb-port", className)}  // Apply base port styling plus custom classes
+      onPointerDown={handlePointerDown}     // Handle connection start
+      onPointerUp={handlePointerUp}         // Handle connection end
+      onPointerEnter={handlePointerUp}      // Also handle connection end on hover (for better UX)
     />
   );
 }

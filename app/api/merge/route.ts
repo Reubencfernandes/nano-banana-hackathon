@@ -1,32 +1,66 @@
+/**
+ * API ROUTE: /api/merge (DEPRECATED - functionality moved to /api/process)
+ * 
+ * Legacy endpoint for merging multiple character images into cohesive group photos.
+ * This functionality is now handled by the main /api/process endpoint with type="MERGE".
+ * Kept for backwards compatibility.
+ * 
+ * Input: JSON with array of image URLs/data and optional custom prompt
+ * Output: JSON with merged group photo as base64 data URL
+ */
+
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/genai";
 
+// Configure Next.js runtime for Node.js (required for Google AI SDK)
 export const runtime = "nodejs";
 
+/**
+ * Parse base64 data URL into MIME type and data components
+ * Handles data URLs in the format: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAA...
+ * 
+ * @param dataUrl Complete data URL string
+ * @returns Object with mimeType and data, or null if invalid format
+ */
 function parseDataUrl(dataUrl: string): { mimeType: string; data: string } | null {
-  // data:[<mediatype>][;base64],<data>
-  const match = dataUrl.match(/^data:(.*?);base64,(.*)$/);
-  if (!match) return null;
-  return { mimeType: match[1] || "image/png", data: match[2] };
+  const match = dataUrl.match(/^data:(.*?);base64,(.*)$/);  // Extract MIME type and base64 data
+  if (!match) return null;  // Invalid data URL format
+  return { 
+    mimeType: match[1] || "image/png",  // Use extracted MIME type or default to PNG
+    data: match[2]                      // Base64 encoded image data
+  };
 }
 
+/**
+ * Convert various image URL formats to inline data format required by Gemini AI
+ * 
+ * Supports:
+ * - Data URLs (data:image/png;base64,...)
+ * - HTTP/HTTPS URLs (fetches and converts to base64)
+ * 
+ * @param url Image URL in any supported format
+ * @returns Promise resolving to inline data object or null on failure
+ */
 async function toInlineData(url: string): Promise<{ mimeType: string; data: string } | null> {
   try {
+    // Handle data URLs directly
     if (url.startsWith('data:')) {
       return parseDataUrl(url);
     }
+    
+    // Handle HTTP URLs by fetching and converting to base64
     if (url.startsWith('http')) {
-      // Fetch HTTP URL and convert to base64
-      const res = await fetch(url);
-      const buf = await res.arrayBuffer();
-      const base64 = Buffer.from(buf).toString('base64');
-      const mimeType = res.headers.get('content-type') || 'image/jpeg';
+      const res = await fetch(url);                                    // Fetch image from URL
+      const buf = await res.arrayBuffer();                             // Get binary data
+      const base64 = Buffer.from(buf).toString('base64');              // Convert to base64
+      const mimeType = res.headers.get('content-type') || 'image/jpeg'; // Get MIME type from headers
       return { mimeType, data: base64 };
     }
-    return null;
+    
+    return null;  // Unsupported URL format
   } catch (e) {
     console.error('Failed to process image URL:', url.substring(0, 100), e);
-    return null;
+    return null;  // Return null on any processing error
   }
 }
 
