@@ -3,7 +3,7 @@
  * 
  * Main image processing endpoint for the Nano Banana Editor.
  * Handles all image transformation operations using Google's Gemini AI model.
- * 
+ *   
  * Supported Operations:
  * - MERGE: Combine multiple character images into a cohesive group photo
  * - COMBINED: Apply multiple transformations in a single API call
