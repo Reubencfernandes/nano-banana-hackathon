@@ -5,7 +5,7 @@ export const runtime = "nodejs"; // Ensure Node runtime for SDK
 
 export async function POST(req: NextRequest) {
   try {
-    const { prompt } = (await req.json()) as { prompt?: string };
+    const { prompt, apiToken } = (await req.json()) as { prompt?: string; apiToken?: string };
     if (!prompt || typeof prompt !== "string") {
       return NextResponse.json(
         { error: "Missing prompt" },
@@ -13,10 +13,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const apiKey = process.env.GOOGLE_API_KEY;
+    // Use user-provided API token or fall back to environment variable
+    const apiKey = apiToken || process.env.GOOGLE_API_KEY;
     if (!apiKey || apiKey === 'your_api_key_here') {
       return NextResponse.json(
-        { error: "API key not configured. Please add GOOGLE_API_KEY to .env.local file. Get your key from: https://aistudio.google.com/app/apikey" },
+        { error: "API key not provided. Please enter your Hugging Face API token in the top right corner or add GOOGLE_API_KEY to .env.local file. Get your key from: https://aistudio.google.com/app/apikey" },
         { status: 500 }
       );
     }

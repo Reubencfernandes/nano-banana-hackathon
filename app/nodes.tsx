@@ -1,13 +1,13 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { Button } from "../../components/ui/button";
-import { Select } from "../../components/ui/select";
-import { Textarea } from "../../components/ui/textarea";
-import { Label } from "../../components/ui/label";
-import { Slider } from "../../components/ui/slider";
-import { ColorPicker } from "../../components/ui/color-picker";
-import { Checkbox } from "../../components/ui/checkbox";
+import { Button } from "../components/ui/button";
+import { Select } from "../components/ui/select";
+import { Textarea } from "../components/ui/textarea";
+import { Label } from "../components/ui/label";
+import { Slider } from "../components/ui/slider";
+import { ColorPicker } from "../components/ui/color-picker";
+import { Checkbox } from "../components/ui/checkbox";
 
 // Helper function to download image
 function downloadImage(dataUrl: string, filename: string) {

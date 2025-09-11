@@ -26,6 +26,7 @@ export async function POST(req: NextRequest) {
         images?: string[];
         prompt?: string;
         params?: any;
+        apiToken?: string;
       };
     } catch (jsonError) {
       console.error('[API] Failed to parse JSON:', jsonError);
@@ -35,10 +36,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const apiKey = process.env.GOOGLE_API_KEY;
+    // Use user-provided API token or fall back to environment variable
+    const apiKey = body.apiToken || process.env.GOOGLE_API_KEY;
     if (!apiKey || apiKey === 'your_actual_api_key_here') {
       return NextResponse.json(
-        { error: "API key not configured. Please add GOOGLE_API_KEY to .env.local file." },
+        { error: "API key not provided. Please enter your Hugging Face API token in the top right corner or add GOOGLE_API_KEY to .env.local file." },
         { status: 500 }
       );
     }
