@@ -1,32 +1,74 @@
+/**
+ * NANO BANANA EDITOR - MAIN APPLICATION COMPONENT
+ * 
+ * This is a visual node-based editor for AI image processing.
+ * Users can create nodes for different operations like merging images,
+ * changing backgrounds, adding clothes, applying styles, etc.
+ * 
+ * Key Features:
+ * - Drag & drop interface for connecting nodes
+ * - Real-time image processing using Google's Gemini API
+ * - Support for multiple image operations (merge, style, edit, etc.)
+ * - Visual connection lines with animations
+ * - Viewport controls (pan, zoom)
+ */
 "use client";
 
+// React imports for hooks and core functionality
 import React, { useEffect, useMemo, useRef, useState } from "react";
+// Custom CSS for animations and styling
 import "./editor.css";
+// Import all the different node view components
 import {
-  BackgroundNodeView,
-  ClothesNodeView,
-  StyleNodeView,
-  EditNodeView,
-  CameraNodeView,
-  AgeNodeView,
-  FaceNodeView
+  BackgroundNodeView,  // Changes/generates backgrounds
+  ClothesNodeView,     // Adds/changes clothing
+  StyleNodeView,       // Applies artistic styles
+  EditNodeView,        // General text-based editing
+  CameraNodeView,      // Camera effects and settings
+  AgeNodeView,         // Age transformation
+  FaceNodeView         // Face modifications
 } from "./nodes";
+// UI components from shadcn/ui library
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
+// Hugging Face OAuth functionality - COMMENTED OUT FOR MANUAL REVIEW
+// import { oauthLoginUrl, oauthHandleRedirectIfPresent } from '@huggingface/hub';
 
+/**
+ * Utility function to combine CSS class names conditionally
+ * Filters out falsy values and joins the remaining strings with spaces
+ * Example: cx("class1", condition && "class2", null) => "class1 class2" or "class1"
+ */
 function cx(...args: Array<string | false | null | undefined>) {
   return args.filter(Boolean).join(" ");
 }
 
-// Simple ID helper
+/**
+ * Generate a unique ID for new nodes
+ * Uses Math.random() to create a random string identifier
+ * Format: random base-36 string (letters + numbers), 7 characters long
+ */
 const uid = () => Math.random().toString(36).slice(2, 9);
 
-// Generate merge prompt based on number of inputs
+/**
+ * Generate AI prompt for merging multiple character images into a single cohesive group photo
+ * 
+ * This function creates a detailed prompt that instructs the AI model to:
+ * 1. Extract people from separate images
+ * 2. Combine them naturally as if photographed together
+ * 3. Ensure consistent lighting, shadows, and perspective
+ * 4. Create a believable group composition
+ * 
+ * @param characterData Array of objects containing image data and labels
+ * @returns Detailed prompt string for the AI merge operation
+ */
 function generateMergePrompt(characterData: { image: string; label: string }[]): string {
   const count = characterData.length;
   
+  // Create a summary of all images being processed
   const labels = characterData.map((d, i) => `Image ${i + 1} (${d.label})`).join(", ");
   
+  // Return comprehensive prompt with specific instructions for natural-looking merge
   return `MERGE TASK: Create a natural, cohesive group photo combining ALL subjects from ${count} provided images.
 
 Images provided:
@@ -57,148 +99,238 @@ CRITICAL REQUIREMENTS:
 The result should look like all subjects were photographed together in the same place at the same time, NOT like separate images placed side by side.`;
 }
 
-// Types
+/* ========================================
+   TYPE DEFINITIONS
+   ======================================== */
+
+/**
+ * All possible node types in the editor
+ * Each type represents a different kind of image processing operation
+ */
 type NodeType = "CHARACTER" | "MERGE" | "BACKGROUND" | "CLOTHES" | "STYLE" | "EDIT" | "CAMERA" | "AGE" | "FACE" | "BLEND";
 
+/**
+ * Base properties that all nodes share
+ * Every node has an ID, type, and position in the editor world space
+ */
 type NodeBase = {
-  id: string;
-  type: NodeType;
-  x: number; // world coords
-  y: number; // world coords
+  id: string;          // Unique identifier for the node
+  type: NodeType;      // What kind of operation this node performs
+  x: number;           // X position in world coordinates (not screen pixels)
+  y: number;           // Y position in world coordinates (not screen pixels)
 };
 
+/**
+ * CHARACTER node - Contains source images (people/subjects)
+ * These are the starting points for most image processing workflows
+ * Users can upload images or paste URLs/data URLs
+ */
 type CharacterNode = NodeBase & {
   type: "CHARACTER";
-  image: string; // data URL or http URL
-  label?: string;
+  image: string;       // Image data (data URL, http URL, or file path)
+  label?: string;      // Optional human-readable name for the character
 };
 
+/**
+ * MERGE node - Combines multiple inputs into a single group photo
+ * Takes multiple CHARACTER or processed nodes and creates a cohesive image
+ * Uses AI to naturally blend subjects together with consistent lighting
+ */
 type MergeNode = NodeBase & {
   type: "MERGE";
-  inputs: string[]; // node ids
-  output?: string | null; // data URL from merge
-  isRunning?: boolean;
-  error?: string | null;
+  inputs: string[];           // Array of node IDs to merge together
+  output?: string | null;     // Resulting merged image (data URL)
+  isRunning?: boolean;        // Whether merge operation is currently processing
+  error?: string | null;      // Error message if merge failed
 };
 
+/**
+ * BACKGROUND node - Changes or generates backgrounds
+ * Can use solid colors, preset images, uploaded custom images, or AI-generated backgrounds
+ */
 type BackgroundNode = NodeBase & {
   type: "BACKGROUND";
-  input?: string; // node id
-  output?: string;
-  backgroundType: "color" | "image" | "upload" | "custom";
-  backgroundColor?: string;
-  backgroundImage?: string;
-  customBackgroundImage?: string;
-  customPrompt?: string;
-  isRunning?: boolean;
-  error?: string | null;
+  input?: string;                    // ID of the source node (usually CHARACTER)
+  output?: string;                   // Processed image with new background
+  backgroundType: "color" | "image" | "upload" | "custom";  // Type of background to apply
+  backgroundColor?: string;          // Hex color code for solid color backgrounds
+  backgroundImage?: string;          // URL/path for preset background images
+  customBackgroundImage?: string;    // User-uploaded background image data
+  customPrompt?: string;            // AI prompt for generating custom backgrounds
+  isRunning?: boolean;              // Processing state indicator
+  error?: string | null;            // Error message if processing failed
 };
 
+/**
+ * CLOTHES node - Adds or changes clothing on subjects
+ * Can use preset clothing styles or custom uploaded clothing images
+ */
 type ClothesNode = NodeBase & {
   type: "CLOTHES";
-  input?: string;
-  output?: string;
-  clothesImage?: string;
-  selectedPreset?: string;
-  clothesPrompt?: string;
-  isRunning?: boolean;
-  error?: string | null;
+  input?: string;              // ID of the source node
+  output?: string;             // Image with modified clothing
+  clothesImage?: string;       // Custom clothing image to apply
+  selectedPreset?: string;     // Preset clothing style identifier
+  clothesPrompt?: string;      // Text description for clothing changes
+  isRunning?: boolean;         // Processing state
+  error?: string | null;       // Error message
 };
 
+/**
+ * STYLE node - Applies artistic styles and filters
+ * Uses AI to transform images with different artistic styles (oil painting, watercolor, etc.)
+ */
 type StyleNode = NodeBase & {
   type: "STYLE";
-  input?: string;
-  output?: string;
-  stylePreset?: string;
-  styleStrength?: number;
-  isRunning?: boolean;
-  error?: string | null;
+  input?: string;              // Source node ID
+  output?: string;             // Styled output image
+  stylePreset?: string;        // Selected artistic style
+  styleStrength?: number;      // How strongly to apply the style (0-100)
+  isRunning?: boolean;         // Processing indicator
+  error?: string | null;       // Error message
 };
 
+/**
+ * EDIT node - General purpose text-based image editing
+ * Uses natural language prompts to make specific changes to images
+ */
 type EditNode = NodeBase & {
   type: "EDIT";
-  input?: string;
-  output?: string;
-  editPrompt?: string;
-  isRunning?: boolean;
-  error?: string | null;
+  input?: string;              // Input node ID
+  output?: string;             // Edited output image
+  editPrompt?: string;         // Natural language description of desired changes
+  isRunning?: boolean;         // Whether edit is being processed
+  error?: string | null;       // Error if edit failed
 };
 
+/**
+ * CAMERA node - Applies camera effects and photographic settings
+ * Simulates different camera settings, lenses, and photographic techniques
+ */
 type CameraNode = NodeBase & {
   type: "CAMERA";
-  input?: string;
-  output?: string;
-  focalLength?: string;
-  aperture?: string;
-  shutterSpeed?: string;
-  whiteBalance?: string;
-  angle?: string;
-  iso?: string;
-  filmStyle?: string;
-  lighting?: string;
-  bokeh?: string;
-  composition?: string;
-  aspectRatio?: string;
-  isRunning?: boolean;
-  error?: string | null;
+  input?: string;              // Source image node ID
+  output?: string;             // Image with camera effects applied
+  focalLength?: string;        // Lens focal length (e.g., "50mm", "85mm")
+  aperture?: string;           // Aperture setting (e.g., "f/1.4", "f/2.8")
+  shutterSpeed?: string;       // Shutter speed (e.g., "1/60", "1/125")
+  whiteBalance?: string;       // Color temperature setting
+  angle?: string;              // Camera angle/perspective
+  iso?: string;                // ISO sensitivity setting
+  filmStyle?: string;          // Film simulation (e.g., "Kodak", "Fuji")
+  lighting?: string;           // Lighting setup description
+  bokeh?: string;              // Background blur style
+  composition?: string;        // Composition technique
+  aspectRatio?: string;        // Image aspect ratio
+  isRunning?: boolean;         // Processing status
+  error?: string | null;       // Error message
 };
 
+/**
+ * AGE node - Transforms subject age
+ * Uses AI to make people appear older or younger while maintaining their identity
+ */
 type AgeNode = NodeBase & {
   type: "AGE";
-  input?: string;
-  output?: string;
-  targetAge?: number;
-  isRunning?: boolean;
-  error?: string | null;
+  input?: string;              // Input node ID
+  output?: string;             // Age-transformed image
+  targetAge?: number;          // Target age to transform to (in years)
+  isRunning?: boolean;         // Processing indicator
+  error?: string | null;       // Error if transformation failed
 };
 
+/**
+ * FACE node - Modifies facial features and accessories
+ * Can add/remove facial hair, accessories, change expressions, etc.
+ */
 type FaceNode = NodeBase & {
   type: "FACE";
-  input?: string;
-  output?: string;
-  faceOptions?: {
-    removePimples?: boolean;
-    addSunglasses?: boolean;
-    addHat?: boolean;
-    changeHairstyle?: string;
-    facialExpression?: string;
-    beardStyle?: string;
+  input?: string;              // Source node ID
+  output?: string;             // Modified face image
+  faceOptions?: {              // Collection of face modification options
+    removePimples?: boolean;       // Clean up skin blemishes
+    addSunglasses?: boolean;       // Add sunglasses accessory
+    addHat?: boolean;             // Add hat accessory  
+    changeHairstyle?: string;     // New hairstyle description
+    facialExpression?: string;    // Change facial expression
+    beardStyle?: string;          // Add/modify facial hair
   };
-  isRunning?: boolean;
-  error?: string | null;
+  isRunning?: boolean;         // Processing state
+  error?: string | null;       // Error message
 };
 
+/**
+ * BLEND node - Blends/composites images with adjustable opacity
+ * Used for subtle image combinations and overlay effects
+ */
 type BlendNode = NodeBase & {
   type: "BLEND";
-  input?: string;
-  output?: string;
-  blendStrength?: number;
-  isRunning?: boolean;
-  error?: string | null;
+  input?: string;              // Primary input node ID
+  output?: string;             // Blended output image
+  blendStrength?: number;      // Blend intensity (0-100 percent)
+  isRunning?: boolean;         // Processing indicator
+  error?: string | null;       // Error message
 };
 
+/**
+ * Union type of all possible node types
+ * Used for type-safe handling of nodes throughout the application
+ */
 type AnyNode = CharacterNode | MergeNode | BackgroundNode | ClothesNode | StyleNode | EditNode | CameraNode | AgeNode | FaceNode | BlendNode;
 
-// Default placeholder portrait
+/* ========================================
+   CONSTANTS AND UTILITY FUNCTIONS
+   ======================================== */
+
+/**
+ * Default placeholder image for new CHARACTER nodes
+ * Uses Unsplash image as a starting point before users upload their own images
+ */
 const DEFAULT_PERSON =
   "https://images.unsplash.com/photo-1527980965255-d3b416303d12?q=80&w=640&auto=format&fit=crop";
 
+/**
+ * Convert File objects to data URLs for image processing
+ * 
+ * Takes a FileList or array of File objects (from drag/drop or file input)
+ * and converts each file to a base64 data URL that can be used in img tags
+ * or sent to APIs for processing.
+ * 
+ * @param files FileList or File array from input events
+ * @returns Promise that resolves to array of data URL strings
+ */
 function toDataUrls(files: FileList | File[]): Promise<string[]> {
-  const arr = Array.from(files as File[]);
+  const arr = Array.from(files as File[]);  // Convert FileList to regular array
   return Promise.all(
     arr.map(
       (file) =>
         new Promise<string>((resolve, reject) => {
-          const r = new FileReader();
-          r.onload = () => resolve(r.result as string);
-          r.onerror = reject;
-          r.readAsDataURL(file);
+          const r = new FileReader();                    // Browser API for reading files
+          r.onload = () => resolve(r.result as string);  // Success: return data URL
+          r.onerror = reject;                            // Error: reject promise
+          r.readAsDataURL(file);                         // Start reading as base64 data URL
         })
     )
   );
 }
 
-// Viewport helpers
+/**
+ * Convert screen pixel coordinates to world coordinates
+ * 
+ * The editor uses a coordinate system where:
+ * - Screen coordinates: actual pixel positions on the browser window
+ * - World coordinates: virtual positions that account for pan/zoom transformations
+ * 
+ * This function converts mouse/touch positions to world space for accurate node positioning.
+ * 
+ * @param clientX Mouse X position in screen pixels
+ * @param clientY Mouse Y position in screen pixels  
+ * @param container Bounding rect of the editor container
+ * @param tx Current pan transform X offset
+ * @param ty Current pan transform Y offset
+ * @param scale Current zoom scale factor
+ * @returns Object with world coordinates {x, y}
+ */
 function screenToWorld(
   clientX: number,
   clientY: number,
@@ -207,7 +339,7 @@ function screenToWorld(
   ty: number,
   scale: number
 ) {
-  const x = (clientX - container.left - tx) / scale;
+  const x = (clientX - container.left - tx) / scale;  // Account for container offset, pan, and zoom
   const y = (clientY - container.top - ty) / scale;
   return { x, y };
 }
@@ -635,13 +767,84 @@ export default function EditorPage() {
     scaleRef.current = scale;
   }, [scale]);
 
+  // HF OAUTH CHECK - COMMENTED OUT FOR MANUAL REVIEW
+  /*
+  useEffect(() => {
+    (async () => {
+      try {
+        // Handle OAuth redirect if present
+        const oauth = await oauthHandleRedirectIfPresent();
+        if (oauth) {
+          // Store the token server-side
+          await fetch('/api/auth/callback', {
+            method: 'POST',
+            body: JSON.stringify({ hf_token: oauth.accessToken }),
+            headers: { 'Content-Type': 'application/json' }
+          });
+          setIsHfProLoggedIn(true);
+        } else {
+          // Check if already logged in
+          const response = await fetch('/api/auth/callback', { method: 'GET' });
+          if (response.ok) {
+            const data = await response.json();
+            setIsHfProLoggedIn(data.isLoggedIn);
+          }
+        }
+      } catch (error) {
+        console.error('OAuth error:', error);
+      } finally {
+        setIsCheckingAuth(false);
+      }
+    })();
+  }, []);
+  */
+
+  // HF PRO LOGIN HANDLER - COMMENTED OUT FOR MANUAL REVIEW  
+  /*
+  const handleHfProLogin = async () => {
+    if (isHfProLoggedIn) {
+      // Logout: clear the token
+      try {
+        await fetch('/api/auth/callback', { method: 'DELETE' });
+        setIsHfProLoggedIn(false);
+      } catch (error) {
+        console.error('Logout error:', error);
+      }
+    } else {
+      // Login with HF OAuth
+      const clientId = process.env.NEXT_PUBLIC_OAUTH_CLIENT_ID;
+      if (!clientId) {
+        console.error('OAuth client ID not configured');
+        alert('OAuth client ID not configured. Please check environment variables.');
+        return;
+      }
+      
+      window.location.href = await oauthLoginUrl({
+        clientId,
+        redirectUrl: `${window.location.origin}/api/auth/callback`
+      });
+    }
+  };
+  */
+  
+  // Placeholder function for manual review
+  const handleHfProLogin = () => {
+    console.log('HF Pro login disabled - see HF_INTEGRATION_CHANGES.md for details');
+  };
+
   // Connection dragging state
   const [draggingFrom, setDraggingFrom] = useState<string | null>(null);
   const [dragPos, setDragPos] = useState<{x: number, y: number} | null>(null);
   
-  // API Token state
-  const [apiToken, setApiToken] = useState<string>("");
+  // API Token state (restored for manual review)
+  const [apiToken, setApiToken] = useState("");
   const [showHelpSidebar, setShowHelpSidebar] = useState(false);
+  
+  // HF PRO AUTHENTICATION - COMMENTED OUT FOR MANUAL REVIEW
+  // const [isHfProLoggedIn, setIsHfProLoggedIn] = useState(false);
+  // const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [isHfProLoggedIn] = useState(false); // Disabled for manual review
+  const [isCheckingAuth] = useState(false); // Disabled for manual review
 
   const characters = nodes.filter((n) => n.type === "CHARACTER") as CharacterNode[];
   const merges = nodes.filter((n) => n.type === "MERGE") as MergeNode[];
@@ -778,8 +981,8 @@ export default function EditorPage() {
   };
   
   // Helper to extract configuration from a node
-  const getNodeConfiguration = (node: AnyNode): any => {
-    const config: any = {};
+  const getNodeConfiguration = (node: AnyNode): Record<string, unknown> => {
+    const config: Record<string, unknown> = {};
     
     switch (node.type) {
       case "BACKGROUND":
@@ -830,7 +1033,7 @@ export default function EditorPage() {
       case "FACE":
         const face = node as FaceNode;
         if (face.faceOptions) {
-          const opts: any = {};
+          const opts: Record<string, unknown> = {};
           if (face.faceOptions.removePimples) opts.removePimples = true;
           if (face.faceOptions.addSunglasses) opts.addSunglasses = true;
           if (face.faceOptions.addHat) opts.addHat = true;
@@ -1073,6 +1276,28 @@ export default function EditorPage() {
         nodeType: node.type
       });
       
+      // ORIGINAL PROCESSING LOGIC RESTORED (HF processing commented out)
+      /*
+      // Only use HF + fal.ai processing
+      if (!isHfProLoggedIn) {
+        setNodes(prev => prev.map(n => 
+          n.id === nodeId ? { ...n, error: "Please login with HF Pro to use fal.ai processing", isRunning: false } : n
+        ));
+        return;
+      }
+
+      // Make a SINGLE API call with fal.ai processing
+      const res = await fetch("/api/hf-process", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "COMBINED", 
+          image: inputImage, 
+          params
+        }),
+      });
+      */
+      
       // Make a SINGLE API call with all accumulated parameters
       const res = await fetch("/api/process", {
         method: "POST",
@@ -1240,6 +1465,19 @@ export default function EditorPage() {
     
     const prompt = generateMergePrompt(inputData);
     
+    // ORIGINAL MERGE LOGIC RESTORED (HF processing commented out)
+    /*
+    const res = await fetch("/api/hf-process", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ 
+        type: "MERGE", 
+        images: mergeImages, 
+        prompt 
+      }),
+    });
+    */
+    
     // Use the process route instead of merge route
     const res = await fetch("/api/process", {
       method: "POST",
@@ -1313,6 +1551,23 @@ export default function EditorPage() {
       // Generate dynamic prompt based on number of inputs
       const prompt = generateMergePrompt(inputData);
       const imgs = inputData.map(d => d.image);
+
+      // ORIGINAL RUNMERGE LOGIC RESTORED (HF processing commented out)
+      /*
+      if (!isHfProLoggedIn) {
+        throw new Error("Please login with HF Pro to use fal.ai processing");
+      }
+
+      const res = await fetch("/api/hf-process", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          type: "MERGE",
+          images: imgs, 
+          prompt
+        }),
+      });
+      */
 
       // Use the process route with MERGE type
       const res = await fetch("/api/process", {
@@ -1545,7 +1800,8 @@ export default function EditorPage() {
         <h1 className="text-lg font-semibold tracking-wide">
           <span className="mr-2" aria-hidden>🍌</span>Nano Banana Editor
         </h1>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          {/* ORIGINAL API TOKEN INPUT RESTORED */}
           <label htmlFor="api-token" className="text-sm font-medium text-muted-foreground">
             API Token:
           </label>
@@ -1557,15 +1813,36 @@ export default function EditorPage() {
             onChange={(e) => setApiToken(e.target.value)}
             className="w-64"
           />
+          
           <Button
-            variant="ghost"
+            variant="outline"
             size="sm"
-            className="h-8 w-8 p-0 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20"
+            className="h-8 px-3"
             type="button"
             onClick={() => setShowHelpSidebar(true)}
           >
-            <span className="text-sm font-medium text-red-500 hover:text-red-600">?</span>
+            Help
           </Button>
+          
+          {/* HF PRO BUTTON - COMMENTED OUT FOR MANUAL REVIEW */}
+          {/*
+          <Button
+            variant={isHfProLoggedIn ? "default" : "secondary"}
+            size="sm"
+            className="h-8 px-3"
+            type="button"
+            onClick={handleHfProLogin}
+            disabled={isCheckingAuth}
+            title={isHfProLoggedIn ? "Using fal.ai Gemini 2.5 Flash Image via HF" : "Click to login and use fal.ai Gemini 2.5 Flash"}
+          >
+            {isCheckingAuth ? "Checking..." : (isHfProLoggedIn ? "🤗 HF PRO ✓" : "Login HF PRO")}
+          </Button>
+          {isHfProLoggedIn && (
+            <div className="text-xs text-muted-foreground">
+              Using fal.ai Gemini 2.5 Flash
+            </div>
+          )}
+          */}
         </div>
       </header>
 
@@ -1593,6 +1870,27 @@ export default function EditorPage() {
               </div>
               
               <div className="space-y-6">
+                {/* ORIGINAL HELP CONTENT RESTORED (HF help commented out) */}
+                {/*
+                <div>
+                  <h3 className="font-semibold mb-3 text-foreground">🤗 HF Pro Login</h3>
+                  <div className="text-sm text-muted-foreground space-y-3">
+                    <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg">
+                      <p className="font-medium text-primary mb-2">Step 1: Login with Hugging Face</p>
+                      <p>Click "Login HF PRO" to authenticate with your Hugging Face account.</p>
+                    </div>
+                    <div className="p-3 bg-secondary border border-border rounded-lg">
+                      <p className="font-medium text-secondary-foreground mb-2">Step 2: Access fal.ai Models</p>
+                      <p>Once logged in, you'll have access to fal.ai's Gemini 2.5 Flash Image models.</p>
+                    </div>
+                    <div className="p-3 bg-accent border border-border rounded-lg">
+                      <p className="font-medium text-accent-foreground mb-2">Step 3: Start Creating</p>
+                      <p>Use the powerful fal.ai models for image generation, merging, editing, and style transfers.</p>
+                    </div>
+                  </div>
+                </div>
+                */}
+                
                 <div>
                   <h3 className="font-semibold mb-3 text-foreground">🔑 API Token Setup</h3>
                   <div className="text-sm text-muted-foreground space-y-3">
@@ -1626,6 +1924,13 @@ export default function EditorPage() {
                 <div className="p-4 bg-muted border border-border rounded-lg">
                   <h4 className="font-semibold text-foreground mb-2">🔒 Privacy & Security</h4>
                   <div className="text-sm text-muted-foreground space-y-1">
+                    {/* ORIGINAL PRIVACY INFO RESTORED (HF privacy info commented out) */}
+                    {/*
+                    <p>• Your HF token is stored securely in HTTP-only cookies</p>
+                    <p>• Authentication happens through Hugging Face OAuth</p>
+                    <p>• You can logout anytime to revoke access</p>
+                    <p>• Processing happens via fal.ai's secure infrastructure</p>
+                    */}
                     <p>• Your API token is stored locally in your browser</p>
                     <p>• Tokens are never sent to our servers</p>
                     <p>• Keep your API key secure and don't share it</p>

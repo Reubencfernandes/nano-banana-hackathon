@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>OAuth URL Debug</title>
+</head>
+<body>
+    <h1>OAuth URL Debug</h1>
+    <button onclick="generateOAuthUrl()">Generate OAuth URL</button>
+    <div id="result" style="margin-top: 20px; font-family: monospace;"></div>
+
+    <script type="module">
+        import { oauthLoginUrl } from 'https://esm.sh/@huggingface/hub';
+        
+        window.generateOAuthUrl = async () => {
+            const clientId = '778cfe88-b732-4803-9734-87b0c42f080b';
+            const redirectUri = window.location.origin + '/api/auth/callback';
+            
+            try {
+                const url = await oauthLoginUrl({
+                    clientId,
+                    redirectUri
+                });
+                
+                document.getElementById('result').innerHTML = `
+                    <h3>Generated OAuth URL:</h3>
+                    <p><strong>Full URL:</strong> <a href="${url}" target="_blank">${url}</a></p>
+                    <p><strong>Client ID:</strong> ${clientId}</p>
+                    <p><strong>Redirect URI:</strong> ${redirectUri}</p>
+                    <p><strong>URL Decoded:</strong> ${decodeURIComponent(url)}</p>
+                `;
+                
+                // Parse URL parameters
+                const urlObj = new URL(url);
+                const params = new URLSearchParams(urlObj.search);
+                document.getElementById('result').innerHTML += `
+                    <h3>URL Parameters:</h3>
+                    <ul>
+                        <li><strong>client_id:</strong> ${params.get('client_id')}</li>
+                        <li><strong>redirect_uri:</strong> ${params.get('redirect_uri')}</li>
+                        <li><strong>response_type:</strong> ${params.get('response_type')}</li>
+                        <li><strong>scope:</strong> ${params.get('scope')}</li>
+                        <li><strong>state:</strong> ${params.get('state')}</li>
+                    </ul>
+                `;
+            } catch (error) {
+                document.getElementById('result').innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+            }
+        };
+    </script>
+</body>
+</html>
