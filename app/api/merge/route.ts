@@ -35,6 +35,7 @@ export async function POST(req: NextRequest) {
     const body = (await req.json()) as {
       images?: string[]; // data URLs
       prompt?: string;
+      apiToken?: string;
     };
 
     const imgs = body.images?.filter(Boolean) ?? [];
@@ -45,10 +46,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const apiKey = process.env.GOOGLE_API_KEY;
+    // Use user-provided API token or fall back to environment variable
+    const apiKey = body.apiToken || process.env.GOOGLE_API_KEY;
     if (!apiKey || apiKey === 'your_api_key_here') {
       return NextResponse.json(
-        { error: "API key not configured. Please add GOOGLE_API_KEY to .env.local file. Get your key from: https://aistudio.google.com/app/apikey" },
+        { error: "API key not provided. Please enter your Hugging Face API token in the top right corner or add GOOGLE_API_KEY to .env.local file. Get your key from: https://aistudio.google.com/app/apikey" },
         { status: 500 }
       );
     }
