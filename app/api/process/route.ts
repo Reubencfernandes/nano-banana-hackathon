@@ -59,7 +59,6 @@ function parseDataUrl(dataUrl: string): { mimeType: string; data: string } | nul
 export async function POST(req: NextRequest) {
   try {
     // Log incoming request size for debugging and monitoring
-    const contentLength = req.headers.get('content-length');
     
     // Parse and validate the JSON request body
     let body: any;
@@ -267,7 +266,6 @@ The result should look like all subjects were photographed together in the same 
 
     // We'll collect additional inline image parts (references)
     const referenceParts: { inlineData: { mimeType: string; data: string } }[] = [];
-    let imageCounter = 2; // Start at 2 since image 1 is the primary input
     
     // Background modifications
     if (params.backgroundType) {
@@ -414,7 +412,7 @@ The result should look like all subjects were photographed together in the same 
             lightingDescription = "professional studio lighting";
         }
         
-        let positioningInstruction = faceCamera ? " Position the person to face directly toward the camera with confident posture." : "";
+        const positioningInstruction = faceCamera ? " Position the person to face directly toward the camera with confident posture." : "";
         
         prompts.push(`Crop the head and create a 2-inch ID photo. Place the person in a professional photo studio with ${setupDescription} and ${lightingDescription}. Create a clean, professional portrait setup with proper studio atmosphere.${positioningInstruction}`);
         
@@ -486,8 +484,6 @@ The result should look like all subjects were photographed together in the same 
     // Camera settings - Enhanced for Gemini 2.5 Flash Image
     if (params.focalLength || params.aperture || params.shutterSpeed || params.whiteBalance || params.angle || 
         params.iso || params.filmStyle || params.lighting || params.bokeh || params.composition || params.motionBlur) {
-      const cameraSettings: string[] = [];
-      
       // Build cinematic camera prompt for professional, movie-like results
       let cameraPrompt = "CINEMATIC CAMERA TRANSFORMATION: Transform this image into a professional, cinematic photograph with movie-quality production values";
       
