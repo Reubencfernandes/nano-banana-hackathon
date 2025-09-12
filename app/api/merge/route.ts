@@ -128,12 +128,6 @@ The result should look like all subjects were photographed together in the same 
     }
 
     // Debug: Log what we're receiving
-    console.log(`[MERGE API] Received ${imgs.length} images to merge`);
-    console.log(`[MERGE API] Image types:`, imgs.map(img => {
-      if (img.startsWith('data:')) return 'data URL';
-      if (img.startsWith('http')) return 'HTTP URL';
-      return 'unknown';
-    }));
     
     const parts: any[] = [{ text: prompt }];
     for (const url of imgs) {
@@ -145,8 +139,6 @@ The result should look like all subjects were photographed together in the same 
       parts.push({ inlineData: { mimeType: parsed.mimeType, data: parsed.data } });
     }
     
-    console.log(`[MERGE API] Sending ${parts.length - 1} images to model (prompt + images)`);
-    console.log(`[MERGE API] Prompt preview:`, prompt.substring(0, 200));
 
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-image-preview",

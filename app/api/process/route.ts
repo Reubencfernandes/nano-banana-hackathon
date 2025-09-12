@@ -60,7 +60,6 @@ export async function POST(req: NextRequest) {
   try {
     // Log incoming request size for debugging and monitoring
     const contentLength = req.headers.get('content-length');
-    console.log(`[API] Request size: ${contentLength} bytes`);
     
     // Parse and validate the JSON request body
     let body: any;
@@ -210,7 +209,6 @@ The result should look like all subjects were photographed together in the same 
       const mergeParts: any[] = [{ text: mergePrompt }];
       for (let i = 0; i < imgs.length; i++) {
         const url = imgs[i];
-        console.log(`[MERGE] Processing image ${i + 1}/${imgs.length}, type: ${typeof url}, length: ${url?.length || 0}`);
         
         try {
           const parsed = await toInlineDataFromAny(url);
@@ -219,13 +217,11 @@ The result should look like all subjects were photographed together in the same 
             continue;
           }
           mergeParts.push({ inlineData: { mimeType: parsed.mimeType, data: parsed.data } });
-          console.log(`[MERGE] Successfully processed image ${i + 1}`);
         } catch (error) {
           console.error(`[MERGE] Error processing image ${i + 1}:`, error);
         }
       }
       
-      console.log(`[MERGE] Sending ${mergeParts.length - 1} images to model`);
 
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-image-preview",
@@ -268,7 +264,6 @@ The result should look like all subjects were photographed together in the same 
     const params = body.params || {};
 
     // Debug: Log all received parameters
-    console.log(`[API] All received parameters:`, JSON.stringify(params, null, 2));
 
     // We'll collect additional inline image parts (references)
     const referenceParts: { inlineData: { mimeType: string; data: string } }[] = [];
@@ -277,7 +272,6 @@ The result should look like all subjects were photographed together in the same 
     // Background modifications
     if (params.backgroundType) {
       const bgType = params.backgroundType;
-      console.log(`[API] Processing background: type=${bgType}`);
       
       if (bgType === "color") {
         prompts.push(`Change the background to a solid ${params.backgroundColor || "white"} background with smooth, even color coverage.`);
@@ -422,7 +416,7 @@ The result should look like all subjects were photographed together in the same 
         
         let positioningInstruction = faceCamera ? " Position the person to face directly toward the camera with confident posture." : "";
         
-        prompts.push(`Place the person in a professional photo studio with ${setupDescription} and ${lightingDescription}. Create a clean, professional portrait setup with proper studio atmosphere.${positioningInstruction}`);
+        prompts.push(`Crop the head and create a 2-inch ID photo. Place the person in a professional photo studio with ${setupDescription} and ${lightingDescription}. Create a clean, professional portrait setup with proper studio atmosphere.${positioningInstruction}`);
         
       } else if (bgType === "upload" && params.customBackgroundImage) {
         prompts.push(`Replace the background using the provided custom background reference image (attached below). Ensure perspective and lighting match.`);
@@ -430,13 +424,12 @@ The result should look like all subjects were photographed together in the same 
         if (bgRef) referenceParts.push({ inlineData: bgRef });
         
       } else if (bgType === "custom" && params.customPrompt) {
-        prompts.push(params.customPrompt);
+        prompts.push(`${params.customPrompt}. CRITICAL SCALE REQUIREMENTS: Keep the main character at their EXACT original size and position - do NOT make them smaller or change their scale. Ensure the main character appears naturally integrated into the scene with proper lighting, shadows, and perspective that matches the environment.`);
       }
     }
     
     // Clothes modifications
     if (params.clothesImage) {
-      console.log(`[API] Processing clothes image, type: ${typeof params.clothesImage}, length: ${params.clothesImage?.length || 0}`);
       
       if (params.selectedPreset === "Sukajan") {
         prompts.push("Replace the person's clothing with a Japanese sukajan jacket (embroidered designs). Use the clothes reference image if provided.");
@@ -449,7 +442,6 @@ The result should look like all subjects were photographed together in the same 
       try {
         const clothesRef = await toInlineDataFromAny(params.clothesImage);
         if (clothesRef) {
-          console.log(`[API] Successfully processed clothes image`);
           referenceParts.push({ inlineData: clothesRef });
         } else {
           console.error('[API] Failed to process clothes image - toInlineDataFromAny returned null');
@@ -461,32 +453,28 @@ The result should look like all subjects were photographed together in the same 
     
     // Style application
     if (params.stylePreset) {
-      console.log(`[API] Processing style node: stylePreset=${params.stylePreset}, styleStrength=${params.styleStrength}`);
       const strength = params.styleStrength || 50;
       const styleMap: { [key: string]: string } = {
-        "90s-anime": "Convert the image to 90's anime art style with classic anime features",
-        "Ghibli": "Apply Studio Ghibli style with vibrant colors, detailed character design, and fantasy elements typical of Studio Ghibli movies",
-        "mha": "Transform the image into My Hero Academia anime style with modern crisp lines, vibrant colors, dynamic character design, and heroic aesthetics typical of the series",
-        "dbz": "Apply Dragon Ball Z anime style with sharp angular features, spiky hair, intense expressions, bold outlines, high contrast shading, and dramatic action-oriented aesthetics",
-        "ukiyo-e": "Render in traditional Japanese Ukiyo-e woodblock print style with flat colors, bold outlines, stylized waves and clouds, traditional Japanese artistic elements",
-        "cyberpunk": "Transform into cyberpunk aesthetic with neon colors (cyan, magenta, yellow), dark backgrounds, futuristic elements, holographic effects, tech-noir atmosphere",
-        "steampunk": "Apply steampunk style with Victorian-era brass and copper tones, mechanical gears, steam effects, vintage industrial aesthetic, sepia undertones",
-        "cubism": "Render in Cubist art style with geometric fragmentation, multiple perspectives shown simultaneously, abstract angular forms, Picasso-inspired decomposition",
-        "van-gogh": "Apply Post-Impressionist Van Gogh style with thick swirling brushstrokes, vibrant yellows and blues, expressive texture, starry night-like patterns",
-        "simpsons": "Convert to The Simpsons cartoon style with yellow skin tones, simple rounded features, bulging eyes, overbite, Matt Groening's distinctive character design",
-        "family-guy": "Transform into Family Guy animation style with rounded character design, simplified features, Seth MacFarlane's distinctive art style, bold outlines",
-        "wildwest": "Render in Wild West style with dusty desert tones, sunset orange lighting, vintage film grain, cowboy aesthetic, sepia and brown color palette",
-        "star-wars": "Apply Star Wars style with vibrant colors, detailed character design, and fantasy elements typical of Star Wars movies",
-        "star-trek": "Apply Star Trek style with vibrant colors, detailed character design, and fantasy elements typical of Star Trek movies",
+        "90s-anime": "Transform into vibrant 90s anime art style",
+        "mha": "Convert into My Hero Academia anime style ",
+        "spiderverse": "Convert into Spiderverse anime style",
+        "dbz": "Convert into Dragon Ball Z anime style ",
+        "ukiyo-e": "Convert into traditional Japanese Ukiyo-e woodblock print style with flat color planes, bold black outlines, stylized natural elements, limited color palette of blues and earth tones, geometric patterns, and the distinctive floating world aesthetic of Edo period art",
+        "cubism": "Convert into Cubist art style with geometric fragmentation and angular decomposition, use various different colors",
+        "van-gogh": "Convert into Post-Impressionist Van Gogh style with thick impasto paint texture, bold swirling brushstrokes that create dynamic movement, vibrant yellows and deep blues with expressive non-naturalistic color choices, visible three-dimensional brush marks, and the characteristic flowing patterns and emotional intensity seen in masterworks like Starry Night",
+        "simpsons": "Convert into The Simpsons cartoon style ",
+        "family-guy": "Convert into Family Guy animation style",
+        "pixar": "Convert into Pixar animation style",
+        "manga": "Convert into Manga style",
+       
+       
       };
       
       const styleDescription = styleMap[params.stylePreset];
       if (styleDescription) {
-        console.log(`[API] Style found: ${params.stylePreset} -> ${styleDescription}`);
         prompts.push(`${styleDescription}. Apply this style transformation at ${strength}% intensity while preserving the core subject matter.`);
       } else {
         console.error(`[API] Style not found in styleMap: ${params.stylePreset}`);
-        console.log(`[API] Available styles:`, Object.keys(styleMap));
       }
     }
     
@@ -633,13 +621,11 @@ The result should look like all subjects were photographed together in the same 
     
     // Lighting effects
     if (params.lightingPrompt && params.selectedLighting) {
-      console.log(`[API] Processing lighting node: selectedLighting=${params.selectedLighting}, lightingPrompt exists=${!!params.lightingPrompt}`);
       prompts.push(`IMPORTANT: Completely transform the lighting on this person to match this exact description: ${params.lightingPrompt}. The lighting change should be dramatic and clearly visible. Keep their face, clothes, pose, and background exactly the same, but make the lighting transformation very obvious.`);
     }
     
     // Pose modifications
     if (params.posePrompt && params.selectedPose) {
-      console.log(`[API] Processing pose node: selectedPose=${params.selectedPose}, posePrompt exists=${!!params.posePrompt}`);
       prompts.push(`IMPORTANT: Completely change the person's body pose to match this exact description: ${params.posePrompt}. The pose change should be dramatic and clearly visible. Keep their face, clothes, and background exactly the same, but make the pose transformation very obvious.`);
     }
     
@@ -671,11 +657,6 @@ The result should look like all subjects were photographed together in the same 
     }
 
     // Debug: Log the final combined prompt and parts structure
-    console.log(`[API] Final combined prompt: ${prompt}`);
-    console.log(`[API] Total prompts collected: ${prompts.length}`);
-    console.log(`[API] Individual prompts:`, prompts);
-    console.log(`[API] Reference images count: ${referenceParts.length}`);
-    console.log(`[API] Total parts being sent to AI: ${1 + 1 + referenceParts.length} (prompt + input image + ${referenceParts.length} reference images)`);
 
     // Generate with Gemini
     const parts = [
@@ -686,7 +667,6 @@ The result should look like all subjects were photographed together in the same 
       ...referenceParts,
     ];
 
-    console.log(`[API] Sending request to Gemini with ${parts.length} parts (prompt + ${referenceParts.length + 1} images)`);
     
     let response;
     try {
@@ -694,7 +674,6 @@ The result should look like all subjects were photographed together in the same 
         model: "gemini-2.5-flash-image-preview",
         contents: parts,
       });
-      console.log('[API] Gemini response received successfully');
     } catch (geminiError: any) {
       console.error('[API] Gemini API error:', geminiError);
       console.error('[API] Gemini error details:', {
@@ -723,31 +702,21 @@ The result should look like all subjects were photographed together in the same 
       );
     }
 
-    console.log('[API] Raw Gemini response structure:', JSON.stringify(response, null, 2));
     
     const outParts = (response as any)?.candidates?.[0]?.content?.parts ?? [];
     const images: string[] = [];
     const texts: string[] = [];
     
-    console.log(`[API] Response parts found: ${outParts.length}`);
     
     for (let i = 0; i < outParts.length; i++) {
       const p = outParts[i];
-      console.log(`[API] Part ${i}:`, {
-        hasInlineData: !!p?.inlineData,
-        hasText: !!p?.text,
-        inlineDataType: p?.inlineData?.mimeType,
-        textLength: p?.text?.length
-      });
       
       if (p?.inlineData?.data) {
         images.push(`data:image/png;base64,${p.inlineData.data}`);
-        console.log(`[API] Found image data, length: ${p.inlineData.data.length}`);
       }
       
       if (p?.text) {
         texts.push(p.text);
-        console.log(`[API] Found text response: ${p.text.substring(0, 200)}...`);
       }
     }
 
