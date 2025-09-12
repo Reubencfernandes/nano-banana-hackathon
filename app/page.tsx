@@ -101,6 +101,48 @@ CRITICAL REQUIREMENTS:
 The result should look like all subjects were photographed together in the same place at the same time, NOT like separate images placed side by side.`;
 }
 
+/**
+ * Copy image to clipboard with PNG conversion
+ * The clipboard API only supports PNG format for images, so we convert other formats
+ */
+async function copyImageToClipboard(dataUrl: string) {
+  try {
+    const response = await fetch(dataUrl);
+    const blob = await response.blob();
+    
+    // Convert to PNG if not already PNG
+    if (blob.type !== 'image/png') {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+      
+      await new Promise((resolve) => {
+        img.onload = () => {
+          canvas.width = img.width;
+          canvas.height = img.height;
+          ctx?.drawImage(img, 0, 0);
+          resolve(void 0);
+        };
+        img.src = dataUrl;
+      });
+      
+      const pngBlob = await new Promise<Blob>((resolve) => {
+        canvas.toBlob((blob) => resolve(blob!), 'image/png');
+      });
+      
+      await navigator.clipboard.write([
+        new ClipboardItem({ 'image/png': pngBlob })
+      ]);
+    } else {
+      await navigator.clipboard.write([
+        new ClipboardItem({ 'image/png': blob })
+      ]);
+    }
+  } catch (error) {
+    console.error('Failed to copy image to clipboard:', error);
+  }
+}
+
 /* ========================================
    TYPE DEFINITIONS
    ======================================== */
@@ -2112,6 +2154,9 @@ export default function EditorPage() {
         break;
       case "FACE":
         setNodes(prev => [...prev, { ...commonProps, type: "FACE", faceOptions: {} } as FaceNode]);
+        break;
+      case "EDIT":
+        setNodes(prev => [...prev, { ...commonProps, type: "EDIT" } as EditNode]);
         break;
       case "LIGHTNING":
         setNodes(prev => [...prev, { ...commonProps, type: "LIGHTNING", lightingStrength: 75 } as LightningNode]);
