@@ -1407,7 +1407,6 @@ export default function EditorPage() {
       
       // If we found unprocessed merges, we need to execute them first
       if (unprocessedMerges.length > 0 && !inputImage) {
-        console.log(`Found ${unprocessedMerges.length} unprocessed MERGE nodes in chain. Processing them first...`);
         
         // Process each merge node
         for (const merge of unprocessedMerges) {
@@ -1474,10 +1473,7 @@ export default function EditorPage() {
     
     // Show info about batch processing
     if (unprocessedNodeCount > 1) {
-      console.log(`🚀 Combining ${unprocessedNodeCount} node transformations into ONE API call`);
-      console.log("Combined parameters:", params);
     } else {
-      console.log("Processing single node:", node.type);
     }
 
     // Set loading state for all nodes being processed
@@ -1496,7 +1492,6 @@ export default function EditorPage() {
       
       // Check if params contains custom images and validate them
       if (params.clothesImage) {
-        console.log("[Process] Clothes image size:", (params.clothesImage.length / 1024).toFixed(2) + "KB");
         // Validate it's a proper data URL
         if (!params.clothesImage.startsWith('data:') && !params.clothesImage.startsWith('http') && !params.clothesImage.startsWith('/')) {
           throw new Error("Invalid clothes image format. Please upload a valid image.");
@@ -1504,7 +1499,6 @@ export default function EditorPage() {
       }
       
       if (params.customBackgroundImage) {
-        console.log("[Process] Custom background size:", (params.customBackgroundImage.length / 1024).toFixed(2) + "KB");
         // Validate it's a proper data URL
         if (!params.customBackgroundImage.startsWith('data:') && !params.customBackgroundImage.startsWith('http') && !params.customBackgroundImage.startsWith('/')) {
           throw new Error("Invalid background image format. Please upload a valid image.");
@@ -1512,12 +1506,6 @@ export default function EditorPage() {
       }
       
       // Log request details for debugging
-      console.log("[Process] Sending request with:", {
-        hasImage: !!inputImage,
-        imageSize: inputImage ? (inputImage.length / 1024).toFixed(2) + "KB" : 0,
-        paramsKeys: Object.keys(params),
-        nodeType: node.type
-      });
       
       // ORIGINAL PROCESSING LOGIC RESTORED (HF processing commented out)
       /*
@@ -1591,8 +1579,6 @@ export default function EditorPage() {
       
       
       if (unprocessedNodeCount > 1) {
-        console.log(`✅ Successfully applied ${unprocessedNodeCount} transformations in ONE API call!`);
-        console.log(`Saved ${unprocessedNodeCount - 1} API calls by combining transformations`);
       }
     } catch (e: any) {
       console.error("Process error:", e);
@@ -1712,11 +1698,6 @@ export default function EditorPage() {
     }
     
     // Log merge details for debugging
-    console.log("[Merge] Processing merge with:", {
-      imageCount: mergeImages.length,
-      imageSizes: mergeImages.map(img => (img.length / 1024).toFixed(2) + "KB"),
-      labels: inputData.map(d => d.label)
-    });
     
     const prompt = generateMergePrompt(inputData);
     
@@ -1800,8 +1781,6 @@ export default function EditorPage() {
       if (inputData.length < 2) throw new Error("Connect at least two nodes with images (CHARACTER nodes or processed nodes).");
       
       // Debug: Log what we're sending
-      console.log("🔄 Merging nodes:", inputData.map(d => d.label).join(", "));
-      console.log("📷 Image URLs being sent:", inputData.map(d => d.image.substring(0, 100) + "..."));
       
       // Generate dynamic prompt based on number of inputs
       const prompt = generateMergePrompt(inputData);

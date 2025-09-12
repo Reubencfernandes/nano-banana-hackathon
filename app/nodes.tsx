@@ -1679,20 +1679,17 @@ export function StyleNodeView({ node, onDelete, onUpdate, onStartConnection, onE
    * Each style represents a different artistic movement or pop culture aesthetic
    */
   const styleOptions = [
-    { value: "90s-anime", label: "90's Anime Style" },              // Classic 90s anime art style
-    { value: "gibhli", label: "Gibhli Style" },
-    { value: "mha", label: "My Hero Academia Style" },            // Modern anime style
-    { value: "dbz", label: "Dragon Ball Z Style" },               // Iconic manga/anime style
-    { value: "ukiyo-e", label: "Ukiyo-e Style" },                  // Traditional Japanese woodblock prints
-    { value: "cyberpunk", label: "Cyberpunk Style" },              // Futuristic neon aesthetic
-    { value: "steampunk", label: "Steampunk Style" },              // Victorian-era industrial aesthetic
-    { value: "cubism", label: "Cubism Style" },                   // Picasso-style geometric art
-    { value: "van-gogh", label: "Post-Impressionist (Van Gogh) Style" }, // Van Gogh's distinctive brushwork
-    { value: "simpsons", label: "Simpsons Style" },               // Cartoon animation style
-    { value: "family-guy", label: "Family Guy Style" },           // Modern cartoon animation // Netflix series visual style
-    { value: "wildwest", label: "Wild West Style" },// Cinematic color grading
-    { value: "star-wars", label: "Star Wars Style" },
-    { value: "star-trek", label: "Star Trek Style" },
+    { value: "90s-anime", label: "90's Anime Style" },
+    { value: "mha", label: "My Hero Academia Style" },
+    { value: "dbz", label: "Dragon Ball Z Style" },
+    { value: "ukiyo-e", label: "Ukiyo-e Style" },
+    { value: "spiderverse", label: "Spiderverse Style" },
+    { value: "cubism", label: "Cubism Style" },
+    { value: "van-gogh", label: "Post-Impressionist (Van Gogh) Style" },
+    { value: "simpsons", label: "Simpsons Style" },
+    { value: "family-guy", label: "Family Guy Style" },
+    { value: "pixar", label: "Pixar Style" },
+    { value: "manga", label: "Manga Style" },
   ];
   
   return (
