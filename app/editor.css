@@ -4,35 +4,35 @@
    CONNECTION LINE ANIMATIONS
    ======================================== */
 
-/* Animation for regular connection lines when dragging */
+/* Animation for regular connection lines when dragging - now truly continuous */
 @keyframes flow {
-  0% {
-    stroke-dashoffset: 0;    /* Start with dashes at their original position */
+  from {
+    stroke-dashoffset: 10;   /* Start offset equal to one complete dash cycle */
   }
-  100% {
-    stroke-dashoffset: -20;  /* Move dashes 20 units to the left, creating flow effect */
+  to {
+    stroke-dashoffset: 0;    /* Move to next cycle, creating seamless continuous flow */
   }
 }
 
 /* Applied to connection lines when user is actively dragging to connect nodes */
 .connection-animated {
-  animation: flow 1s linear infinite;  /* Run the flow animation continuously for 1 second cycles */
-  stroke-dasharray: 5, 5;             /* Create dashed line: 5px dash, 5px gap pattern */
+  animation: flow 0.8s linear infinite;  /* Smooth continuous animation, slightly faster */
+  stroke-dasharray: 5, 5;               /* Create dashed line: 5px dash, 5px gap pattern */
 }
 
-/* Animation for processing connections - shows data flowing through active connections */
+/* Animation for processing connections - shows data flowing through active connections - now truly continuous */
 @keyframes processingFlow {
-  0% {
-    stroke-dashoffset: 0;    /* Start position of the moving dashes */
+  from {
+    stroke-dashoffset: 12;   /* Start offset equal to one complete dash cycle (8+4=12) */
   }
-  100% {
-    stroke-dashoffset: -40;  /* End position - larger offset for more visible movement */
+  to {
+    stroke-dashoffset: 0;    /* Move to next cycle, creating seamless continuous flow */
   }
 }
 
 /* Applied to connection lines when nodes are actively processing data */
 .connection-processing {
-  animation: processingFlow 1.2s linear infinite;  /* Smooth continuous animation, slightly slower than drag */
+  animation: processingFlow 1.0s linear infinite;  /* Smooth continuous animation, optimized timing */
   stroke: #22c55e;                                 /* Green color to indicate active processing */
   stroke-width: 3;                                 /* Thicker line to make it more prominent */
   stroke-dasharray: 8, 4;                          /* Longer dashes (8px) with smaller gaps (4px) for better visibility */
