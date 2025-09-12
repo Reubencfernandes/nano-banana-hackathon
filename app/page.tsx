@@ -196,9 +196,26 @@ type BackgroundNode = NodeBase & {
   type: "BACKGROUND";
   input?: string;                    // ID of the source node (usually CHARACTER)
   output?: string;                   // Processed image with new background
-  backgroundType: "color" | "image" | "upload" | "custom";  // Type of background to apply
+  backgroundType: "color" | "gradient" | "image" | "city" | "photostudio" | "upload" | "custom";  // Type of background to apply
   backgroundColor?: string;          // Hex color code for solid color backgrounds
+  
+  // Gradient background properties
+  gradientDirection?: string;        // Direction of gradient (to right, to bottom, radial, etc.)
+  gradientStartColor?: string;       // Starting color of gradient
+  gradientEndColor?: string;         // Ending color of gradient
+  
   backgroundImage?: string;          // URL/path for preset background images
+  
+  // City scene properties
+  citySceneType?: string;           // Type of city scene (busy_street, times_square, etc.)
+  cityTimeOfDay?: string;           // Time of day for city scene
+  
+  // Photo studio properties
+  studioSetup?: string;             // Studio background setup type
+  studioBackgroundColor?: string;   // Color for colored seamless background
+  studioLighting?: string;          // Studio lighting setup
+  faceCamera?: boolean;             // Whether to position character facing camera
+  
   customBackgroundImage?: string;    // User-uploaded background image data
   customPrompt?: string;            // AI prompt for generating custom backgrounds
   isRunning?: boolean;              // Processing state indicator
@@ -266,6 +283,7 @@ type CameraNode = NodeBase & {
   bokeh?: string;              // Background blur style
   composition?: string;        // Composition technique
   aspectRatio?: string;        // Image aspect ratio
+  motionBlur?: string;         // Motion blur effect
   isRunning?: boolean;         // Processing status
   error?: string | null;       // Error message
 };
@@ -327,7 +345,7 @@ type LightningNode = NodeBase & {
   input?: string;              // Source node ID
   output?: string;             // Image with lighting applied
   selectedLighting?: string;   // Selected lighting preset name
-  lightingImage?: string;      // Path to lighting image
+  lightingPrompt?: string;     // Text prompt for lighting effect
   lightingStrength?: number;   // Intensity of lighting effect (0-100)
   isRunning?: boolean;         // Processing state
   error?: string | null;       // Error message
@@ -343,7 +361,7 @@ type PosesNode = NodeBase & {
   input?: string;              // Source node ID
   output?: string;             // Image with pose applied
   selectedPose?: string;       // Selected pose preset name
-  poseImage?: string;          // Path to pose reference image
+  posePrompt?: string;         // Text prompt for pose effect
   poseStrength?: number;       // How strongly to apply the pose (0-100)
   isRunning?: boolean;         // Processing state
   error?: string | null;       // Error message
@@ -1177,11 +1195,33 @@ export default function EditorPage() {
     switch (node.type) {
       case "BACKGROUND":
         if ((node as BackgroundNode).backgroundType) {
-          config.backgroundType = (node as BackgroundNode).backgroundType;
-          config.backgroundColor = (node as BackgroundNode).backgroundColor;
-          config.backgroundImage = (node as BackgroundNode).backgroundImage;
-          config.customBackgroundImage = (node as BackgroundNode).customBackgroundImage;
-          config.customPrompt = (node as BackgroundNode).customPrompt;
+          const bgNode = node as BackgroundNode;
+          config.backgroundType = bgNode.backgroundType;
+          config.backgroundColor = bgNode.backgroundColor;
+          config.backgroundImage = bgNode.backgroundImage;
+          config.customBackgroundImage = bgNode.customBackgroundImage;
+          config.customPrompt = bgNode.customPrompt;
+          
+          // Gradient properties
+          if (bgNode.backgroundType === "gradient") {
+            config.gradientDirection = bgNode.gradientDirection;
+            config.gradientStartColor = bgNode.gradientStartColor;
+            config.gradientEndColor = bgNode.gradientEndColor;
+          }
+          
+          // City scene properties
+          if (bgNode.backgroundType === "city") {
+            config.citySceneType = bgNode.citySceneType;
+            config.cityTimeOfDay = bgNode.cityTimeOfDay;
+          }
+          
+          // Photo studio properties
+          if (bgNode.backgroundType === "photostudio") {
+            config.studioSetup = bgNode.studioSetup;
+            config.studioBackgroundColor = bgNode.studioBackgroundColor;
+            config.studioLighting = bgNode.studioLighting;
+            config.faceCamera = bgNode.faceCamera;
+          }
         }
         break;
       case "CLOTHES":
@@ -1214,6 +1254,7 @@ export default function EditorPage() {
         if (cam.bokeh && cam.bokeh !== "None") config.bokeh = cam.bokeh;
         if (cam.composition && cam.composition !== "None") config.composition = cam.composition;
         if (cam.aspectRatio && cam.aspectRatio !== "None") config.aspectRatio = cam.aspectRatio;
+        if (cam.motionBlur && cam.motionBlur !== "None") config.motionBlur = cam.motionBlur;
         break;
       case "AGE":
         if ((node as AgeNode).targetAge) {
@@ -1239,6 +1280,18 @@ export default function EditorPage() {
           if (Object.keys(opts).length > 0) {
             config.faceOptions = opts;
           }
+        }
+        break;
+      case "LIGHTNING":
+        if ((node as LightningNode).lightingPrompt && (node as LightningNode).selectedLighting) {
+          config.lightingPrompt = (node as LightningNode).lightingPrompt;
+          config.selectedLighting = (node as LightningNode).selectedLighting;
+        }
+        break;
+      case "POSES":
+        if ((node as PosesNode).posePrompt && (node as PosesNode).selectedPose) {
+          config.posePrompt = (node as PosesNode).posePrompt;
+          config.selectedPose = (node as PosesNode).selectedPose;
         }
         break;
     }
@@ -1509,7 +1562,13 @@ export default function EditorPage() {
       }
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Processing failed");
+      if (!res.ok) {
+        // Handle both string and object error formats
+        const errorMessage = typeof data.error === 'string' 
+          ? data.error 
+          : data.error?.message || JSON.stringify(data.error) || "Processing failed";
+        throw new Error(errorMessage);
+      }
 
       // Only update the current node with the output
       // Don't show output in intermediate nodes - they were just used for configuration

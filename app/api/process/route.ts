@@ -267,21 +267,169 @@ The result should look like all subjects were photographed together in the same 
     const prompts: string[] = [];
     const params = body.params || {};
 
+    // Debug: Log all received parameters
+    console.log(`[API] All received parameters:`, JSON.stringify(params, null, 2));
+
     // We'll collect additional inline image parts (references)
     const referenceParts: { inlineData: { mimeType: string; data: string } }[] = [];
+    let imageCounter = 2; // Start at 2 since image 1 is the primary input
     
     // Background modifications
     if (params.backgroundType) {
       const bgType = params.backgroundType;
+      console.log(`[API] Processing background: type=${bgType}`);
+      
       if (bgType === "color") {
-        prompts.push(`Change the background to a solid ${params.backgroundColor || "white"} background.`);
+        prompts.push(`Change the background to a solid ${params.backgroundColor || "white"} background with smooth, even color coverage.`);
+        
+      } else if (bgType === "gradient") {
+        const direction = params.gradientDirection || "to right";
+        const startColor = params.gradientStartColor || "#ff6b6b";
+        const endColor = params.gradientEndColor || "#4ecdc4";
+        
+        if (direction === "radial") {
+          prompts.push(`Replace the background with a radial gradient that starts with ${startColor} in the center and transitions smoothly to ${endColor} at the edges, creating a circular gradient effect.`);
+        } else {
+          prompts.push(`Replace the background with a linear gradient flowing ${direction}, starting with ${startColor} and smoothly transitioning to ${endColor}.`);
+        }
+        
       } else if (bgType === "image") {
         prompts.push(`Change the background to ${params.backgroundImage || "a beautiful beach scene"}.`);
+        
+      } else if (bgType === "city") {
+        const sceneType = params.citySceneType || "busy_street";
+        const timeOfDay = params.cityTimeOfDay || "daytime";
+        
+        let cityDescription = "";
+        
+        switch (sceneType) {
+          case "busy_street":
+            cityDescription = "a realistic busy city street with people walking at various distances around the main character. Include pedestrians in business attire, casual clothing, carrying bags and phones - some walking close by (appearing similar size to main character), others further in the background (appearing smaller due to distance). Show urban storefronts, traffic lights, street signs, and parked cars with authentic city atmosphere and proper depth perception";
+            break;
+          case "tokyo_shibuya":
+            cityDescription = "the iconic Tokyo Shibuya Crossing with people walking at various distances around the main character. Include people close by (similar scale to main character) and others further away (smaller due to distance), Japanese signage, neon advertisements, the famous scramble crossing zebra stripes, people in typical Tokyo fashion, some wearing masks, carrying colorful umbrellas. Show the massive LED screens, buildings towering above, and create proper depth with people at different distances creating natural perspective";
+            break;
+          case "tokyo_subway":
+            cityDescription = "a realistic Tokyo subway environment with commuters at various distances from the main character. Include people nearby (similar scale) and others further down corridors (smaller due to perspective), authentic Japanese subway tile walls, directional signage in Japanese, the distinctive Tokyo Metro design aesthetic, and proper depth showing the underground transit system's scale and architecture";
+            break;
+          case "times_square":
+            cityDescription = "Times Square NYC with bright LED billboards, street performers, tourists, and New Yorkers walking closely around the main character. Include authentic yellow taxi cabs, hot dog vendors, people taking selfies, Broadway theater marquees, the famous red steps, TKTS booth, and the overwhelming sensory experience of NYC's most famous intersection";
+            break;
+          case "downtown_skyline":
+            cityDescription = "a downtown city skyline with tall buildings, glass towers, and urban architecture in the background while people in business attire walk nearby on the sidewalk";
+            break;
+          case "urban_crosswalk":
+            cityDescription = "an urban crosswalk intersection with pedestrians of diverse backgrounds crossing around the main character, traffic lights, crosswalk signals, city buses, and the natural flow of city foot traffic";
+            break;
+          case "shopping_district":
+            cityDescription = "a bustling shopping district with people carrying shopping bags walking near the main character, storefront window displays, outdoor cafes, street vendors, and the lively atmosphere of commercial city life";
+            break;
+          case "city_park":
+            cityDescription = "a city park with people jogging, walking dogs, and families enjoying activities around the main character, with urban skyscrapers visible in the background through the trees";
+            break;
+          case "rooftop_view":
+            cityDescription = "a rooftop terrace with people socializing around the main character, overlooking a sprawling city skyline with twinkling lights and urban architecture stretching to the horizon";
+            break;
+          case "blade_runner_street":
+            cityDescription = "a cinematic Blade Runner-inspired street scene with neon-soaked alleyways, people in futuristic clothing walking through steam and rain around the main character. Include holographic advertisements, flying vehicles in the distance, Asian-influenced signage, dark atmospheric lighting with cyan and magenta neon reflections on wet pavement, and the dystopian cyberpunk aesthetic of the iconic film";
+            break;
+          case "matrix_alley":
+            cityDescription = "a Matrix-inspired urban alley with people in dark clothing and sunglasses walking purposefully around the main character. Include the distinctive green-tinted lighting, concrete brutalist architecture, fire escapes, urban decay, shadowy doorways, and the cold, digital atmosphere of the Matrix films with realistic but slightly stylized cinematography";
+            break;
+          default:
+            cityDescription = "a dynamic city environment with people walking naturally around the main character in an authentic urban setting";
+        }
+        
+        let timeDescription = "";
+        switch (timeOfDay) {
+          case "golden_hour":
+            timeDescription = " during golden hour with warm, glowing sunlight";
+            break;
+          case "daytime":
+            timeDescription = " during bright daytime with clear lighting";
+            break;
+          case "blue_hour":
+            timeDescription = " during blue hour with twilight atmosphere";
+            break;
+          case "night":
+            timeDescription = " at night with city lights, illuminated windows, and neon glow";
+            break;
+          case "dawn":
+            timeDescription = " at dawn with soft morning light";
+            break;
+          case "overcast":
+            timeDescription = " on an overcast day with diffused lighting";
+            break;
+          default:
+            timeDescription = "";
+        }
+        
+        prompts.push(`Replace the background with ${cityDescription}${timeDescription}. CRITICAL SCALE REQUIREMENTS: Keep the main character at their EXACT original size and position - do NOT make them smaller or change their scale. The background people should be appropriately sized relative to their distance from the camera, with people closer to the camera appearing larger and people further away appearing smaller, but the main character must maintain their original proportions. Ensure the main character appears naturally integrated into the scene with proper lighting, shadows, and perspective that matches the environment.`);
+        
+      } else if (bgType === "photostudio") {
+        const setup = params.studioSetup || "white_seamless";
+        const lighting = params.studioLighting || "key_fill";
+        const faceCamera = params.faceCamera || false;
+        
+        let setupDescription = "";
+        switch (setup) {
+          case "white_seamless":
+            setupDescription = "a professional white seamless paper backdrop";
+            break;
+          case "black_seamless":
+            setupDescription = "a professional black seamless paper backdrop";
+            break;
+          case "grey_seamless":
+            setupDescription = "a professional grey seamless paper backdrop";
+            break;
+          case "colored_seamless":
+            const bgColor = params.studioBackgroundColor || "#ffffff";
+            setupDescription = `a professional seamless paper backdrop in ${bgColor}`;
+            break;
+          case "textured_backdrop":
+            setupDescription = "a professional textured photography backdrop";
+            break;
+          case "infinity_cove":
+            setupDescription = "a professional infinity cove studio setup with curved backdrop";
+            break;
+          default:
+            setupDescription = "a professional studio backdrop";
+        }
+        
+        let lightingDescription = "";
+        switch (lighting) {
+          case "key_fill":
+            lightingDescription = "key and fill lighting for balanced illumination";
+            break;
+          case "three_point":
+            lightingDescription = "three-point lighting with key, fill, and rim lights";
+            break;
+          case "beauty_lighting":
+            lightingDescription = "beauty lighting setup with soft, flattering illumination";
+            break;
+          case "dramatic_lighting":
+            lightingDescription = "dramatic single-light setup with strong shadows";
+            break;
+          case "soft_lighting":
+            lightingDescription = "soft, diffused lighting for gentle illumination";
+            break;
+          case "hard_lighting":
+            lightingDescription = "hard, directional lighting for sharp shadows and contrast";
+            break;
+          default:
+            lightingDescription = "professional studio lighting";
+        }
+        
+        let positioningInstruction = faceCamera ? " Position the person to face directly toward the camera with confident posture." : "";
+        
+        prompts.push(`Place the person in a professional photo studio with ${setupDescription} and ${lightingDescription}. Create a clean, professional portrait setup with proper studio atmosphere.${positioningInstruction}`);
+        
       } else if (bgType === "upload" && params.customBackgroundImage) {
         prompts.push(`Replace the background using the provided custom background reference image (attached below). Ensure perspective and lighting match.`);
         const bgRef = await toInlineDataFromAny(params.customBackgroundImage);
         if (bgRef) referenceParts.push({ inlineData: bgRef });
-      } else if (params.customPrompt) {
+        
+      } else if (bgType === "custom" && params.customPrompt) {
         prompts.push(params.customPrompt);
       }
     }
@@ -313,10 +461,11 @@ The result should look like all subjects were photographed together in the same 
     
     // Style application
     if (params.stylePreset) {
+      console.log(`[API] Processing style node: stylePreset=${params.stylePreset}, styleStrength=${params.styleStrength}`);
       const strength = params.styleStrength || 50;
       const styleMap: { [key: string]: string } = {
         "90s-anime": "Convert the image to 90's anime art style with classic anime features",
-        "Gibhli": "Apply Studio Ghibli style with vibrant colors, detailed character design, and fantasy elements typical of Studio Ghibli movies",
+        "Ghibli": "Apply Studio Ghibli style with vibrant colors, detailed character design, and fantasy elements typical of Studio Ghibli movies",
         "mha": "Transform the image into My Hero Academia anime style with modern crisp lines, vibrant colors, dynamic character design, and heroic aesthetics typical of the series",
         "dbz": "Apply Dragon Ball Z anime style with sharp angular features, spiky hair, intense expressions, bold outlines, high contrast shading, and dramatic action-oriented aesthetics",
         "ukiyo-e": "Render in traditional Japanese Ukiyo-e woodblock print style with flat colors, bold outlines, stylized waves and clouds, traditional Japanese artistic elements",
@@ -333,7 +482,11 @@ The result should look like all subjects were photographed together in the same 
       
       const styleDescription = styleMap[params.stylePreset];
       if (styleDescription) {
+        console.log(`[API] Style found: ${params.stylePreset} -> ${styleDescription}`);
         prompts.push(`${styleDescription}. Apply this style transformation at ${strength}% intensity while preserving the core subject matter.`);
+      } else {
+        console.error(`[API] Style not found in styleMap: ${params.stylePreset}`);
+        console.log(`[API] Available styles:`, Object.keys(styleMap));
       }
     }
     
@@ -342,28 +495,135 @@ The result should look like all subjects were photographed together in the same 
       prompts.push(params.editPrompt);
     }
     
-    // Camera settings
+    // Camera settings - Enhanced for Gemini 2.5 Flash Image
     if (params.focalLength || params.aperture || params.shutterSpeed || params.whiteBalance || params.angle || 
-        params.iso || params.filmStyle || params.lighting || params.bokeh || params.composition) {
+        params.iso || params.filmStyle || params.lighting || params.bokeh || params.composition || params.motionBlur) {
       const cameraSettings: string[] = [];
+      
+      // Build cinematic camera prompt for professional, movie-like results
+      let cameraPrompt = "CINEMATIC CAMERA TRANSFORMATION: Transform this image into a professional, cinematic photograph with movie-quality production values";
+      
       if (params.focalLength) {
         if (params.focalLength === "8mm") {
-          cameraSettings.push("Apply 8mm fisheye lens effect with 180-degree circular distortion");
+          cameraPrompt += " shot with an ultra-wide 8mm fisheye lens creating dramatic barrel distortion, immersive perspective, and cinematic edge curvature typical of action sequences";
+        } else if (params.focalLength === "14mm") {
+          cameraPrompt += " captured with a 14mm ultra-wide angle lens for sweeping cinematic vistas and dramatic environmental context";
+        } else if (params.focalLength === "24mm") {
+          cameraPrompt += " shot with a 24mm wide-angle cinema lens for establishing shots with expansive field of view and slight perspective enhancement";
+        } else if (params.focalLength === "35mm") {
+          cameraPrompt += " filmed with a 35mm lens providing natural cinematic perspective, the gold standard for narrative storytelling";
+        } else if (params.focalLength === "50mm") {
+          cameraPrompt += " captured with a 50mm cinema lens for authentic human vision perspective and natural depth rendering";
+        } else if (params.focalLength === "85mm") {
+          cameraPrompt += " shot with an 85mm portrait cinema lens for intimate character close-ups with beautiful subject isolation and compressed backgrounds";
+        } else if (params.focalLength === "100mm") {
+          cameraPrompt += " filmed with a 100mm telephoto lens for dramatic compression and cinematic subject isolation";
+        } else if (params.focalLength === "135mm") {
+          cameraPrompt += " captured with a 135mm telephoto cinema lens for extreme compression and dreamlike background separation";
         } else {
-          cameraSettings.push(`Focal Length: ${params.focalLength}`);
+          cameraPrompt += ` shot with professional ${params.focalLength} cinema glass`;
         }
       }
-      if (params.aperture) cameraSettings.push(`Aperture: ${params.aperture}`);
-      if (params.shutterSpeed) cameraSettings.push(`Shutter Speed: ${params.shutterSpeed}`);
-      if (params.whiteBalance) cameraSettings.push(`White Balance: ${params.whiteBalance}`);
-      if (params.angle) cameraSettings.push(`Camera Angle: ${params.angle}`);
-      if (params.iso) cameraSettings.push(`${params.iso}`);
-      if (params.lighting) cameraSettings.push(`Lighting: ${params.lighting}`);
-      if (params.bokeh) cameraSettings.push(`Bokeh effect: ${params.bokeh}`);
-      if (params.filmStyle == "RAW") cameraSettings.push(`Convert the image to RAW image`); else cameraSettings.push(`Film Style: ${params.filmStyle}`);     
-    if (cameraSettings.length > 0) {
-        prompts.push(`Apply professional photography settings: ${cameraSettings.join(", ")}`);
+      
+      if (params.aperture) {
+        if (params.aperture === "f/1.2") {
+          cameraPrompt += `, shot wide open at f/1.2 for extreme shallow depth of field, ethereal bokeh, and cinematic subject isolation with dreamy background blur`;
+        } else if (params.aperture === "f/1.4") {
+          cameraPrompt += `, captured at f/1.4 for beautiful shallow depth of field, creating that signature cinematic look with smooth background separation`;
+        } else if (params.aperture === "f/2.8") {
+          cameraPrompt += `, shot at f/2.8 for controlled depth of field, maintaining subject sharpness while creating pleasing background blur`;
+        } else if (params.aperture === "f/4") {
+          cameraPrompt += `, filmed at f/4 for balanced depth of field, keeping key subjects sharp while maintaining some background separation`;
+        } else if (params.aperture === "f/5.6") {
+          cameraPrompt += `, captured at f/5.6 for extended depth of field while maintaining cinematic quality and professional sharpness`;
+        } else if (params.aperture === "f/8" || params.aperture === "f/11") {
+          cameraPrompt += `, shot at ${params.aperture} for deep focus cinematography with tack-sharp details throughout the entire frame`;
+        } else {
+          cameraPrompt += `, professionally exposed at ${params.aperture}`;
+        }
       }
+      
+      if (params.iso) {
+        if (params.iso === "ISO 100") {
+          cameraPrompt += ", shot at ISO 100 for pristine image quality, zero noise, and maximum dynamic range typical of high-end cinema cameras";
+        } else if (params.iso === "ISO 200") {
+          cameraPrompt += ", captured at ISO 200 for clean shadows and optimal color reproduction with professional cinema camera characteristics";
+        } else if (params.iso === "ISO 400") {
+          cameraPrompt += ", filmed at ISO 400 for balanced exposure with minimal noise, the sweet spot for most cinematic scenarios";
+        } else if (params.iso === "ISO 800") {
+          cameraPrompt += ", shot at ISO 800 creating subtle film grain texture that adds cinematic character and organic feel";
+        } else if (params.iso === "ISO 1600") {
+          cameraPrompt += ", captured at ISO 1600 with controlled grain for dramatic low-light cinematography and moody atmosphere";
+        } else if (params.iso === "ISO 3200") {
+          cameraPrompt += ", filmed at ISO 3200 with artistic grain structure for gritty, realistic cinema aesthetics";
+        } else {
+          cameraPrompt += `, shot at ${params.iso} with appropriate noise characteristics`;
+        }
+      }
+      
+      if (params.lighting) {
+        if (params.lighting === "Golden Hour") {
+          cameraPrompt += ", cinematically lit during golden hour with warm, directional sunlight creating magical rim lighting, long shadows, and that coveted cinematic glow";
+        } else if (params.lighting === "Blue Hour") {
+          cameraPrompt += ", captured during blue hour with soft, even twilight illumination and cool color temperature for moody cinematic atmosphere";
+        } else if (params.lighting === "Studio") {
+          cameraPrompt += ", professionally lit with multi-point studio lighting setup featuring key light, fill light, and rim light for commercial cinema quality";
+        } else if (params.lighting === "Natural") {
+          cameraPrompt += ", naturally lit with soft, diffused daylight providing even illumination and organic shadow patterns";
+        } else if (params.lighting === "Dramatic") {
+          cameraPrompt += ", dramatically lit with high-contrast lighting creating strong shadows and highlights for cinematic tension";
+        } else {
+          cameraPrompt += `, professionally lit with ${params.lighting} lighting setup`;
+        }
+      }
+      
+      if (params.bokeh) {
+        if (params.bokeh === "Smooth Bokeh") {
+          cameraPrompt += ", featuring silky smooth bokeh with perfectly circular out-of-focus highlights and creamy background transitions";
+        } else if (params.bokeh === "Swirly Bokeh") {
+          cameraPrompt += ", featuring artistic swirly bokeh with spiral-like background blur patterns for unique visual character";
+        } else if (params.bokeh === "Hexagonal Bokeh") {
+          cameraPrompt += ", featuring hexagonal bokeh with geometric six-sided highlight shapes typical of cinema lenses";
+        } else {
+          cameraPrompt += `, featuring ${params.bokeh} quality bokeh rendering in out-of-focus areas`;
+        }
+      }
+      
+      if (params.motionBlur) {
+        if (params.motionBlur === "Light Motion Blur") {
+          cameraPrompt += ", with subtle motion blur suggesting gentle movement and adding cinematic flow to the image";
+        } else if (params.motionBlur === "Medium Motion Blur") {
+          cameraPrompt += ", with moderate motion blur creating dynamic energy and sense of movement typical of action cinematography";
+        } else if (params.motionBlur === "Heavy Motion Blur") {
+          cameraPrompt += ", with pronounced motion blur creating dramatic movement streaks and high-energy cinematic action";
+        } else if (params.motionBlur === "Radial Blur") {
+          cameraPrompt += ", with radial motion blur emanating from the center, creating explosive zoom-like movement and dramatic focus pull";
+        } else if (params.motionBlur === "Zoom Blur") {
+          cameraPrompt += ", with zoom blur effect creating dramatic speed lines and kinetic energy radiating outward from the subject";
+        } else {
+          cameraPrompt += `, with ${params.motionBlur} motion effect`;
+        }
+      }
+      
+      if (params.angle) {
+        if (params.angle === "Low Angle") {
+          cameraPrompt += ", shot from a low-angle perspective looking upward for dramatic impact";
+        } else if (params.angle === "Bird's Eye") {
+          cameraPrompt += ", captured from a bird's eye view directly overhead";
+        } else {
+          cameraPrompt += `, ${params.angle} camera angle`;
+        }
+      }
+      
+      if (params.filmStyle && params.filmStyle !== "RAW") {
+        cameraPrompt += `, processed with ${params.filmStyle} film aesthetic and color grading`;
+      } else if (params.filmStyle === "RAW") {
+        cameraPrompt += ", with natural RAW processing maintaining realistic colors and contrast";
+      }
+      
+      cameraPrompt += ". Maintain photorealistic quality with authentic camera characteristics, natural lighting, and professional composition.";
+      
+      prompts.push(cameraPrompt);
     }
     
     // Age transformation
@@ -371,32 +631,16 @@ The result should look like all subjects were photographed together in the same 
       prompts.push(`Transform the person to look exactly ${params.targetAge} years old with age-appropriate features.`);
     }
     
-    // Lightning effects
-    if (params.lightingImage && params.selectedLighting) {
-      prompts.push(`Apply ${params.selectedLighting} lighting effect to the person in the image. Adjust the lighting, shadows, and highlights to match the reference lighting style shown in the second image. Maintain the person's appearance, pose, and background`);
-      
-      try {
-        const lightingRef = await toInlineDataFromAny(params.lightingImage);
-        if (lightingRef) {
-          referenceParts.push({ inlineData: lightingRef });
-        }
-      } catch (error) {
-        console.error('[API] Error processing lighting image:', error);
-      }
+    // Lighting effects
+    if (params.lightingPrompt && params.selectedLighting) {
+      console.log(`[API] Processing lighting node: selectedLighting=${params.selectedLighting}, lightingPrompt exists=${!!params.lightingPrompt}`);
+      prompts.push(`IMPORTANT: Completely transform the lighting on this person to match this exact description: ${params.lightingPrompt}. The lighting change should be dramatic and clearly visible. Keep their face, clothes, pose, and background exactly the same, but make the lighting transformation very obvious.`);
     }
     
     // Pose modifications
-    if (params.poseImage && params.selectedPose) {
-      prompts.push(`Change the pose of the person in the first image to match the pose shown in the reference image. Keep the person's facial features, clothing, and overall appearance the same, only modify their body position and pose to match the reference`);
-      
-      try {
-        const poseRef = await toInlineDataFromAny(params.poseImage);
-        if (poseRef) {
-          referenceParts.push({ inlineData: poseRef });
-        }
-      } catch (error) {
-        console.error('[API] Error processing pose image:', error);
-      }
+    if (params.posePrompt && params.selectedPose) {
+      console.log(`[API] Processing pose node: selectedPose=${params.selectedPose}, posePrompt exists=${!!params.posePrompt}`);
+      prompts.push(`IMPORTANT: Completely change the person's body pose to match this exact description: ${params.posePrompt}. The pose change should be dramatic and clearly visible. Keep their face, clothes, and background exactly the same, but make the pose transformation very obvious.`);
     }
     
     // Face modifications
@@ -426,6 +670,13 @@ The result should look like all subjects were photographed together in the same 
       prompt = body.prompt + "\n\n" + prompt;
     }
 
+    // Debug: Log the final combined prompt and parts structure
+    console.log(`[API] Final combined prompt: ${prompt}`);
+    console.log(`[API] Total prompts collected: ${prompts.length}`);
+    console.log(`[API] Individual prompts:`, prompts);
+    console.log(`[API] Reference images count: ${referenceParts.length}`);
+    console.log(`[API] Total parts being sent to AI: ${1 + 1 + referenceParts.length} (prompt + input image + ${referenceParts.length} reference images)`);
+
     // Generate with Gemini
     const parts = [
       { text: prompt },
@@ -435,23 +686,83 @@ The result should look like all subjects were photographed together in the same 
       ...referenceParts,
     ];
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-image-preview",
-      contents: parts,
-    });
+    console.log(`[API] Sending request to Gemini with ${parts.length} parts (prompt + ${referenceParts.length + 1} images)`);
+    
+    let response;
+    try {
+      response = await ai.models.generateContent({
+        model: "gemini-2.5-flash-image-preview",
+        contents: parts,
+      });
+      console.log('[API] Gemini response received successfully');
+    } catch (geminiError: any) {
+      console.error('[API] Gemini API error:', geminiError);
+      console.error('[API] Gemini error details:', {
+        message: geminiError.message,
+        status: geminiError.status,
+        code: geminiError.code
+      });
+      
+      if (geminiError.message?.includes('safety')) {
+        return NextResponse.json(
+          { error: "Content was blocked by safety filters. Try using different images or prompts." },
+          { status: 400 }
+        );
+      }
+      
+      if (geminiError.message?.includes('quota') || geminiError.message?.includes('limit')) {
+        return NextResponse.json(
+          { error: "API quota exceeded. Please check your Gemini API usage limits." },
+          { status: 429 }
+        );
+      }
+      
+      return NextResponse.json(
+        { error: `Gemini API error: ${geminiError.message || 'Unknown error'}` },
+        { status: 500 }
+      );
+    }
 
+    console.log('[API] Raw Gemini response structure:', JSON.stringify(response, null, 2));
+    
     const outParts = (response as any)?.candidates?.[0]?.content?.parts ?? [];
     const images: string[] = [];
+    const texts: string[] = [];
     
-    for (const p of outParts) {
+    console.log(`[API] Response parts found: ${outParts.length}`);
+    
+    for (let i = 0; i < outParts.length; i++) {
+      const p = outParts[i];
+      console.log(`[API] Part ${i}:`, {
+        hasInlineData: !!p?.inlineData,
+        hasText: !!p?.text,
+        inlineDataType: p?.inlineData?.mimeType,
+        textLength: p?.text?.length
+      });
+      
       if (p?.inlineData?.data) {
         images.push(`data:image/png;base64,${p.inlineData.data}`);
+        console.log(`[API] Found image data, length: ${p.inlineData.data.length}`);
+      }
+      
+      if (p?.text) {
+        texts.push(p.text);
+        console.log(`[API] Found text response: ${p.text.substring(0, 200)}...`);
       }
     }
 
     if (!images.length) {
+      console.error('[API] No images generated by Gemini. Text responses:', texts);
       return NextResponse.json(
-        { error: "No image generated. Try adjusting your parameters." },
+        { 
+          error: "No image generated. Try adjusting your parameters.", 
+          textResponse: texts.join('\n'),
+          debugInfo: {
+            partsCount: outParts.length,
+            candidatesCount: (response as any)?.candidates?.length || 0,
+            hasResponse: !!response
+          }
+        },
         { status: 500 }
       );
     }
@@ -460,12 +771,33 @@ The result should look like all subjects were photographed together in the same 
   } catch (err: any) {
     console.error("/api/process error:", err);
     console.error("Error stack:", err?.stack);
+    console.error("Error details:", {
+      name: err?.name,
+      message: err?.message,
+      code: err?.code,
+      status: err?.status,
+      details: err?.details
+    });
     
     // Provide more specific error messages
-    if (err?.message?.includes('payload size')) {
+    if (err?.message?.includes('payload size') || err?.code === 413) {
       return NextResponse.json(
         { error: "Image data too large. Please use smaller images or reduce image quality." },
         { status: 413 }
+      );
+    }
+    
+    if (err?.message?.includes('API key') || err?.message?.includes('authentication')) {
+      return NextResponse.json(
+        { error: "Invalid API key. Please check your Google Gemini API token." },
+        { status: 401 }
+      );
+    }
+    
+    if (err?.message?.includes('quota') || err?.message?.includes('limit')) {
+      return NextResponse.json(
+        { error: "API quota exceeded. Please check your Google Gemini API usage limits." },
+        { status: 429 }
       );
     }
     
