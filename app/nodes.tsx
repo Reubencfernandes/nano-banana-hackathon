@@ -26,7 +26,6 @@ import React, { useState, useRef, useEffect } from "react";
 import { Button } from "../components/ui/button";
 import { Select } from "../components/ui/select";
 import { Textarea } from "../components/ui/textarea";
-import { Label } from "../components/ui/label";
 import { Slider } from "../components/ui/slider";
 import { ColorPicker } from "../components/ui/color-picker";
 import { Checkbox } from "../components/ui/checkbox";
@@ -57,9 +56,35 @@ async function copyImageToClipboard(dataUrl: string) {
   try {
     const response = await fetch(dataUrl);
     const blob = await response.blob();
-    await navigator.clipboard.write([
-      new ClipboardItem({ [blob.type]: blob })
-    ]);
+    
+    // Convert to PNG if not already PNG (clipboard API only supports PNG for images)
+    if (blob.type !== 'image/png') {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+      
+      await new Promise((resolve) => {
+        img.onload = () => {
+          canvas.width = img.width;
+          canvas.height = img.height;
+          ctx?.drawImage(img, 0, 0);
+          resolve(void 0);
+        };
+        img.src = dataUrl;
+      });
+      
+      const pngBlob = await new Promise<Blob>((resolve) => {
+        canvas.toBlob((blob) => resolve(blob!), 'image/png');
+      });
+      
+      await navigator.clipboard.write([
+        new ClipboardItem({ 'image/png': pngBlob })
+      ]);
+    } else {
+      await navigator.clipboard.write([
+        new ClipboardItem({ 'image/png': blob })
+      ]);
+    }
   } catch (error) {
     console.error('Failed to copy image to clipboard:', error);
   }
@@ -1537,105 +1562,196 @@ export function PosesNodeView({ node, onDelete, onUpdate, onStartConnection, onE
   );
 }
 
-export function EditNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition, getNodeHistoryInfo, navigateNodeHistory, getCurrentNodeImage }: any) {
+/**
+ * EDIT NODE VIEW COMPONENT
+ * 
+ * This node allows users to perform general text-based image editing operations.
+ * Users can describe what they want to change about an image using natural language,
+ * and the AI will attempt to apply those changes.
+ * 
+ * Features:
+ * - Natural language editing prompts (e.g., "make it brighter", "add vintage effect")
+ * - AI-powered prompt improvement using Gemini
+ * - Real-time editing processing
+ * - Output history with navigation
+ * - Connection management for input/output workflow
+ * 
+ * @param node - The edit node data containing editPrompt, input, output, etc.
+ * @param onDelete - Callback to delete this node
+ * @param onUpdate - Callback to update node properties
+ * @param onStartConnection - Callback when starting a connection from output port
+ * @param onEndConnection - Callback when ending a connection at input port
+ * @param onProcess - Callback to process this node
+ * @param onUpdatePosition - Callback to update node position when dragged
+ * @param getNodeHistoryInfo - Function to get history information for this node
+ * @param navigateNodeHistory - Function to navigate through node history
+ * @param getCurrentNodeImage - Function to get the current image for this node
+ */
+export function EditNodeView({ 
+  node, 
+  onDelete, 
+  onUpdate, 
+  onStartConnection, 
+  onEndConnection, 
+  onProcess, 
+  onUpdatePosition, 
+  getNodeHistoryInfo, 
+  navigateNodeHistory, 
+  getCurrentNodeImage 
+}: any) {
+  // Use custom hook for drag functionality - handles position updates during dragging
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
   
+  /**
+   * Handle prompt improvement using Gemini API
+   * Takes the user's basic edit description and enhances it for better AI processing
+   */
+  const handlePromptImprovement = async () => {
+    // Validate that user has entered a prompt
+    if (!node.editPrompt?.trim()) {
+      alert('Please enter an edit description first');
+      return;
+    }
+    
+    try {
+      // Call the API to improve the prompt
+      const response = await fetch('/api/improve-prompt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          prompt: node.editPrompt.trim(),
+          type: 'edit'
+        })
+      });
+      
+      if (response.ok) {
+        const { improvedPrompt } = await response.json();
+        onUpdate(node.id, { editPrompt: improvedPrompt });
+      } else {
+        alert('Failed to improve prompt. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error improving prompt:', error);
+      alert('Failed to improve prompt. Please try again.');
+    }
+  };
+
+  /**
+   * Handle delete node action with confirmation
+   */
+  const handleDeleteNode = (e: React.MouseEvent) => {
+    e.stopPropagation();  // Prevent triggering drag
+    e.preventDefault();
+    
+    if (confirm('Delete this node?')) {
+      onDelete(node.id);
+    }
+  };
+
+  /**
+   * Handle clearing the input connection
+   */
+  const handleClearConnection = () => {
+    onUpdate(node.id, { input: undefined });
+  };
+
+  /**
+   * Handle edit prompt changes
+   */
+  const handlePromptChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    onUpdate(node.id, { editPrompt: e.target.value });
+  };
+
   return (
     <div className="nb-node absolute text-white w-[320px]" style={{ left: localPos.x, top: localPos.y }}>
+      {/* Node Header - Contains title, delete button, and connection ports */}
       <div 
         className="nb-header px-3 py-2 flex items-center justify-between rounded-t-[14px] cursor-grab active:cursor-grabbing"
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
+        onPointerDown={onPointerDown}    // Start dragging
+        onPointerMove={onPointerMove}    // Handle drag movement
+        onPointerUp={onPointerUp}        // End dragging
       >
+        {/* Input port (left side) - where connections come in */}
         <Port className="in" nodeId={node.id} isOutput={false} onEndConnection={onEndConnection} />
+        
+        {/* Node title */}
         <div className="font-semibold text-sm flex-1 text-center">EDIT</div>
+        
         <div className="flex items-center gap-1">
+          {/* Delete button */}
           <Button
             variant="ghost"
             size="icon"
             className="text-destructive hover:bg-destructive/20 h-6 w-6"
-            onClick={(e) => {
-              e.stopPropagation();
-              e.preventDefault();
-              if (confirm('Delete this node?')) {
-                onDelete(node.id);
-              }
-            }}
-            onPointerDown={(e) => e.stopPropagation()}
+            onClick={handleDeleteNode}
+            onPointerDown={(e) => e.stopPropagation()}  // Prevent drag when clicking delete
             title="Delete node"
             aria-label="Delete node"
           >
             ×
           </Button>
+          
+          {/* Output port (right side) - where connections go out */}
           <Port className="out" nodeId={node.id} isOutput={true} onStartConnection={onStartConnection} />
         </div>
       </div>
+      
+      {/* Node Content - Contains all the controls and outputs */}
       <div className="p-3 space-y-3">
+        {/* Show clear connection button if node has input */}
         {node.input && (
           <div className="flex justify-end mb-2">
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => onUpdate(node.id, { input: undefined })}
+              onClick={handleClearConnection}
               className="text-xs"
+              title="Remove input connection"
             >
               Clear Connection
             </Button>
           </div>
         )}
+        
+        {/* Edit prompt input and improvement section */}
         <div className="space-y-2">
+          <div className="text-xs text-white/70 mb-1">Edit Instructions</div>
           <Textarea
             className="w-full"
             placeholder="Describe what to edit (e.g., 'make it brighter', 'add more contrast', 'make it look vintage')"
             value={node.editPrompt || ""}
-            onChange={(e) => onUpdate(node.id, { editPrompt: (e.target as HTMLTextAreaElement).value })}
+            onChange={handlePromptChange}
             rows={3}
           />
+          
+          {/* AI-powered prompt improvement button */}
           <Button
             variant="outline"
             size="sm"
             className="w-full text-xs"
-            onClick={async () => {
-              if (!node.editPrompt) {
-                alert('Please enter an edit description first');
-                return;
-              }
-              
-              try {
-                const response = await fetch('/api/improve-prompt', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ 
-                    prompt: node.editPrompt,
-                    type: 'edit'
-                  })
-                });
-                
-                if (response.ok) {
-                  const { improvedPrompt } = await response.json();
-                  onUpdate(node.id, { editPrompt: improvedPrompt });
-                } else {
-                  alert('Failed to improve prompt. Please try again.');
-                }
-              } catch (error) {
-                console.error('Error improving prompt:', error);
-                alert('Failed to improve prompt. Please try again.');
-              }
-            }}
+            onClick={handlePromptImprovement}
             title="Use Gemini 2.5 Flash to improve your edit prompt"
+            disabled={!node.editPrompt?.trim()}
           >
             ✨ Improve with Gemini
           </Button>
         </div>
+        
+        {/* Process button - starts the editing operation */}
         <Button 
           className="w-full"
           onClick={() => onProcess(node.id)}
-          disabled={node.isRunning}
-          title={!node.input ? "Connect an input first" : "Process all unprocessed nodes in chain"}
+          disabled={node.isRunning || !node.editPrompt?.trim()}
+          title={
+            !node.input ? "Connect an input first" : 
+            !node.editPrompt?.trim() ? "Enter edit instructions first" :
+            "Apply the edit to the input image"
+          }
         >
           {node.isRunning ? "Processing..." : "Apply Edit"}
         </Button>
+        
+        {/* Output section with history navigation and download */}
         <NodeOutputSection
           nodeId={node.id}
           output={node.output}
@@ -1644,8 +1760,12 @@ export function EditNodeView({ node, onDelete, onUpdate, onStartConnection, onEn
           navigateNodeHistory={navigateNodeHistory}
           getCurrentNodeImage={getCurrentNodeImage}
         />
+        
+        {/* Error display */}
         {node.error && (
-          <div className="text-xs text-red-400 mt-2">{node.error}</div>
+          <div className="text-xs text-red-400 mt-2 p-2 bg-red-900/20 rounded">
+            {node.error}
+          </div>
         )}
       </div>
     </div>

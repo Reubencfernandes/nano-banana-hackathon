@@ -11,7 +11,10 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(git push:*)",
-      "WebSearch"
+      "WebSearch",
+      "Read(//Users/reubenfernandes/Desktop/**)",
+      "mcp__puppeteer__puppeteer_click",
+      "mcp__browser-tools__getConsoleErrors"
     ],
     "deny": [],
     "ask": []
