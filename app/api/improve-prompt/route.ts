@@ -63,20 +63,10 @@ Keep the character image and background realistic. Make the description rich and
 
 Original prompt: "${body.prompt}"
 
-Write an improved background generation prompt:`,
+Write a short and concise improved background generation prompt and do not include anything unnecessary:`,
 
       edit: `You are an expert at writing prompts for AI image editing. Take the following simple editing request and transform it into a clear, detailed prompt that will produce precise, high-quality image modifications.
-
-Focus on:
-- Specific visual changes needed
-- Maintaining image quality and realism
-- Clear instructions for what to change and what to preserve
-- Professional photography/editing terminology
-- Realistic and natural-looking results
-
-Original prompt: "${body.prompt}"
-
-Write an improved editing prompt:`,
+Original prompt: "${body.prompt}" Return a short and concise improved editing prompt and do not include anything unnecessary:`,
 
       default: `You are an expert at writing prompts for AI image generation and editing. Take the following simple prompt and transform it into a detailed, effective prompt that will produce better results.
 
@@ -98,7 +88,7 @@ Write an improved prompt:`
       contents: [{ role: "user", parts: [{ text: improvementPrompt }] }],
     });
 
-    const improvedPrompt = response.response.text()?.trim();
+    const improvedPrompt = response?.text?.trim();
 
     if (!improvedPrompt) {
       return NextResponse.json(

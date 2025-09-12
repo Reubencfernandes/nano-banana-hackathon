@@ -18,17 +18,19 @@
  * - AgeNodeView: Transform subject age
  * - FaceNodeView: Modify facial features and accessories
  */
+// Enable React Server Components client-side rendering for this file
 "use client";
 
-// React imports for component functionality
+// Import React core functionality for state management and lifecycle hooks
 import React, { useState, useRef, useEffect } from "react";
-// UI component imports from shadcn/ui library
-import { Button } from "../components/ui/button";
-import { Select } from "../components/ui/select";
-import { Textarea } from "../components/ui/textarea";
-import { Slider } from "../components/ui/slider";
-import { ColorPicker } from "../components/ui/color-picker";
-import { Checkbox } from "../components/ui/checkbox";
+
+// Import reusable UI components from the shadcn/ui component library
+import { Button } from "../components/ui/button";       // Standard button component
+import { Select } from "../components/ui/select";       // Dropdown selection component  
+import { Textarea } from "../components/ui/textarea";   // Multi-line text input component
+import { Slider } from "../components/ui/slider";       // Range slider input component
+import { ColorPicker } from "../components/ui/color-picker"; // Color selection component
+import { Checkbox } from "../components/ui/checkbox";   // Checkbox input component
 
 /**
  * Helper function to download processed images
@@ -38,12 +40,12 @@ import { Checkbox } from "../components/ui/checkbox";
  * @param filename Desired filename for the downloaded image
  */
 function downloadImage(dataUrl: string, filename: string) {
-  const link = document.createElement('a');  // Create temporary download link
-  link.href = dataUrl;                       // Set the image data as href
-  link.download = filename;                  // Set the download filename
-  document.body.appendChild(link);           // Add link to DOM (required for Firefox)
-  link.click();                             // Trigger download
-  document.body.removeChild(link);          // Clean up temporary link
+  const link = document.createElement('a');  // Create an invisible anchor element for download
+  link.href = dataUrl;                       // Set the base64 image data as the link target
+  link.download = filename;                  // Specify the filename for the downloaded file
+  document.body.appendChild(link);           // Temporarily add link to DOM (Firefox requirement)
+  link.click();                             // Programmatically trigger the download
+  document.body.removeChild(link);          // Remove the temporary link element from DOM
 }
 
 /**
@@ -54,38 +56,46 @@ function downloadImage(dataUrl: string, filename: string) {
  */
 async function copyImageToClipboard(dataUrl: string) {
   try {
-    const response = await fetch(dataUrl);
-    const blob = await response.blob();
+    // Fetch the data URL and convert it to a Blob object
+    const response = await fetch(dataUrl);          // Fetch the base64 data URL
+    const blob = await response.blob();             // Convert response to Blob format
     
-    // Convert to PNG if not already PNG (clipboard API only supports PNG for images)
+    // The browser clipboard API only supports PNG format for images
+    // If the image is not PNG, we need to convert it first
     if (blob.type !== 'image/png') {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      const img = new Image();
+      // Create a canvas element to handle image format conversion
+      const canvas = document.createElement('canvas');    // Create invisible canvas
+      const ctx = canvas.getContext('2d');                // Get 2D drawing context
+      const img = new Image();                            // Create image element
       
+      // Wait for the image to load before processing
       await new Promise((resolve) => {
-        img.onload = () => {
-          canvas.width = img.width;
-          canvas.height = img.height;
-          ctx?.drawImage(img, 0, 0);
-          resolve(void 0);
+        img.onload = () => {                              // When image loads
+          canvas.width = img.width;                       // Set canvas width to match image
+          canvas.height = img.height;                     // Set canvas height to match image
+          ctx?.drawImage(img, 0, 0);                      // Draw image onto canvas
+          resolve(void 0);                                // Resolve the promise
         };
-        img.src = dataUrl;
+        img.src = dataUrl;                                // Start loading the image
       });
       
+      // Convert the canvas content to PNG blob
       const pngBlob = await new Promise<Blob>((resolve) => {
-        canvas.toBlob((blob) => resolve(blob!), 'image/png');
+        canvas.toBlob((blob) => resolve(blob!), 'image/png');  // Convert canvas to PNG blob
       });
       
+      // Write the converted PNG blob to clipboard
       await navigator.clipboard.write([
-        new ClipboardItem({ 'image/png': pngBlob })
+        new ClipboardItem({ 'image/png': pngBlob })       // Create clipboard item with PNG data
       ]);
     } else {
+      // Image is already PNG, copy directly to clipboard
       await navigator.clipboard.write([
-        new ClipboardItem({ 'image/png': blob })
+        new ClipboardItem({ 'image/png': blob })          // Copy original blob to clipboard
       ]);
     }
   } catch (error) {
+    // Handle any errors that occur during the copy process
     console.error('Failed to copy image to clipboard:', error);
   }
 }
@@ -94,88 +104,63 @@ async function copyImageToClipboard(dataUrl: string) {
  * Reusable output section with history navigation for node components
  */
 function NodeOutputSection({
-  nodeId,
-  output,
-  downloadFileName,
-  getNodeHistoryInfo,
-  navigateNodeHistory,
-  getCurrentNodeImage,
+  nodeId,              // Unique identifier for the node
+  output,              // Optional current output image (base64 data URL)
+  downloadFileName,    // Filename to use when downloading the image
 }: {
-  nodeId: string;
-  output?: string;
-  downloadFileName: string;
-  getNodeHistoryInfo?: (id: string) => any;
-  navigateNodeHistory?: (id: string, direction: 'prev' | 'next') => void;
-  getCurrentNodeImage?: (id: string, fallback?: string) => string;
+  nodeId: string;                                                           // Node ID type definition
+  output?: string;                                                          // Optional output image string
+  downloadFileName: string;                                                 // Required download filename
 }) {
-  const currentImage = getCurrentNodeImage ? getCurrentNodeImage(nodeId, output) : output;
-  
-  if (!currentImage) return null;
-  
-  const historyInfo = getNodeHistoryInfo ? getNodeHistoryInfo(nodeId) : { hasHistory: false, currentDescription: '' };
+  // If no image is available, don't render anything
+  if (!output) return null;
   
   return (
+    // Main container for output section with vertical spacing
     <div className="space-y-2">
+      {/* Output header container */}
       <div className="space-y-1">
+        {/* Header row with title */}
         <div className="flex items-center justify-between">
+          {/* Output section label */}
           <div className="text-xs text-white/70">Output</div>
-          {historyInfo.hasHistory ? (
-            <div className="flex items-center gap-1">
-              <button
-                className="p-1 text-xs bg-white/10 hover:bg-white/20 rounded disabled:opacity-40"
-                onClick={() => navigateNodeHistory && navigateNodeHistory(nodeId, 'prev')}
-                disabled={!historyInfo.canGoBack}
-              >
-                ←
-              </button>
-              <span className="text-xs text-white/60 px-1">
-                {Math.floor(historyInfo.current || 1)}/{Math.floor(historyInfo.total || 1)}
-              </span>
-              <button
-                className="p-1 text-xs bg-white/10 hover:bg-white/20 rounded disabled:opacity-40"
-                onClick={() => navigateNodeHistory && navigateNodeHistory(nodeId, 'next')}
-                disabled={!historyInfo.canGoForward}
-              >
-                →
-              </button>
-            </div>
-          ) : null}
         </div>
+        {/* Output image with click-to-copy functionality */}
         <img 
-          src={currentImage} 
-          className="w-full rounded cursor-pointer hover:opacity-80 transition-opacity" 
-          alt="Output" 
-          onClick={() => copyImageToClipboard(currentImage)}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            copyImageToClipboard(currentImage);
+          src={output}  // Display the output image
+          className="w-full rounded cursor-pointer hover:opacity-80 transition-all duration-200 hover:ring-2 hover:ring-white/30"  // Styling with hover effects
+          alt="Output"  // Accessibility description
+          onClick={() => copyImageToClipboard(output)} // Left-click copies to clipboard
+          onContextMenu={(e) => { // Right-click context menu handler
+            e.preventDefault(); // Prevent browser context menu from appearing
+            copyImageToClipboard(output); // Copy image to clipboard
             
-            // Show a brief visual feedback
-            const img = e.currentTarget;
-            const originalTitle = img.title;
-            img.title = "Copied to clipboard!";
-            img.style.filter = "brightness(1.2)";
+            // Show brief visual feedback when image is copied
+            const img = e.currentTarget; // Get the image element
+            const originalTitle = img.title; // Store original tooltip text
+            img.title = "Copied to clipboard!"; // Update tooltip to show success
+            img.style.filter = "brightness(1.2)"; // Brighten the image briefly
+            img.style.transform = "scale(0.98)"; // Slightly scale down the image
             
+            // Reset visual feedback after 300ms
             setTimeout(() => {
-              img.title = originalTitle;
-              img.style.filter = "";
-            }, 500);
+              img.title = originalTitle; // Restore original tooltip
+              img.style.filter = ""; // Remove brightness filter
+              img.style.transform = ""; // Reset scale transform
+            }, 300);
           }}
-          title="Click or right-click to copy image to clipboard"
+          title="💾 Click or right-click to copy image to clipboard" // Tooltip instruction
         />
-        {historyInfo.currentDescription ? (
-          <div className="text-xs text-white/60 bg-black/20 rounded px-2 py-1">
-            {historyInfo.currentDescription}
-          </div>
-        ) : null}
       </div>
+      {/* Download button for saving the current image */}
       <Button
-        className="w-full"
-        variant="secondary"
-        onClick={() => downloadImage(currentImage, downloadFileName)}
+        className="w-full"                                              // Full width button
+        variant="secondary"                                              // Secondary button styling
+        onClick={() => downloadImage(output, downloadFileName)}         // Trigger download when clicked
       >
         📥 Download Output
       </Button>
+      {/* End of main output section container */}
     </div>
   );
 }
@@ -184,20 +169,25 @@ function NodeOutputSection({
    TYPE DEFINITIONS (TEMPORARY)
    ======================================== */
 // Temporary type definitions - these should be imported from page.tsx in production
-type BackgroundNode = any;
-type ClothesNode = any;
-type BlendNode = any;
-type EditNode = any;
-type CameraNode = any;
-type AgeNode = any;
-type FaceNode = any;
+// These are placeholder types that allow TypeScript to compile without errors
+type BackgroundNode = any;  // Node for background modification operations
+type ClothesNode = any;     // Node for clothing modification operations  
+type BlendNode = any;       // Node for image blending operations
+type EditNode = any;        // Node for general image editing operations
+type CameraNode = any;      // Node for camera effect operations
+type AgeNode = any;         // Node for age transformation operations
+type FaceNode = any;        // Node for facial feature modification operations
 
 /**
  * Utility function to combine CSS class names conditionally
- * Same implementation as in page.tsx for consistent styling
+ * Filters out falsy values and joins remaining strings with spaces
+ * Same implementation as in page.tsx for consistent styling across components
+ * 
+ * @param args Array of class name strings or falsy values
+ * @returns Combined class name string with falsy values filtered out
  */
 function cx(...args: Array<string | false | null | undefined>) {
-  return args.filter(Boolean).join(" ");
+  return args.filter(Boolean).join(" ");  // Remove falsy values and join with spaces
 }
 
 /* ========================================
@@ -424,6 +414,18 @@ export function BackgroundNodeView({
         </div>
       </div>
       <div className="p-3 space-y-3">
+        {node.input && (
+          <div className="flex justify-end mb-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onUpdate(node.id, { input: undefined })}
+              className="text-xs"
+            >
+              Clear Connection
+            </Button>
+          </div>
+        )}
         <Select 
           className="w-full"
           value={node.backgroundType || "color"}
@@ -565,8 +567,10 @@ export function ClothesNodeView({ node, onDelete, onUpdate, onStartConnection, o
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
   
   const presetClothes = [
-    { name: "Sukajan", path: "/sukajan.png" },
-    { name: "Blazer", path: "/blazzer.png" },
+    { name: "Sukajan", path: "/clothes/sukajan.png" },
+    { name: "Blazer", path: "/clothes/blazzer.png" },
+    { name: "Suit", path: "/clothes/suit.png" },
+    { name: "Women's Outfit", path: "/clothes/womenoutfit.png" },
   ];
 
   const onDrop = async (e: React.DragEvent) => {
@@ -666,7 +670,7 @@ export function ClothesNodeView({ node, onDelete, onUpdate, onStartConnection, o
               }`}
               onClick={() => selectPreset(preset.path, preset.name)}
             >
-              <img src={preset.path} alt={preset.name} className="w-full h-16 object-cover rounded mb-1" />
+              <img src={preset.path} alt={preset.name} className="w-full h-28 object-contain rounded mb-1" />
               <div className="text-xs">{preset.name}</div>
             </button>
           ))}
@@ -701,8 +705,10 @@ export function ClothesNodeView({ node, onDelete, onUpdate, onStartConnection, o
                 }
               }}
             />
-            <div className="border-2 border-dashed border-white/20 rounded-lg p-4 text-center cursor-pointer hover:border-white/40">
-              <p className="text-xs text-white/60">Drop, upload, or paste clothes image</p>
+            <div className="border-2 border-dashed border-white/20 rounded-lg p-6 text-center cursor-pointer hover:border-white/40 transition-colors">
+              <div className="text-white/40 text-lg mb-2">📁</div>
+              <p className="text-sm text-white/70 font-medium">Drop, upload, or paste clothes image</p>
+              <p className="text-xs text-white/50 mt-1">JPG, PNG, WebP supported</p>
             </div>
           </label>
         ) : null}
@@ -1057,7 +1063,7 @@ export function FaceNodeView({ node, onDelete, onUpdate, onStartConnection, onEn
           <Port className="out" nodeId={node.id} isOutput={true} onStartConnection={onStartConnection} />
         </div>
       </div>
-      <div className="p-3 space-y-2">
+      <div className="p-3 space-y-2 max-h-[500px] overflow-y-auto scrollbar-thin">
         {node.input && (
           <div className="flex justify-end mb-2">
             <Button
@@ -1141,39 +1147,40 @@ export function FaceNodeView({ node, onDelete, onUpdate, onStartConnection, onEn
 
         <div>
           <label className="text-xs text-white/70">Makeup</label>
-          <div className="grid grid-cols-3 gap-2 mt-2">
-            {[
-              { name: "Natural", path: "/makeup/natural.jpg" },
-              { name: "Glam", path: "/makeup/glam.jpg" },
-              { name: "Bold", path: "/makeup/bold.jpg" },
-              { name: "Smoky", path: "/makeup/smoky.jpg" },
-              { name: "Vintage", path: "/makeup/vintage.jpg" },
-              { name: "No Makeup", path: "/makeup/none.jpg" }
-            ].map((makeup) => (
-              <button
-                key={makeup.name}
-                className={`p-1 rounded border ${
-                  node.faceOptions?.selectedMakeup === makeup.name
-                    ? "border-indigo-400 bg-indigo-500/20"
-                    : "border-white/20 hover:border-white/40"
-                }`}
-                onClick={() => onUpdate(node.id, { 
-                  faceOptions: { ...node.faceOptions, selectedMakeup: makeup.name, makeupImage: makeup.path }
-                })}
-              >
-                <img 
-                  src={makeup.path} 
-                  alt={makeup.name} 
-                  className="w-full h-8 object-cover rounded mb-1 cursor-pointer hover:opacity-80"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    copyImageToClipboard(makeup.path);
-                  }}
-                  title="Click to copy makeup reference"
-                />
-                <div className="text-xs">{makeup.name}</div>
-              </button>
-            ))}
+          <div className="grid grid-cols-2 gap-2 mt-2">
+            <button
+              className={`p-1 rounded border ${
+                !node.faceOptions?.selectedMakeup || node.faceOptions?.selectedMakeup === "None"
+                  ? "border-indigo-400 bg-indigo-500/20"
+                  : "border-white/20 hover:border-white/40"
+              }`}
+              onClick={() => onUpdate(node.id, { 
+                faceOptions: { ...node.faceOptions, selectedMakeup: "None", makeupImage: null }
+              })}
+            >
+              <div className="w-full h-24 flex items-center justify-center text-xs text-white/60 border border-dashed border-white/20 rounded mb-1">
+                No Makeup
+              </div>
+              <div className="text-xs">None</div>
+            </button>
+            <button
+              className={`p-1 rounded border ${
+                node.faceOptions?.selectedMakeup === "Makeup"
+                  ? "border-indigo-400 bg-indigo-500/20"
+                  : "border-white/20 hover:border-white/40"
+              }`}
+              onClick={() => onUpdate(node.id, { 
+                faceOptions: { ...node.faceOptions, selectedMakeup: "Makeup", makeupImage: "/makeup/makeup1.png" }
+              })}
+            >
+              <img 
+                src="/makeup/makeup1.png" 
+                alt="Makeup" 
+                className="w-full h-24 object-contain rounded mb-1"
+                title="Click to select makeup"
+              />
+              <div className="text-xs">Makeup</div>
+            </button>
           </div>
         </div>
         
@@ -1322,9 +1329,9 @@ export function LightningNodeView({ node, onDelete, onUpdate, onStartConnection,
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
   
   const presetLightings = [
-    { name: "Studio Light", path: "/lighting/light1.jpg" },
-    { name: "Natural Light", path: "/lighting/light2.jpg" },
-    { name: "Dramatic Light", path: "/lighting/light3.jpg" },
+    { name: "Studio Light", path: "/lighting/light1.png" },
+    { name: "Natural Light", path: "/lighting/light2.png" },
+    { name: "Dramatic Light", path: "/lighting/light3.png" },
   ];
 
   const selectLighting = (lightingPath: string, lightingName: string) => {
@@ -1391,27 +1398,12 @@ export function LightningNodeView({ node, onDelete, onUpdate, onStartConnection,
               <img 
                 src={preset.path} 
                 alt={preset.name} 
-                className="w-full h-12 object-cover rounded mb-1 cursor-pointer hover:opacity-80"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  copyImageToClipboard(preset.path);
-                }}
-                title="Click to copy lighting reference"
+                className="w-full h-24 object-contain rounded mb-1"
+                title="Click to select lighting"
               />
               <div className="text-xs">{preset.name}</div>
             </button>
           ))}
-        </div>
-        
-        <div>
-          <Slider
-            label="Lighting Strength"
-            valueLabel={`${node.lightingStrength || 75}%`}
-            min={0}
-            max={100}
-            value={node.lightingStrength || 75}
-            onChange={(e) => onUpdate(node.id, { lightingStrength: parseInt((e.target as HTMLInputElement).value) })}
-          />
         </div>
         
         <Button 
@@ -1444,10 +1436,10 @@ export function PosesNodeView({ node, onDelete, onUpdate, onStartConnection, onE
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
   
   const presetPoses = [
-    { name: "Standing Pose 1", path: "/poses/stand1.jpg" },
-    { name: "Standing Pose 2", path: "/poses/stand2.jpg" },
-    { name: "Sitting Pose 1", path: "/poses/sit1.jpg" },
-    { name: "Sitting Pose 2", path: "/poses/sit2.jpg" },
+    { name: "Standing Pose 1", path: "/poses/stand1.png" },
+    { name: "Standing Pose 2", path: "/poses/stand2.png" },
+    { name: "Sitting Pose 1", path: "/poses/sit1.png" },
+    { name: "Sitting Pose 2", path: "/poses/sit2.png" },
   ];
 
   const selectPose = (posePath: string, poseName: string) => {
@@ -1514,27 +1506,12 @@ export function PosesNodeView({ node, onDelete, onUpdate, onStartConnection, onE
               <img 
                 src={preset.path} 
                 alt={preset.name} 
-                className="w-full h-12 object-cover rounded mb-1 cursor-pointer hover:opacity-80"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  copyImageToClipboard(preset.path);
-                }}
-                title="Click to copy pose reference"
+                className="w-full h-24 object-contain rounded mb-1"
+                title="Click to select pose"
               />
               <div className="text-xs">{preset.name}</div>
             </button>
           ))}
-        </div>
-        
-        <div>
-          <Slider
-            label="Pose Strength"
-            valueLabel={`${node.poseStrength || 60}%`}
-            min={0}
-            max={100}
-            value={node.poseStrength || 60}
-            onChange={(e) => onUpdate(node.id, { poseStrength: parseInt((e.target as HTMLInputElement).value) })}
-          />
         </div>
         
         <Button 
