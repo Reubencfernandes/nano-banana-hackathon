@@ -358,7 +358,7 @@ The result should look like all subjects were photographed together in the same 
       if (params.whiteBalance) cameraSettings.push(`White Balance: ${params.whiteBalance}`);
       if (params.angle) cameraSettings.push(`Camera Angle: ${params.angle}`);
       if (params.iso) cameraSettings.push(`${params.iso}`);
-      if (params.filmStyle) cameraSettings.push(`Film style: ${params.filmStyle}`);
+      if (params.filmStyle) cameraSettings.push(`${params.filmStyle}`);
       if (params.lighting) cameraSettings.push(`Lighting: ${params.lighting}`);
       if (params.bokeh) cameraSettings.push(`Bokeh effect: ${params.bokeh}`);
       if (params.composition) cameraSettings.push(`Composition: ${params.composition}`);

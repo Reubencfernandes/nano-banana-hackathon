@@ -12,7 +12,7 @@
     "@fal-ai/serverless-client": "^0.15.0",
     "@google/genai": "^1.17.0",
     "@huggingface/hub": "^2.6.3",
-    "@huggingface/inference": "^4.7.1",
+    "@huggingface/inference": "^4.8.0",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "lucide-react": "^0.542.0",

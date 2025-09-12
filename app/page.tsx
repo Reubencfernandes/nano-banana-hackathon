@@ -31,8 +31,8 @@ import {
 // UI components from shadcn/ui library
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
-// Hugging Face OAuth functionality - COMMENTED OUT FOR MANUAL REVIEW
-// import { oauthLoginUrl, oauthHandleRedirectIfPresent } from '@huggingface/hub';
+// Hugging Face OAuth functionality
+import { oauthLoginUrl, oauthHandleRedirectIfPresent } from '@huggingface/hub';
 
 /**
  * Utility function to combine CSS class names conditionally
@@ -698,29 +698,66 @@ function MergeNodeView({
         </div>
 
         <div className="mt-2">
-          <div className="text-xs text-white/70 mb-1">Output</div>
+          <div className="flex items-center justify-between mb-1">
+            <div className="text-xs text-white/70">Output</div>
+            {(() => {
+              const historyInfo = getNodeHistoryInfo(node.id);
+              return historyInfo.hasHistory ? (
+                <div className="flex items-center gap-1">
+                  <button
+                    className="p-1 text-xs bg-white/10 hover:bg-white/20 rounded disabled:opacity-40"
+                    onClick={() => navigateNodeHistory(node.id, 'prev')}
+                    disabled={!historyInfo.canGoBack}
+                  >
+                    ←
+                  </button>
+                  <span className="text-xs text-white/60 px-1">
+                    {historyInfo.current}/{historyInfo.total}
+                  </span>
+                  <button
+                    className="p-1 text-xs bg-white/10 hover:bg-white/20 rounded disabled:opacity-40"
+                    onClick={() => navigateNodeHistory(node.id, 'next')}
+                    disabled={!historyInfo.canGoForward}
+                  >
+                    →
+                  </button>
+                </div>
+              ) : null;
+            })()}
+          </div>
           <div className="w-full min-h-[200px] max-h-[400px] rounded-xl bg-black/40 grid place-items-center">
-            {node.output ? (
-              <img src={node.output} className="w-full h-auto max-h-[400px] object-contain rounded-xl" alt="output" />
+            {getCurrentNodeImage(node.id, node.output) ? (
+              <img src={getCurrentNodeImage(node.id, node.output)} className="w-full h-auto max-h-[400px] object-contain rounded-xl" alt="output" />
             ) : (
               <span className="text-white/40 text-xs py-16">Run merge to see result</span>
             )}
           </div>
-          {node.output && (
-            <Button
-              className="w-full mt-2"
-              variant="secondary"
-              onClick={() => {
-                const link = document.createElement('a');
-                link.href = node.output as string;
-                link.download = `merge-${Date.now()}.png`;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-              }}
-            >
-              📥 Download Merged Image
-            </Button>
+          {getCurrentNodeImage(node.id, node.output) && (
+            <div className="mt-2 space-y-2">
+              {(() => {
+                const historyInfo = getNodeHistoryInfo(node.id);
+                return historyInfo.currentDescription ? (
+                  <div className="text-xs text-white/60 bg-black/20 rounded px-2 py-1">
+                    {historyInfo.currentDescription}
+                  </div>
+                ) : null;
+              })()}
+              <Button
+                className="w-full"
+                variant="secondary"
+                onClick={() => {
+                  const link = document.createElement('a');
+                  const currentImage = getCurrentNodeImage(node.id, node.output);
+                  link.href = currentImage as string;
+                  link.download = `merge-${Date.now()}.png`;
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                }}
+              >
+                📥 Download Merged Image
+              </Button>
+            </div>
           )}
           {node.error && (
             <div className="mt-2">
@@ -767,10 +804,10 @@ export default function EditorPage() {
     scaleRef.current = scale;
   }, [scale]);
 
-  // HF OAUTH CHECK - COMMENTED OUT FOR MANUAL REVIEW
-  /*
+  // HF OAUTH CHECK
   useEffect(() => {
     (async () => {
+      setIsCheckingAuth(true);
       try {
         // Handle OAuth redirect if present
         const oauth = await oauthHandleRedirectIfPresent();
@@ -797,10 +834,8 @@ export default function EditorPage() {
       }
     })();
   }, []);
-  */
 
-  // HF PRO LOGIN HANDLER - COMMENTED OUT FOR MANUAL REVIEW  
-  /*
+  // HF PRO LOGIN HANDLER
   const handleHfProLogin = async () => {
     if (isHfProLoggedIn) {
       // Logout: clear the token
@@ -825,12 +860,6 @@ export default function EditorPage() {
       });
     }
   };
-  */
-  
-  // Placeholder function for manual review
-  const handleHfProLogin = () => {
-    console.log('HF Pro login disabled - see HF_INTEGRATION_CHANGES.md for details');
-  };
 
   // Connection dragging state
   const [draggingFrom, setDraggingFrom] = useState<string | null>(null);
@@ -840,11 +869,52 @@ export default function EditorPage() {
   const [apiToken, setApiToken] = useState("");
   const [showHelpSidebar, setShowHelpSidebar] = useState(false);
   
-  // HF PRO AUTHENTICATION - COMMENTED OUT FOR MANUAL REVIEW
-  // const [isHfProLoggedIn, setIsHfProLoggedIn] = useState(false);
-  // const [isCheckingAuth, setIsCheckingAuth] = useState(true);
-  const [isHfProLoggedIn] = useState(false); // Disabled for manual review
-  const [isCheckingAuth] = useState(false); // Disabled for manual review
+  // HF PRO AUTHENTICATION
+  const [isHfProLoggedIn, setIsHfProLoggedIn] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
+  // NODE HISTORY (per-node image history)
+  const [nodeHistories, setNodeHistories] = useState<Record<string, Array<{
+    id: string;
+    image: string;
+    timestamp: number;
+    description: string;
+  }>>>({});
+  
+  const [nodeHistoryIndex, setNodeHistoryIndex] = useState<Record<string, number>>({});
+
+  // Load node histories from localStorage on startup
+  useEffect(() => {
+    try {
+      const savedHistories = localStorage.getItem('nano-banana-node-histories');
+      const savedIndices = localStorage.getItem('nano-banana-node-history-indices');
+      if (savedHistories) {
+        setNodeHistories(JSON.parse(savedHistories));
+      }
+      if (savedIndices) {
+        setNodeHistoryIndex(JSON.parse(savedIndices));
+      }
+    } catch (error) {
+      console.error('Failed to load node histories from localStorage:', error);
+    }
+  }, []);
+
+  // Save node histories to localStorage whenever they change
+  useEffect(() => {
+    try {
+      localStorage.setItem('nano-banana-node-histories', JSON.stringify(nodeHistories));
+    } catch (error) {
+      console.error('Failed to save node histories to localStorage:', error);
+    }
+  }, [nodeHistories]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('nano-banana-node-history-indices', JSON.stringify(nodeHistoryIndex));
+    } catch (error) {
+      console.error('Failed to save node history indices to localStorage:', error);
+    }
+  }, [nodeHistoryIndex]);
 
   const characters = nodes.filter((n) => n.type === "CHARACTER") as CharacterNode[];
   const merges = nodes.filter((n) => n.type === "MERGE") as MergeNode[];
@@ -921,6 +991,84 @@ export default function EditorPage() {
   // Update any node's properties
   const updateNode = (id: string, updates: any) => {
     setNodes((prev) => prev.map((n) => (n.id === id ? { ...n, ...updates } : n)));
+  };
+
+  // Add image to node's history
+  const addToNodeHistory = (nodeId: string, image: string, description: string) => {
+    const historyEntry = {
+      id: uid(),
+      image,
+      timestamp: Date.now(),
+      description
+    };
+    
+    setNodeHistories(prev => {
+      const nodeHistory = prev[nodeId] || [];
+      const newHistory = [historyEntry, ...nodeHistory].slice(0, 10); // Keep last 10 per node
+      return {
+        ...prev,
+        [nodeId]: newHistory
+      };
+    });
+    
+    // Set this as the current (latest) image for the node
+    setNodeHistoryIndex(prev => ({
+      ...prev,
+      [nodeId]: 0
+    }));
+  };
+
+  // Navigate node history
+  const navigateNodeHistory = (nodeId: string, direction: 'prev' | 'next') => {
+    const history = nodeHistories[nodeId];
+    if (!history || history.length <= 1) return;
+    
+    const currentIndex = nodeHistoryIndex[nodeId] || 0;
+    let newIndex = currentIndex;
+    
+    if (direction === 'prev' && currentIndex < history.length - 1) {
+      newIndex = currentIndex + 1;
+    } else if (direction === 'next' && currentIndex > 0) {
+      newIndex = currentIndex - 1;
+    }
+    
+    if (newIndex !== currentIndex) {
+      setNodeHistoryIndex(prev => ({
+        ...prev,
+        [nodeId]: newIndex
+      }));
+      
+      // Update the node's output to show the historical image
+      const historicalImage = history[newIndex].image;
+      updateNode(nodeId, { output: historicalImage });
+    }
+  };
+
+  // Get current image for a node (either latest or from history navigation)
+  const getCurrentNodeImage = (nodeId: string, defaultOutput?: string) => {
+    const history = nodeHistories[nodeId];
+    const index = nodeHistoryIndex[nodeId] || 0;
+    
+    if (history && history[index]) {
+      return history[index].image;
+    }
+    
+    return defaultOutput;
+  };
+
+  // Get history info for a node
+  const getNodeHistoryInfo = (nodeId: string) => {
+    const history = nodeHistories[nodeId] || [];
+    const index = nodeHistoryIndex[nodeId] || 0;
+    
+    return {
+      hasHistory: history.length > 1,
+      current: index + 1,
+      total: history.length,
+      canGoBack: index < history.length - 1,
+      canGoForward: index > 0,
+      currentDescription: history[index]?.description || ''
+    };
   };
 
   // Handle single input connections for new nodes
@@ -1334,6 +1482,13 @@ export default function EditorPage() {
         }
         return n;
       }));
+
+      // Add to node's history
+      const description = unprocessedNodeCount > 1 
+        ? `Combined ${unprocessedNodeCount} transformations`
+        : `${node.type} transformation`;
+      
+      addToNodeHistory(nodeId, data.image, description);
       
       if (unprocessedNodeCount > 1) {
         console.log(`✅ Successfully applied ${unprocessedNodeCount} transformations in ONE API call!`);
@@ -1600,6 +1755,19 @@ export default function EditorPage() {
       }
       const out = js.image || (js.images?.[0] as string) || null;
       setNodes((prev) => prev.map((n) => (n.id === mergeId && n.type === "MERGE" ? { ...n, output: out, isRunning: false } : n)));
+      
+      // Add merge result to node's history
+      if (out) {
+        const inputLabels = merge.inputs.map((id, index) => {
+          const inputNode = nodes.find(n => n.id === id);
+          if (inputNode?.type === "CHARACTER") {
+            return (inputNode as CharacterNode).label || `Character ${index + 1}`;
+          }
+          return `${inputNode?.type || 'Node'} ${index + 1}`;
+        });
+        
+        addToNodeHistory(mergeId, out, `Merged: ${inputLabels.join(" + ")}`);
+      }
     } catch (e: any) {
       console.error("Merge error:", e);
       setNodes((prev) => prev.map((n) => (n.id === mergeId && n.type === "MERGE" ? { ...n, isRunning: false, error: e?.message || "Error" } : n)));
@@ -1824,25 +1992,7 @@ export default function EditorPage() {
             Help
           </Button>
           
-          {/* HF PRO BUTTON - COMMENTED OUT FOR MANUAL REVIEW */}
-          {/*
-          <Button
-            variant={isHfProLoggedIn ? "default" : "secondary"}
-            size="sm"
-            className="h-8 px-3"
-            type="button"
-            onClick={handleHfProLogin}
-            disabled={isCheckingAuth}
-            title={isHfProLoggedIn ? "Using fal.ai Gemini 2.5 Flash Image via HF" : "Click to login and use fal.ai Gemini 2.5 Flash"}
-          >
-            {isCheckingAuth ? "Checking..." : (isHfProLoggedIn ? "🤗 HF PRO ✓" : "Login HF PRO")}
-          </Button>
-          {isHfProLoggedIn && (
-            <div className="text-xs text-muted-foreground">
-              Using fal.ai Gemini 2.5 Flash
-            </div>
-          )}
-          */}
+
         </div>
       </header>
 
@@ -2052,6 +2202,9 @@ export default function EditorPage() {
                       onEndConnection={handleEndSingleConnection}
                       onProcess={processNode}
                       onUpdatePosition={updateNodePosition}
+                      getNodeHistoryInfo={getNodeHistoryInfo}
+                      navigateNodeHistory={navigateNodeHistory}
+                      getCurrentNodeImage={getCurrentNodeImage}
                     />
                   );
                 case "CLOTHES":
@@ -2065,6 +2218,9 @@ export default function EditorPage() {
                       onEndConnection={handleEndSingleConnection}
                       onProcess={processNode}
                       onUpdatePosition={updateNodePosition}
+                      getNodeHistoryInfo={getNodeHistoryInfo}
+                      navigateNodeHistory={navigateNodeHistory}
+                      getCurrentNodeImage={getCurrentNodeImage}
                     />
                   );
                 case "STYLE":
@@ -2078,6 +2234,9 @@ export default function EditorPage() {
                       onEndConnection={handleEndSingleConnection}
                       onProcess={processNode}
                       onUpdatePosition={updateNodePosition}
+                      getNodeHistoryInfo={getNodeHistoryInfo}
+                      navigateNodeHistory={navigateNodeHistory}
+                      getCurrentNodeImage={getCurrentNodeImage}
                     />
                   );
                 case "EDIT":
@@ -2091,6 +2250,9 @@ export default function EditorPage() {
                       onEndConnection={handleEndSingleConnection}
                       onProcess={processNode}
                       onUpdatePosition={updateNodePosition}
+                      getNodeHistoryInfo={getNodeHistoryInfo}
+                      navigateNodeHistory={navigateNodeHistory}
+                      getCurrentNodeImage={getCurrentNodeImage}
                     />
                   );
                 case "CAMERA":
@@ -2104,6 +2266,9 @@ export default function EditorPage() {
                       onEndConnection={handleEndSingleConnection}
                       onProcess={processNode}
                       onUpdatePosition={updateNodePosition}
+                      getNodeHistoryInfo={getNodeHistoryInfo}
+                      navigateNodeHistory={navigateNodeHistory}
+                      getCurrentNodeImage={getCurrentNodeImage}
                     />
                   );
                 case "AGE":
@@ -2117,6 +2282,9 @@ export default function EditorPage() {
                       onEndConnection={handleEndSingleConnection}
                       onProcess={processNode}
                       onUpdatePosition={updateNodePosition}
+                      getNodeHistoryInfo={getNodeHistoryInfo}
+                      navigateNodeHistory={navigateNodeHistory}
+                      getCurrentNodeImage={getCurrentNodeImage}
                     />
                   );
                 case "FACE":
@@ -2130,6 +2298,9 @@ export default function EditorPage() {
                       onEndConnection={handleEndSingleConnection}
                       onProcess={processNode}
                       onUpdatePosition={updateNodePosition}
+                      getNodeHistoryInfo={getNodeHistoryInfo}
+                      navigateNodeHistory={navigateNodeHistory}
+                      getCurrentNodeImage={getCurrentNodeImage}
                     />
                   );
                 default:

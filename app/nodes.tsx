@@ -47,6 +47,75 @@ function downloadImage(dataUrl: string, filename: string) {
   document.body.removeChild(link);          // Clean up temporary link
 }
 
+/**
+ * Reusable output section with history navigation for node components
+ */
+function NodeOutputSection({
+  nodeId,
+  output,
+  downloadFileName,
+  getNodeHistoryInfo,
+  navigateNodeHistory,
+  getCurrentNodeImage,
+}: {
+  nodeId: string;
+  output?: string;
+  downloadFileName: string;
+  getNodeHistoryInfo?: (id: string) => any;
+  navigateNodeHistory?: (id: string, direction: 'prev' | 'next') => void;
+  getCurrentNodeImage?: (id: string, fallback?: string) => string;
+}) {
+  const currentImage = getCurrentNodeImage ? getCurrentNodeImage(nodeId, output) : output;
+  
+  if (!currentImage) return null;
+  
+  const historyInfo = getNodeHistoryInfo ? getNodeHistoryInfo(nodeId) : { hasHistory: false, currentDescription: '' };
+  
+  return (
+    <div className="space-y-2">
+      <div className="space-y-1">
+        <div className="flex items-center justify-between">
+          <div className="text-xs text-white/70">Output</div>
+          {historyInfo.hasHistory ? (
+            <div className="flex items-center gap-1">
+              <button
+                className="p-1 text-xs bg-white/10 hover:bg-white/20 rounded disabled:opacity-40"
+                onClick={() => navigateNodeHistory && navigateNodeHistory(nodeId, 'prev')}
+                disabled={!historyInfo.canGoBack}
+              >
+                ←
+              </button>
+              <span className="text-xs text-white/60 px-1">
+                {historyInfo.current}/{historyInfo.total}
+              </span>
+              <button
+                className="p-1 text-xs bg-white/10 hover:bg-white/20 rounded disabled:opacity-40"
+                onClick={() => navigateNodeHistory && navigateNodeHistory(nodeId, 'next')}
+                disabled={!historyInfo.canGoForward}
+              >
+                →
+              </button>
+            </div>
+          ) : null}
+        </div>
+        <img src={currentImage} className="w-full rounded" alt="Output" />
+        {historyInfo.currentDescription ? (
+          <div className="text-xs text-white/60 bg-black/20 rounded px-2 py-1">
+            {historyInfo.currentDescription}
+          </div>
+        ) : null}
+      </div>
+      <Button
+        className="w-full"
+        variant="secondary"
+        onClick={() => downloadImage(currentImage, downloadFileName)}
+      >
+        📥 Download Output
+      </Button>
+    </div>
+  );
+}
+
 /* ========================================
    TYPE DEFINITIONS (TEMPORARY)
    ======================================== */
@@ -204,6 +273,9 @@ export function BackgroundNodeView({
   onEndConnection,
   onProcess,
   onUpdatePosition,
+  getNodeHistoryInfo,
+  navigateNodeHistory,
+  getCurrentNodeImage,
 }: any) {
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
   
@@ -372,18 +444,14 @@ export function BackgroundNodeView({
           {node.isRunning ? "Processing..." : "Apply Background"}
         </Button>
         
-        {node.output && (
-          <div className="space-y-2">
-            <img src={node.output} className="w-full rounded" alt="Output" />
-            <Button
-              className="w-full"
-              variant="secondary"
-              onClick={() => downloadImage(node.output, `background-${Date.now()}.png`)}
-            >
-              📥 Download Output
-            </Button>
-          </div>
-        )}
+        <NodeOutputSection
+          nodeId={node.id}
+          output={node.output}
+          downloadFileName={`background-${Date.now()}.png`}
+          getNodeHistoryInfo={getNodeHistoryInfo}
+          navigateNodeHistory={navigateNodeHistory}
+          getCurrentNodeImage={getCurrentNodeImage}
+        />
         {node.error && (
           <div className="text-xs text-red-400 mt-2">{node.error}</div>
         )}
@@ -392,7 +460,7 @@ export function BackgroundNodeView({
   );
 }
 
-export function ClothesNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition }: any) {
+export function ClothesNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition, getNodeHistoryInfo, navigateNodeHistory, getCurrentNodeImage }: any) {
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
   
   const presetClothes = [
@@ -546,18 +614,14 @@ export function ClothesNodeView({ node, onDelete, onUpdate, onStartConnection, o
         >
           {node.isRunning ? "Processing..." : "Apply Clothes"}
         </Button>
-        {node.output && (
-          <div className="space-y-2">
-            <img src={node.output} className="w-full rounded" alt="Output" />
-            <Button
-              className="w-full"
-              variant="secondary"
-              onClick={() => downloadImage(node.output, `clothes-${Date.now()}.png`)}
-            >
-              📥 Download Output
-            </Button>
-          </div>
-        )}
+        <NodeOutputSection
+          nodeId={node.id}
+          output={node.output}
+          downloadFileName={`clothes-${Date.now()}.png`}
+          getNodeHistoryInfo={getNodeHistoryInfo}
+          navigateNodeHistory={navigateNodeHistory}
+          getCurrentNodeImage={getCurrentNodeImage}
+        />
         {node.error && (
           <div className="text-xs text-red-400 mt-2">{node.error}</div>
         )}
@@ -566,7 +630,7 @@ export function ClothesNodeView({ node, onDelete, onUpdate, onStartConnection, o
   );
 }
 
-export function AgeNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition }: any) {
+export function AgeNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition, getNodeHistoryInfo, navigateNodeHistory, getCurrentNodeImage }: any) {
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
   
   return (
@@ -631,18 +695,14 @@ export function AgeNodeView({ node, onDelete, onUpdate, onStartConnection, onEnd
         >
           {node.isRunning ? "Processing..." : "Apply Age"}
         </Button>
-        {node.output && (
-          <div className="space-y-2">
-            <img src={node.output} className="w-full rounded" alt="Output" />
-            <Button
-              className="w-full"
-              variant="secondary"
-              onClick={() => downloadImage(node.output, `age-${Date.now()}.png`)}
-            >
-              📥 Download Output
-            </Button>
-          </div>
-        )}
+        <NodeOutputSection
+          nodeId={node.id}
+          output={node.output}
+          downloadFileName={`age-${Date.now()}.png`}
+          getNodeHistoryInfo={getNodeHistoryInfo}
+          navigateNodeHistory={navigateNodeHistory}
+          getCurrentNodeImage={getCurrentNodeImage}
+        />
         {node.error && (
           <div className="text-xs text-red-400 mt-2">{node.error}</div>
         )}
@@ -651,7 +711,7 @@ export function AgeNodeView({ node, onDelete, onUpdate, onStartConnection, onEnd
   );
 }
 
-export function CameraNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition }: any) {
+export function CameraNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition, getNodeHistoryInfo, navigateNodeHistory, getCurrentNodeImage }: any) {
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
   const focalLengths = ["None", "8mm fisheye", "12mm", "24mm", "35mm", "50mm", "85mm", "135mm", "200mm", "300mm", "400mm"];
   const apertures = ["None", "f/0.95", "f/1.2", "f/1.4", "f/1.8", "f/2", "f/2.8", "f/4", "f/5.6", "f/8", "f/11", "f/16", "f/22"];
@@ -841,18 +901,16 @@ export function CameraNodeView({ node, onDelete, onUpdate, onStartConnection, on
         >
           {node.isRunning ? "Processing..." : "Apply Camera Settings"}
         </Button>
-        {node.output && (
-          <div className="space-y-2 mt-2">
-            <img src={node.output} className="w-full rounded" alt="Output" />
-            <Button
-              className="w-full"
-              variant="secondary"
-              onClick={() => downloadImage(node.output, `camera-${Date.now()}.png`)}
-            >
-              📥 Download Output
-            </Button>
-          </div>
-        )}
+        <div className="mt-2">
+          <NodeOutputSection
+            nodeId={node.id}
+            output={node.output}
+            downloadFileName={`camera-${Date.now()}.png`}
+            getNodeHistoryInfo={getNodeHistoryInfo}
+            navigateNodeHistory={navigateNodeHistory}
+            getCurrentNodeImage={getCurrentNodeImage}
+          />
+        </div>
         {node.error && (
           <div className="text-xs text-red-400 mt-2">{node.error}</div>
         )}
@@ -861,7 +919,7 @@ export function CameraNodeView({ node, onDelete, onUpdate, onStartConnection, on
   );
 }
 
-export function FaceNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition }: any) {
+export function FaceNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition, getNodeHistoryInfo, navigateNodeHistory, getCurrentNodeImage }: any) {
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
   const hairstyles = ["None", "short", "long", "curly", "straight", "bald", "mohawk", "ponytail"];
   const expressions = ["None", "happy", "serious", "smiling", "laughing", "sad", "surprised", "angry"];
@@ -988,18 +1046,16 @@ export function FaceNodeView({ node, onDelete, onUpdate, onStartConnection, onEn
         >
           {node.isRunning ? "Processing..." : "Apply Face Changes"}
         </Button>
-        {node.output && (
-          <div className="space-y-2 mt-2">
-            <img src={node.output} className="w-full rounded" alt="Output" />
-            <Button
-              className="w-full"
-              variant="secondary"
-              onClick={() => downloadImage(node.output, `face-${Date.now()}.png`)}
-            >
-              📥 Download Output
-            </Button>
-          </div>
-        )}
+        <div className="mt-2">
+          <NodeOutputSection
+            nodeId={node.id}
+            output={node.output}
+            downloadFileName={`face-${Date.now()}.png`}
+            getNodeHistoryInfo={getNodeHistoryInfo}
+            navigateNodeHistory={navigateNodeHistory}
+            getCurrentNodeImage={getCurrentNodeImage}
+          />
+        </div>
         {node.error && (
           <div className="text-xs text-red-400 mt-2">{node.error}</div>
         )}
@@ -1008,7 +1064,7 @@ export function FaceNodeView({ node, onDelete, onUpdate, onStartConnection, onEn
   );
 }
 
-export function StyleNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition }: any) {
+export function StyleNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition, getNodeHistoryInfo, navigateNodeHistory, getCurrentNodeImage }: any) {
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
   
   const styleOptions = [
@@ -1107,18 +1163,14 @@ export function StyleNodeView({ node, onDelete, onUpdate, onStartConnection, onE
         >
           {node.isRunning ? "Applying Style..." : "Apply Style Transfer"}
         </Button>
-        {node.output && (
-          <div className="space-y-2">
-            <img src={node.output} className="w-full rounded" alt="Output" />
-            <Button
-              className="w-full"
-              variant="secondary"
-              onClick={() => downloadImage(node.output, `style-${Date.now()}.png`)}
-            >
-              📥 Download Output
-            </Button>
-          </div>
-        )}
+        <NodeOutputSection
+          nodeId={node.id}
+          output={node.output}
+          downloadFileName={`style-${Date.now()}.png`}
+          getNodeHistoryInfo={getNodeHistoryInfo}
+          navigateNodeHistory={navigateNodeHistory}
+          getCurrentNodeImage={getCurrentNodeImage}
+        />
         {node.error && (
           <div className="text-xs text-red-400 mt-2">{node.error}</div>
         )}
@@ -1127,7 +1179,7 @@ export function StyleNodeView({ node, onDelete, onUpdate, onStartConnection, onE
   );
 }
 
-export function EditNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition }: any) {
+export function EditNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition, getNodeHistoryInfo, navigateNodeHistory, getCurrentNodeImage }: any) {
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
   
   return (
@@ -1182,18 +1234,14 @@ export function EditNodeView({ node, onDelete, onUpdate, onStartConnection, onEn
         >
           {node.isRunning ? "Processing..." : "Apply Edit"}
         </Button>
-        {node.output && (
-          <div className="space-y-2">
-            <img src={node.output} className="w-full rounded" alt="Output" />
-            <Button
-              className="w-full"
-              variant="secondary"
-              onClick={() => downloadImage(node.output, `edit-${Date.now()}.png`)}
-            >
-              📥 Download Output
-            </Button>
-          </div>
-        )}
+        <NodeOutputSection
+          nodeId={node.id}
+          output={node.output}
+          downloadFileName={`edit-${Date.now()}.png`}
+          getNodeHistoryInfo={getNodeHistoryInfo}
+          navigateNodeHistory={navigateNodeHistory}
+          getCurrentNodeImage={getCurrentNodeImage}
+        />
       </div>
     </div>
   );
