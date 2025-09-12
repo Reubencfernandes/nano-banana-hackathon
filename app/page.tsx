@@ -363,8 +363,7 @@ type AnyNode = CharacterNode | MergeNode | BackgroundNode | ClothesNode | StyleN
  * Default placeholder image for new CHARACTER nodes
  * Uses Unsplash image as a starting point before users upload their own images
  */
-const DEFAULT_PERSON =
-  "https://images.unsplash.com/photo-1527980965255-d3b416303d12?q=80&w=640&auto=format&fit=crop";
+const DEFAULT_PERSON = "/reo.png";
 
 /**
  * Convert File objects to data URLs for image processing
@@ -854,42 +853,17 @@ function MergeNodeView({
         <div className="mt-2">
           <div className="flex items-center justify-between mb-1">
             <div className="text-xs text-white/70">Output</div>
-            {(() => {
-              const historyInfo = getNodeHistoryInfo(node.id);
-              return historyInfo.hasHistory ? (
-                <div className="flex items-center gap-1">
-                  <button
-                    className="p-1 text-xs bg-white/10 hover:bg-white/20 rounded disabled:opacity-40"
-                    onClick={() => navigateNodeHistory(node.id, 'prev')}
-                    disabled={!historyInfo.canGoBack}
-                  >
-                    ←
-                  </button>
-                  <span className="text-xs text-white/60 px-1">
-                    {historyInfo.current}/{historyInfo.total}
-                  </span>
-                  <button
-                    className="p-1 text-xs bg-white/10 hover:bg-white/20 rounded disabled:opacity-40"
-                    onClick={() => navigateNodeHistory(node.id, 'next')}
-                    disabled={!historyInfo.canGoForward}
-                  >
-                    →
-                  </button>
-                </div>
-              ) : null;
-            })()}
           </div>
           <div className="w-full min-h-[200px] max-h-[400px] rounded-xl bg-black/40 grid place-items-center">
-            {getCurrentNodeImage(node.id, node.output) ? (
+            {node.output ? (
               <img 
-                src={getCurrentNodeImage(node.id, node.output)} 
+                src={node.output} 
                 className="w-full h-auto max-h-[400px] object-contain rounded-xl cursor-pointer hover:opacity-80 transition-opacity" 
                 alt="output"
                 onClick={async () => {
-                  const currentImage = getCurrentNodeImage(node.id, node.output);
-                  if (currentImage) {
+                  if (node.output) {
                     try {
-                      const response = await fetch(currentImage);
+                      const response = await fetch(node.output);
                       const blob = await response.blob();
                       await navigator.clipboard.write([
                         new ClipboardItem({ [blob.type]: blob })
@@ -901,10 +875,9 @@ function MergeNodeView({
                 }}
                 onContextMenu={async (e) => {
                   e.preventDefault();
-                  const currentImage = getCurrentNodeImage(node.id, node.output);
-                  if (currentImage) {
+                  if (node.output) {
                     try {
-                      const response = await fetch(currentImage);
+                      const response = await fetch(node.output);
                       const blob = await response.blob();
                       await navigator.clipboard.write([
                         new ClipboardItem({ [blob.type]: blob })
@@ -929,23 +902,14 @@ function MergeNodeView({
               <span className="text-white/40 text-xs py-16">Run merge to see result</span>
             )}
           </div>
-          {getCurrentNodeImage(node.id, node.output) && (
-            <div className="mt-2 space-y-2">
-              {(() => {
-                const historyInfo = getNodeHistoryInfo(node.id);
-                return historyInfo.currentDescription ? (
-                  <div className="text-xs text-white/60 bg-black/20 rounded px-2 py-1">
-                    {historyInfo.currentDescription}
-                  </div>
-                ) : null;
-              })()}
+          {node.output && (
+            <div className="mt-2">
               <Button
                 className="w-full"
                 variant="secondary"
                 onClick={() => {
                   const link = document.createElement('a');
-                  const currentImage = getCurrentNodeImage(node.id, node.output);
-                  link.href = currentImage as string;
+                  link.href = node.output as string;
                   link.download = `merge-${Date.now()}.png`;
                   document.body.appendChild(link);
                   link.click();
@@ -1070,48 +1034,6 @@ export default function EditorPage() {
   const [isHfProLoggedIn, setIsHfProLoggedIn] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
-  // NODE HISTORY (per-node image history)
-  const [nodeHistories, setNodeHistories] = useState<Record<string, Array<{
-    id: string;
-    image: string;
-    timestamp: number;
-    description: string;
-  }>>>({});
-  
-  const [nodeHistoryIndex, setNodeHistoryIndex] = useState<Record<string, number>>({});
-
-  // Load node histories from localStorage on startup
-  useEffect(() => {
-    try {
-      const savedHistories = localStorage.getItem('nano-banana-node-histories');
-      const savedIndices = localStorage.getItem('nano-banana-node-history-indices');
-      if (savedHistories) {
-        setNodeHistories(JSON.parse(savedHistories));
-      }
-      if (savedIndices) {
-        setNodeHistoryIndex(JSON.parse(savedIndices));
-      }
-    } catch (error) {
-      console.error('Failed to load node histories from localStorage:', error);
-    }
-  }, []);
-
-  // Save node histories to localStorage whenever they change
-  useEffect(() => {
-    try {
-      localStorage.setItem('nano-banana-node-histories', JSON.stringify(nodeHistories));
-    } catch (error) {
-      console.error('Failed to save node histories to localStorage:', error);
-    }
-  }, [nodeHistories]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('nano-banana-node-history-indices', JSON.stringify(nodeHistoryIndex));
-    } catch (error) {
-      console.error('Failed to save node history indices to localStorage:', error);
-    }
-  }, [nodeHistoryIndex]);
 
   const characters = nodes.filter((n) => n.type === "CHARACTER") as CharacterNode[];
   const merges = nodes.filter((n) => n.type === "MERGE") as MergeNode[];
@@ -1190,83 +1112,6 @@ export default function EditorPage() {
     setNodes((prev) => prev.map((n) => (n.id === id ? { ...n, ...updates } : n)));
   };
 
-  // Add image to node's history
-  const addToNodeHistory = (nodeId: string, image: string, description: string) => {
-    const historyEntry = {
-      id: uid(),
-      image,
-      timestamp: Date.now(),
-      description
-    };
-    
-    setNodeHistories(prev => {
-      const nodeHistory = prev[nodeId] || [];
-      const newHistory = [historyEntry, ...nodeHistory].slice(0, 10); // Keep last 10 per node
-      return {
-        ...prev,
-        [nodeId]: newHistory
-      };
-    });
-    
-    // Set this as the current (latest) image for the node
-    setNodeHistoryIndex(prev => ({
-      ...prev,
-      [nodeId]: 0
-    }));
-  };
-
-  // Navigate node history
-  const navigateNodeHistory = (nodeId: string, direction: 'prev' | 'next') => {
-    const history = nodeHistories[nodeId];
-    if (!history || history.length <= 1) return;
-    
-    const currentIndex = nodeHistoryIndex[nodeId] || 0;
-    let newIndex = currentIndex;
-    
-    if (direction === 'prev' && currentIndex < history.length - 1) {
-      newIndex = currentIndex + 1;
-    } else if (direction === 'next' && currentIndex > 0) {
-      newIndex = currentIndex - 1;
-    }
-    
-    if (newIndex !== currentIndex) {
-      setNodeHistoryIndex(prev => ({
-        ...prev,
-        [nodeId]: newIndex
-      }));
-      
-      // Update the node's output to show the historical image
-      const historicalImage = history[newIndex].image;
-      updateNode(nodeId, { output: historicalImage });
-    }
-  };
-
-  // Get current image for a node (either latest or from history navigation)
-  const getCurrentNodeImage = (nodeId: string, defaultOutput?: string) => {
-    const history = nodeHistories[nodeId];
-    const index = nodeHistoryIndex[nodeId] || 0;
-    
-    if (history && history[index]) {
-      return history[index].image;
-    }
-    
-    return defaultOutput;
-  };
-
-  // Get history info for a node
-  const getNodeHistoryInfo = (nodeId: string) => {
-    const history = nodeHistories[nodeId] || [];
-    const index = Math.max(0, Math.min(nodeHistoryIndex[nodeId] || 0, history.length - 1)); // Clamp index within bounds
-    
-    return {
-      hasHistory: history.length > 1,
-      current: Math.max(1, index + 1), // Ensure current is at least 1
-      total: Math.max(0, history.length), // Ensure total is at least 0
-      canGoBack: index < history.length - 1,
-      canGoForward: index > 0,
-      currentDescription: history[index]?.description || ''
-    };
-  };
 
   // Handle single input connections for new nodes
   const handleEndSingleConnection = (nodeId: string) => {
@@ -1685,7 +1530,6 @@ export default function EditorPage() {
         ? `Combined ${unprocessedNodeCount} transformations`
         : `${node.type} transformation`;
       
-      addToNodeHistory(nodeId, data.image, description);
       
       if (unprocessedNodeCount > 1) {
         console.log(`✅ Successfully applied ${unprocessedNodeCount} transformations in ONE API call!`);
@@ -1963,7 +1807,6 @@ export default function EditorPage() {
           return `${inputNode?.type || 'Node'} ${index + 1}`;
         });
         
-        addToNodeHistory(mergeId, out, `Merged: ${inputLabels.join(" + ")}`);
       }
     } catch (e: any) {
       console.error("Merge error:", e);
@@ -2029,7 +1872,7 @@ export default function EditorPage() {
           if (inputNode) {
             const start = getNodeOutputPort(inputNode);
             const end = getNodeInputPort(node);
-            const isProcessing = merge.isRunning || (inputNode as any).isRunning;
+            const isProcessing = merge.isRunning; // Only animate to the currently processing merge node
             paths.push({ 
               path: createPath(start.x, start.y, end.x, end.y),
               processing: isProcessing
@@ -2043,7 +1886,7 @@ export default function EditorPage() {
         if (inputNode) {
           const start = getNodeOutputPort(inputNode);
           const end = getNodeInputPort(node);
-          const isProcessing = (node as any).isRunning || (inputNode as any).isRunning;
+          const isProcessing = (node as any).isRunning; // Only animate to the currently processing node
           paths.push({ 
             path: createPath(start.x, start.y, end.x, end.y),
             processing: isProcessing
@@ -2116,7 +1959,30 @@ export default function EditorPage() {
     const rect = containerRef.current!.getBoundingClientRect();
     const world = screenToWorld(e.clientX, e.clientY, rect, tx, ty, scale);
     setMenuWorld(world);
-    setMenuPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+    
+    // Menu dimensions
+    const menuWidth = 224; // w-56 = 224px
+    const menuHeight = 320; // Approximate height with max-h-[300px] + padding
+    
+    // Calculate position relative to container
+    let x = e.clientX - rect.left;
+    let y = e.clientY - rect.top;
+    
+    // Adjust if menu would go off right edge
+    if (x + menuWidth > rect.width) {
+      x = rect.width - menuWidth - 10;
+    }
+    
+    // Adjust if menu would go off bottom edge  
+    if (y + menuHeight > rect.height) {
+      y = rect.height - menuHeight - 10;
+    }
+    
+    // Ensure minimum margins from edges
+    x = Math.max(10, x);
+    y = Math.max(10, y);
+    
+    setMenuPos({ x, y });
     setMenuOpen(true);
   };
 
@@ -2408,9 +2274,6 @@ export default function EditorPage() {
                       onEndConnection={handleEndSingleConnection}
                       onProcess={processNode}
                       onUpdatePosition={updateNodePosition}
-                      getNodeHistoryInfo={getNodeHistoryInfo}
-                      navigateNodeHistory={navigateNodeHistory}
-                      getCurrentNodeImage={getCurrentNodeImage}
                     />
                   );
                 case "CLOTHES":
@@ -2424,9 +2287,6 @@ export default function EditorPage() {
                       onEndConnection={handleEndSingleConnection}
                       onProcess={processNode}
                       onUpdatePosition={updateNodePosition}
-                      getNodeHistoryInfo={getNodeHistoryInfo}
-                      navigateNodeHistory={navigateNodeHistory}
-                      getCurrentNodeImage={getCurrentNodeImage}
                     />
                   );
                 case "STYLE":
@@ -2440,9 +2300,6 @@ export default function EditorPage() {
                       onEndConnection={handleEndSingleConnection}
                       onProcess={processNode}
                       onUpdatePosition={updateNodePosition}
-                      getNodeHistoryInfo={getNodeHistoryInfo}
-                      navigateNodeHistory={navigateNodeHistory}
-                      getCurrentNodeImage={getCurrentNodeImage}
                     />
                   );
                 case "EDIT":
@@ -2456,9 +2313,6 @@ export default function EditorPage() {
                       onEndConnection={handleEndSingleConnection}
                       onProcess={processNode}
                       onUpdatePosition={updateNodePosition}
-                      getNodeHistoryInfo={getNodeHistoryInfo}
-                      navigateNodeHistory={navigateNodeHistory}
-                      getCurrentNodeImage={getCurrentNodeImage}
                     />
                   );
                 case "CAMERA":
@@ -2472,9 +2326,6 @@ export default function EditorPage() {
                       onEndConnection={handleEndSingleConnection}
                       onProcess={processNode}
                       onUpdatePosition={updateNodePosition}
-                      getNodeHistoryInfo={getNodeHistoryInfo}
-                      navigateNodeHistory={navigateNodeHistory}
-                      getCurrentNodeImage={getCurrentNodeImage}
                     />
                   );
                 case "AGE":
@@ -2488,9 +2339,6 @@ export default function EditorPage() {
                       onEndConnection={handleEndSingleConnection}
                       onProcess={processNode}
                       onUpdatePosition={updateNodePosition}
-                      getNodeHistoryInfo={getNodeHistoryInfo}
-                      navigateNodeHistory={navigateNodeHistory}
-                      getCurrentNodeImage={getCurrentNodeImage}
                     />
                   );
                 case "FACE":
@@ -2504,9 +2352,6 @@ export default function EditorPage() {
                       onEndConnection={handleEndSingleConnection}
                       onProcess={processNode}
                       onUpdatePosition={updateNodePosition}
-                      getNodeHistoryInfo={getNodeHistoryInfo}
-                      navigateNodeHistory={navigateNodeHistory}
-                      getCurrentNodeImage={getCurrentNodeImage}
                     />
                   );
                 case "LIGHTNING":
@@ -2520,9 +2365,6 @@ export default function EditorPage() {
                       onEndConnection={handleEndSingleConnection}
                       onProcess={processNode}
                       onUpdatePosition={updateNodePosition}
-                      getNodeHistoryInfo={getNodeHistoryInfo}
-                      navigateNodeHistory={navigateNodeHistory}
-                      getCurrentNodeImage={getCurrentNodeImage}
                     />
                   );
                 case "POSES":
@@ -2536,9 +2378,6 @@ export default function EditorPage() {
                       onEndConnection={handleEndSingleConnection}
                       onProcess={processNode}
                       onUpdatePosition={updateNodePosition}
-                      getNodeHistoryInfo={getNodeHistoryInfo}
-                      navigateNodeHistory={navigateNodeHistory}
-                      getCurrentNodeImage={getCurrentNodeImage}
                     />
                   );
                 default:
@@ -2555,7 +2394,10 @@ export default function EditorPage() {
             onMouseLeave={() => setMenuOpen(false)}
           >
             <div className="px-3 py-2 text-xs text-white/60">Add node</div>
-            <div className="max-h-[400px] overflow-y-auto">
+            <div 
+              className="max-h-[300px] overflow-y-auto scrollbar-thin pr-1"
+              onWheel={(e) => e.stopPropagation()}
+            >
               <button className="w-full text-left px-3 py-2 text-sm hover:bg-white/10 rounded-lg" onClick={() => addFromMenu("CHARACTER")}>CHARACTER</button>
               <button className="w-full text-left px-3 py-2 text-sm hover:bg-white/10 rounded-lg" onClick={() => addFromMenu("MERGE")}>MERGE</button>
               <button className="w-full text-left px-3 py-2 text-sm hover:bg-white/10 rounded-lg" onClick={() => addFromMenu("BACKGROUND")}>BACKGROUND</button>
