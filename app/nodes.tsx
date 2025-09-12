@@ -545,7 +545,10 @@ export function BackgroundNodeView({
           onChange={(e) => onUpdate(node.id, { backgroundType: (e.target as HTMLSelectElement).value })}
         >
           <option value="color">Solid Color</option>
+          <option value="gradient">Gradient Color</option>
           <option value="image">Preset Background</option>
+          <option value="city">City Scene</option>
+          <option value="photostudio">Photo Studio</option>
           <option value="upload">Upload Image</option>
           <option value="custom">Custom Prompt</option>
         </Select>
@@ -556,6 +559,48 @@ export function BackgroundNodeView({
             value={node.backgroundColor || "#ffffff"}
             onChange={(e) => onUpdate(node.id, { backgroundColor: (e.target as HTMLInputElement).value })}
           />
+        )}
+        
+        {node.backgroundType === "gradient" && (
+          <div className="space-y-3">
+            <label className="text-xs text-white/70">Gradient Direction</label>
+            <Select 
+              className="w-full"
+              value={node.gradientDirection || "to right"}
+              onChange={(e) => onUpdate(node.id, { gradientDirection: (e.target as HTMLSelectElement).value })}
+            >
+              <option value="to right">Left to Right</option>
+              <option value="to left">Right to Left</option>
+              <option value="to bottom">Top to Bottom</option>
+              <option value="to top">Bottom to Top</option>
+              <option value="to bottom right">Diagonal Top-Left to Bottom-Right</option>
+              <option value="to bottom left">Diagonal Top-Right to Bottom-Left</option>
+              <option value="to top right">Diagonal Bottom-Left to Top-Right</option>
+              <option value="to top left">Diagonal Bottom-Right to Top-Left</option>
+              <option value="radial">Radial (Center to Edge)</option>
+            </Select>
+            <label className="text-xs text-white/70">Start Color</label>
+            <ColorPicker
+              className="w-full"
+              value={node.gradientStartColor || "#ff6b6b"}
+              onChange={(e) => onUpdate(node.id, { gradientStartColor: (e.target as HTMLInputElement).value })}
+            />
+            <label className="text-xs text-white/70">End Color</label>
+            <ColorPicker
+              className="w-full"
+              value={node.gradientEndColor || "#4ecdc4"}
+              onChange={(e) => onUpdate(node.id, { gradientEndColor: (e.target as HTMLInputElement).value })}
+            />
+            <div 
+              className="w-full h-8 rounded-md border border-white/20"
+              style={{
+                background: node.gradientDirection === "radial" 
+                  ? `radial-gradient(circle, ${node.gradientStartColor || "#ff6b6b"} 0%, ${node.gradientEndColor || "#4ecdc4"} 100%)`
+                  : `linear-gradient(${node.gradientDirection || "to right"}, ${node.gradientStartColor || "#ff6b6b"} 0%, ${node.gradientEndColor || "#4ecdc4"} 100%)`
+              }}
+              title="Gradient Preview"
+            />
+          </div>
         )}
         
         {node.backgroundType === "image" && (
@@ -571,6 +616,92 @@ export function BackgroundNodeView({
             <option value="nature">Nature</option>
             <option value="city">City Skyline</option>
           </Select>
+        )}
+        
+        {node.backgroundType === "city" && (
+          <div className="space-y-3">
+            <label className="text-xs text-white/70">City Scene Type</label>
+            <Select 
+              className="w-full"
+              value={node.citySceneType || "busy_street"}
+              onChange={(e) => onUpdate(node.id, { citySceneType: (e.target as HTMLSelectElement).value })}
+            >
+              <option value="busy_street">Busy Street with Close Pedestrians</option>
+              <option value="tokyo_shibuya">Tokyo Shibuya Crossing</option>
+              <option value="tokyo_subway">Tokyo Subway</option>
+              <option value="times_square">Times Square NYC</option>
+              <option value="downtown_skyline">Downtown Skyline</option>
+              <option value="urban_crosswalk">Urban Crosswalk Scene</option>
+              <option value="shopping_district">Shopping District</option>
+              <option value="city_park">City Park</option>
+              <option value="rooftop_view">Rooftop City View</option>
+              <option value="blade_runner_street">Blade Runner Style Street</option>
+              <option value="matrix_alley">Matrix Style Urban Alley</option>
+            </Select>
+            <label className="text-xs text-white/70">Time of Day</label>
+            <Select 
+              className="w-full"
+              value={node.cityTimeOfDay || "daytime"}
+              onChange={(e) => onUpdate(node.id, { cityTimeOfDay: (e.target as HTMLSelectElement).value })}
+            >
+              <option value="golden_hour">Golden Hour</option>
+              <option value="daytime">Daytime</option>
+              <option value="blue_hour">Blue Hour</option>
+              <option value="night">Night with City Lights</option>
+              <option value="dawn">Dawn</option>
+              <option value="overcast">Overcast Day</option>
+            </Select>
+          </div>
+        )}
+        
+        {node.backgroundType === "photostudio" && (
+          <div className="space-y-3">
+            <label className="text-xs text-white/70">Studio Setup</label>
+            <Select 
+              className="w-full"
+              value={node.studioSetup || "white_seamless"}
+              onChange={(e) => onUpdate(node.id, { studioSetup: (e.target as HTMLSelectElement).value })}
+            >
+              <option value="white_seamless">White Seamless Background</option>
+              <option value="black_seamless">Black Seamless Background</option>
+              <option value="grey_seamless">Grey Seamless Background</option>
+              <option value="colored_seamless">Colored Seamless Background</option>
+              <option value="textured_backdrop">Textured Backdrop</option>
+              <option value="infinity_cove">Infinity Cove</option>
+            </Select>
+            {node.studioSetup === "colored_seamless" && (
+              <>
+                <label className="text-xs text-white/70">Background Color</label>
+                <ColorPicker
+                  className="w-full"
+                  value={node.studioBackgroundColor || "#ffffff"}
+                  onChange={(e) => onUpdate(node.id, { studioBackgroundColor: (e.target as HTMLInputElement).value })}
+                />
+              </>
+            )}
+            <label className="text-xs text-white/70">Lighting Setup</label>
+            <Select 
+              className="w-full"
+              value={node.studioLighting || "key_fill"}
+              onChange={(e) => onUpdate(node.id, { studioLighting: (e.target as HTMLSelectElement).value })}
+            >
+              <option value="key_fill">Key + Fill Light</option>
+              <option value="three_point">Three-Point Lighting</option>
+              <option value="beauty_lighting">Beauty Lighting</option>
+              <option value="dramatic_lighting">Dramatic Single Light</option>
+              <option value="soft_lighting">Soft Diffused Lighting</option>
+              <option value="hard_lighting">Hard Directional Lighting</option>
+            </Select>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={node.faceCamera || false}
+                onChange={(e) => onUpdate(node.id, { faceCamera: (e.target as HTMLInputElement).checked })}
+                className="w-4 h-4"
+              />
+              <label className="text-xs text-white/70">Position character to face camera</label>
+            </div>
+          </div>
         )}
         
         {node.backgroundType === "upload" && (
@@ -1053,8 +1184,8 @@ export function CameraNodeView({ node, onDelete, onUpdate, onStartConnection, on
   // Bokeh (background blur) styles for different lens characteristics
   const bokehStyles = ["None", "Smooth Bokeh", "Swirly Bokeh", "Hexagonal Bokeh", "Cat Eye Bokeh", "Bubble Bokeh"];
 
-  // Manual or automatic
-  const manualOrAutomatic = ["None", "AF-S", "AF-C", "AF-A"];
+  // Motion blur options
+  const motionBlurOptions = ["None", "Light Motion Blur", "Medium Motion Blur", "Heavy Motion Blur", "Radial Blur", "Zoom Blur"];
 
   return (
     <div className="nb-node absolute text-white w-[360px]" style={{ left: localPos.x, top: localPos.y }}>
@@ -1103,16 +1234,16 @@ export function CameraNodeView({ node, onDelete, onUpdate, onStartConnection, on
         {/* Basic Camera Settings Section */}
         <div className="text-xs text-white/50 font-semibold mb-1">Basic Settings</div>
         <div className="grid grid-cols-2 gap-2">                     {/* 2-column grid for compact layout */}
-          {/* Automaticormanual Control - affects field of view and perspective */}
+          {/* Motion Blur Control - adds movement effects */}
           <div>
-            <label className="text-xs text-white/70">Manual or Automatic</label>
+            <label className="text-xs text-white/70">Motion Blur</label>
             <Select 
               className="w-full"
-              value={node.manualOrAutomatic || "None"}                   // Default to "None" if not set
-              onChange={(e) => onUpdate(node.id, { manualOrAutomatic: (e.target as HTMLSelectElement).value })}
-              title="Select Focus Modes"
+              value={node.motionBlur || "None"}                   // Default to "None" if not set
+              onChange={(e) => onUpdate(node.id, { motionBlur: (e.target as HTMLSelectElement).value })}
+              title="Select Motion Blur Effect"
             >
-              {manualOrAutomatic.map(f => <option key={f} value={f}>{f}</option>)}
+              {motionBlurOptions.map(f => <option key={f} value={f}>{f}</option>)}
             </Select>
           </div>
           {/* Focal Length Control - affects field of view and perspective */}
@@ -1707,22 +1838,34 @@ export function LightningNodeView({ node, onDelete, onUpdate, onStartConnection,
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
   
   /**
-   * Available lighting preset options with reference images
-   * Each preset demonstrates a different lighting setup and mood
+   * Available lighting preset options with text descriptions
+   * Each preset uses detailed lighting prompts instead of reference images
    */
   const presetLightings = [
-    { name: "Studio Light", path: "/lighting/light1.png" },        // Professional studio lighting
-    { name: "Natural Light", path: "/lighting/light2.png" },       // Soft natural daylight
-    { name: "Dramatic Light", path: "/lighting/light3.png" },      // High-contrast dramatic lighting
+    { 
+      name: "Moody Cinematic", 
+      path: "/lighting/light1.png",
+      prompt: "Moody cinematic portrait lighting with a sharp vertical beam of warm orange-red light cutting across the face and neck, contrasted with cool teal ambient fill on the surrounding areas. Strong chiaroscuro effect, deep shadows, high contrast between warm and cool tones, dramatic spotlight strip"
+    },
+    { 
+      name: "Dual-Tone Neon", 
+      path: "/lighting/light2.png",
+      prompt: "Cinematic portrait lighting with strong dual-tone rim lights: deep blue light illuminating the front-left side of the face, intense red light as a rim light from the back-right, dark black background, high contrast, minimal fill light, dramatic neon glow"
+    },
+    { 
+      name: "Natural Shadow Play", 
+      path: "/lighting/light3.png",
+      prompt: "DRAMATIC natural shadow play with hard directional sunlight filtering through foliage, creating bold contrasting patterns of light and shadow across the subject. Strong chiaroscuro effect with deep blacks and bright highlights, dappled leaf shadows dancing across face and body, creating an artistic interplay of illumination and darkness. Emphasize the sculptural quality of light carving through shadow, with sharp shadow edges and brilliant sun-kissed highlights for maximum visual impact"
+    },
   ];
 
   /**
    * Handle selection of a lighting preset
-   * Updates both the lighting image path and the selected preset name
+   * Updates with the text prompt instead of reference image
    */
-  const selectLighting = (lightingPath: string, lightingName: string) => {
+  const selectLighting = (lightingPath: string, lightingName: string, lightingPrompt: string) => {
     onUpdate(node.id, { 
-      lightingImage: lightingPath,                                 // Path to lighting reference image
+      lightingPrompt: lightingPrompt,                              // Text prompt for lighting effect
       selectedLighting: lightingName                               // Name of selected lighting preset
     });
   };
@@ -1783,7 +1926,7 @@ export function LightningNodeView({ node, onDelete, onUpdate, onStartConnection,
                   ? "border-indigo-400 bg-indigo-500/20"
                   : "border-white/20 hover:border-white/40"
               }`}
-              onClick={() => selectLighting(preset.path, preset.name)}
+              onClick={() => selectLighting(preset.path, preset.name, preset.prompt)}
             >
               <img 
                 src={preset.path} 
@@ -1859,23 +2002,39 @@ export function PosesNodeView({ node, onDelete, onUpdate, onStartConnection, onE
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
   
   /**
-   * Available pose preset options with reference images
-   * Each preset shows a different body position or posture
+   * Available pose preset options with text descriptions
+   * Each preset uses detailed pose prompts instead of reference images
    */
   const presetPoses = [
-    { name: "Standing Pose 1", path: "/poses/stand1.png" },        // First standing position variant
-    { name: "Standing Pose 2", path: "/poses/stand2.png" },        // Second standing position variant
-    { name: "Sitting Pose 1", path: "/poses/sit1.png" },           // First sitting position variant
-    { name: "Sitting Pose 2", path: "/poses/sit2.png" },           // Second sitting position variant
+    { 
+      name: "Dynamic Standing", 
+      path: "/poses/stand1.png",
+      prompt: "A dynamic standing pose with the figure's weight shifted to one side. The right arm extends forward in a pointing gesture while the left arm hangs naturally. The figure has a slight hip tilt and appears to be in mid-movement, creating an energetic, directional composition."
+    },
+    { 
+      name: "Arms Crossed", 
+      path: "/poses/stand2.png",
+      prompt: "A relaxed standing pose with arms crossed over the torso. The weight is distributed fairly evenly, with one leg slightly forward. The figure's posture suggests a casual, confident stance with the head tilted slightly downward in a contemplative manner."
+    },
+    { 
+      name: "Seated Composed", 
+      path: "/poses/sit1.png",
+      prompt: "A seated pose on what appears to be a stool or high chair. The figure sits with legs crossed at the knee, creating an asymmetrical but balanced composition. The hands rest on the lap, and the overall posture is upright and composed."
+    },
+    { 
+      name: "Relaxed Lean", 
+      path: "/poses/sit2.png",
+      prompt: "A more relaxed seated pose with the figure leaning to one side. One leg is bent and raised while the other extends downward. The figure appears to be resting or in casual repose, with arms supporting the body and creating a diagonal flow through the composition."
+    },
   ];
 
   /**
    * Handle selection of a pose preset
-   * Updates both the pose reference image and the selected pose name
+   * Updates with the text prompt instead of reference image
    */
-  const selectPose = (posePath: string, poseName: string) => {
+  const selectPose = (posePath: string, poseName: string, posePrompt: string) => {
     onUpdate(node.id, { 
-      poseImage: posePath,                                         // Path to pose reference image
+      posePrompt: posePrompt,                                      // Text prompt for pose effect
       selectedPose: poseName                                       // Name of selected pose preset
     });
   };
@@ -1936,7 +2095,7 @@ export function PosesNodeView({ node, onDelete, onUpdate, onStartConnection, onE
                   ? "border-indigo-400 bg-indigo-500/20"
                   : "border-white/20 hover:border-white/40"
               }`}
-              onClick={() => selectPose(preset.path, preset.name)}
+              onClick={() => selectPose(preset.path, preset.name, preset.prompt)}
             >
               <img 
                 src={preset.path} 
