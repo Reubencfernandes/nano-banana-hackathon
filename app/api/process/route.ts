@@ -315,7 +315,8 @@ The result should look like all subjects were photographed together in the same 
     if (params.stylePreset) {
       const strength = params.styleStrength || 50;
       const styleMap: { [key: string]: string } = {
-        "90s-anime": "Convert the image to 90's anime art style with classic anime features: large expressive eyes, detailed hair, soft shading, nostalgic colors reminiscent of Studio Ghibli and classic anime productions",
+        "90s-anime": "Convert the image to 90's anime art style with classic anime features",
+        "Gibhli": "Apply Studio Ghibli style with vibrant colors, detailed character design, and fantasy elements typical of Studio Ghibli movies",
         "mha": "Transform the image into My Hero Academia anime style with modern crisp lines, vibrant colors, dynamic character design, and heroic aesthetics typical of the series",
         "dbz": "Apply Dragon Ball Z anime style with sharp angular features, spiky hair, intense expressions, bold outlines, high contrast shading, and dramatic action-oriented aesthetics",
         "ukiyo-e": "Render in traditional Japanese Ukiyo-e woodblock print style with flat colors, bold outlines, stylized waves and clouds, traditional Japanese artistic elements",
@@ -325,10 +326,9 @@ The result should look like all subjects were photographed together in the same 
         "van-gogh": "Apply Post-Impressionist Van Gogh style with thick swirling brushstrokes, vibrant yellows and blues, expressive texture, starry night-like patterns",
         "simpsons": "Convert to The Simpsons cartoon style with yellow skin tones, simple rounded features, bulging eyes, overbite, Matt Groening's distinctive character design",
         "family-guy": "Transform into Family Guy animation style with rounded character design, simplified features, Seth MacFarlane's distinctive art style, bold outlines",
-        "arcane": "Apply Arcane (League of Legends) style with painterly brush-stroke textures, neon rim lighting, hand-painted feel, stylized realism, vibrant color grading",
         "wildwest": "Render in Wild West style with dusty desert tones, sunset orange lighting, vintage film grain, cowboy aesthetic, sepia and brown color palette",
-        "stranger-things": "Apply Stranger Things 80s aesthetic with Kodak film push-process look, neon magenta backlight, grainy vignette, retro sci-fi horror atmosphere",
-        "breaking-bad": "Transform with Breaking Bad cinematography style featuring dusty New Mexico orange and teal color grading, 35mm film grain, desert atmosphere, dramatic lighting"
+        "star-wars": "Apply Star Wars style with vibrant colors, detailed character design, and fantasy elements typical of Star Wars movies",
+        "star-trek": "Apply Star Trek style with vibrant colors, detailed character design, and fantasy elements typical of Star Trek movies",
       };
       
       const styleDescription = styleMap[params.stylePreset];
@@ -347,7 +347,7 @@ The result should look like all subjects were photographed together in the same 
         params.iso || params.filmStyle || params.lighting || params.bokeh || params.composition) {
       const cameraSettings: string[] = [];
       if (params.focalLength) {
-        if (params.focalLength === "8mm fisheye") {
+        if (params.focalLength === "8mm") {
           cameraSettings.push("Apply 8mm fisheye lens effect with 180-degree circular distortion");
         } else {
           cameraSettings.push(`Focal Length: ${params.focalLength}`);
@@ -358,12 +358,10 @@ The result should look like all subjects were photographed together in the same 
       if (params.whiteBalance) cameraSettings.push(`White Balance: ${params.whiteBalance}`);
       if (params.angle) cameraSettings.push(`Camera Angle: ${params.angle}`);
       if (params.iso) cameraSettings.push(`${params.iso}`);
-      if (params.filmStyle) cameraSettings.push(`${params.filmStyle}`);
       if (params.lighting) cameraSettings.push(`Lighting: ${params.lighting}`);
       if (params.bokeh) cameraSettings.push(`Bokeh effect: ${params.bokeh}`);
-      if (params.composition) cameraSettings.push(`Composition: ${params.composition}`);
-      
-      if (cameraSettings.length > 0) {
+      if (params.filmStyle == "RAW") cameraSettings.push(`Convert the image to RAW image`); else cameraSettings.push(`Film Style: ${params.filmStyle}`);     
+    if (cameraSettings.length > 0) {
         prompts.push(`Apply professional photography settings: ${cameraSettings.join(", ")}`);
       }
     }
@@ -375,8 +373,7 @@ The result should look like all subjects were photographed together in the same 
     
     // Lightning effects
     if (params.lightingImage && params.selectedLighting) {
-      const lightingStrength = params.lightingStrength || 75;
-      prompts.push(`Apply ${params.selectedLighting} lighting effect to the person in the image. Adjust the lighting, shadows, and highlights to match the reference lighting style shown in the second image. Maintain the person's appearance, pose, and background while enhancing the lighting at ${lightingStrength}% intensity.`);
+      prompts.push(`Apply ${params.selectedLighting} lighting effect to the person in the image. Adjust the lighting, shadows, and highlights to match the reference lighting style shown in the second image. Maintain the person's appearance, pose, and background`);
       
       try {
         const lightingRef = await toInlineDataFromAny(params.lightingImage);
@@ -390,8 +387,7 @@ The result should look like all subjects were photographed together in the same 
     
     // Pose modifications
     if (params.poseImage && params.selectedPose) {
-      const poseStrength = params.poseStrength || 60;
-      prompts.push(`Change the pose of the person in the first image to match the pose shown in the reference image. Keep the person's facial features, clothing, and overall appearance the same, only modify their body position and pose to match the reference at ${poseStrength}% strength.`);
+      prompts.push(`Change the pose of the person in the first image to match the pose shown in the reference image. Keep the person's facial features, clothing, and overall appearance the same, only modify their body position and pose to match the reference`);
       
       try {
         const poseRef = await toInlineDataFromAny(params.poseImage);
@@ -413,6 +409,7 @@ The result should look like all subjects were photographed together in the same 
       if (face.changeHairstyle) modifications.push(`change hairstyle to ${face.changeHairstyle}`);
       if (face.facialExpression) modifications.push(`change facial expression to ${face.facialExpression}`);
       if (face.beardStyle) modifications.push(`add/change beard to ${face.beardStyle}`);
+      if (face.selectedMakeup) modifications.push(`add a face makeup with red colors on cheeks and and some yellow blue colors around the eye area`);
       
       if (modifications.length > 0) {
         prompts.push(`Face modifications: ${modifications.join(", ")}`);
@@ -421,7 +418,7 @@ The result should look like all subjects were photographed together in the same 
     
     // Combine all prompts
     let prompt = prompts.length > 0 
-      ? prompts.join("\n\n") + "\n\nApply all these modifications while maintaining the person's identity and keeping unspecified aspects unchanged."
+      ? prompts.join("\n\n") + "\nApply all these modifications while maintaining the person's identity and keeping unspecified aspects unchanged."
       : "Process this image with high quality output.";
 
     // Add the custom prompt if provided
