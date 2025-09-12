@@ -373,6 +373,36 @@ The result should look like all subjects were photographed together in the same 
       prompts.push(`Transform the person to look exactly ${params.targetAge} years old with age-appropriate features.`);
     }
     
+    // Lightning effects
+    if (params.lightingImage && params.selectedLighting) {
+      const lightingStrength = params.lightingStrength || 75;
+      prompts.push(`Apply ${params.selectedLighting} lighting effect to the person in the image. Adjust the lighting, shadows, and highlights to match the reference lighting style shown in the second image. Maintain the person's appearance, pose, and background while enhancing the lighting at ${lightingStrength}% intensity.`);
+      
+      try {
+        const lightingRef = await toInlineDataFromAny(params.lightingImage);
+        if (lightingRef) {
+          referenceParts.push({ inlineData: lightingRef });
+        }
+      } catch (error) {
+        console.error('[API] Error processing lighting image:', error);
+      }
+    }
+    
+    // Pose modifications
+    if (params.poseImage && params.selectedPose) {
+      const poseStrength = params.poseStrength || 60;
+      prompts.push(`Change the pose of the person in the first image to match the pose shown in the reference image. Keep the person's facial features, clothing, and overall appearance the same, only modify their body position and pose to match the reference at ${poseStrength}% strength.`);
+      
+      try {
+        const poseRef = await toInlineDataFromAny(params.poseImage);
+        if (poseRef) {
+          referenceParts.push({ inlineData: poseRef });
+        }
+      } catch (error) {
+        console.error('[API] Error processing pose image:', error);
+      }
+    }
+    
     // Face modifications
     if (params.faceOptions) {
       const face = params.faceOptions;

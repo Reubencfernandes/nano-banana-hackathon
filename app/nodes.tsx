@@ -48,6 +48,24 @@ function downloadImage(dataUrl: string, filename: string) {
 }
 
 /**
+ * Helper function to copy image to clipboard
+ * Converts the image data URL to blob and copies it to clipboard
+ * 
+ * @param dataUrl Base64 data URL of the image to copy
+ */
+async function copyImageToClipboard(dataUrl: string) {
+  try {
+    const response = await fetch(dataUrl);
+    const blob = await response.blob();
+    await navigator.clipboard.write([
+      new ClipboardItem({ [blob.type]: blob })
+    ]);
+  } catch (error) {
+    console.error('Failed to copy image to clipboard:', error);
+  }
+}
+
+/**
  * Reusable output section with history navigation for node components
  */
 function NodeOutputSection({
@@ -86,7 +104,7 @@ function NodeOutputSection({
                 ←
               </button>
               <span className="text-xs text-white/60 px-1">
-                {historyInfo.current}/{historyInfo.total}
+                {Math.floor(historyInfo.current || 1)}/{Math.floor(historyInfo.total || 1)}
               </span>
               <button
                 className="p-1 text-xs bg-white/10 hover:bg-white/20 rounded disabled:opacity-40"
@@ -98,7 +116,28 @@ function NodeOutputSection({
             </div>
           ) : null}
         </div>
-        <img src={currentImage} className="w-full rounded" alt="Output" />
+        <img 
+          src={currentImage} 
+          className="w-full rounded cursor-pointer hover:opacity-80 transition-opacity" 
+          alt="Output" 
+          onClick={() => copyImageToClipboard(currentImage)}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            copyImageToClipboard(currentImage);
+            
+            // Show a brief visual feedback
+            const img = e.currentTarget;
+            const originalTitle = img.title;
+            img.title = "Copied to clipboard!";
+            img.style.filter = "brightness(1.2)";
+            
+            setTimeout(() => {
+              img.title = originalTitle;
+              img.style.filter = "";
+            }, 500);
+          }}
+          title="Click or right-click to copy image to clipboard"
+        />
         {historyInfo.currentDescription ? (
           <div className="text-xs text-white/60 bg-black/20 rounded px-2 py-1">
             {historyInfo.currentDescription}
@@ -426,13 +465,50 @@ export function BackgroundNodeView({
         )}
         
         {node.backgroundType === "custom" && (
-          <Textarea
-            className="w-full"
-            placeholder="Describe the background..."
-            value={node.customPrompt || ""}
-            onChange={(e) => onUpdate(node.id, { customPrompt: (e.target as HTMLTextAreaElement).value })}
-            rows={2}
-          />
+          <div className="space-y-2">
+            <Textarea
+              className="w-full"
+              placeholder="Describe the background..."
+              value={node.customPrompt || ""}
+              onChange={(e) => onUpdate(node.id, { customPrompt: (e.target as HTMLTextAreaElement).value })}
+              rows={2}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full text-xs"
+              onClick={async () => {
+                if (!node.customPrompt) {
+                  alert('Please enter a background description first');
+                  return;
+                }
+                
+                try {
+                  const response = await fetch('/api/improve-prompt', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                      prompt: node.customPrompt,
+                      type: 'background'
+                    })
+                  });
+                  
+                  if (response.ok) {
+                    const { improvedPrompt } = await response.json();
+                    onUpdate(node.id, { customPrompt: improvedPrompt });
+                  } else {
+                    alert('Failed to improve prompt. Please try again.');
+                  }
+                } catch (error) {
+                  console.error('Error improving prompt:', error);
+                  alert('Failed to improve prompt. Please try again.');
+                }
+              }}
+              title="Use Gemini 2.5 Flash to improve your background prompt"
+            >
+              ✨ Improve with Gemini
+            </Button>
+          </div>
         )}
         
         <Button 
@@ -1037,6 +1113,44 @@ export function FaceNodeView({ node, onDelete, onUpdate, onStartConnection, onEn
             {beardStyles.map(b => <option key={b} value={b}>{b}</option>)}
           </Select>
         </div>
+
+        <div>
+          <label className="text-xs text-white/70">Makeup</label>
+          <div className="grid grid-cols-3 gap-2 mt-2">
+            {[
+              { name: "Natural", path: "/makeup/natural.jpg" },
+              { name: "Glam", path: "/makeup/glam.jpg" },
+              { name: "Bold", path: "/makeup/bold.jpg" },
+              { name: "Smoky", path: "/makeup/smoky.jpg" },
+              { name: "Vintage", path: "/makeup/vintage.jpg" },
+              { name: "No Makeup", path: "/makeup/none.jpg" }
+            ].map((makeup) => (
+              <button
+                key={makeup.name}
+                className={`p-1 rounded border ${
+                  node.faceOptions?.selectedMakeup === makeup.name
+                    ? "border-indigo-400 bg-indigo-500/20"
+                    : "border-white/20 hover:border-white/40"
+                }`}
+                onClick={() => onUpdate(node.id, { 
+                  faceOptions: { ...node.faceOptions, selectedMakeup: makeup.name, makeupImage: makeup.path }
+                })}
+              >
+                <img 
+                  src={makeup.path} 
+                  alt={makeup.name} 
+                  className="w-full h-8 object-cover rounded mb-1 cursor-pointer hover:opacity-80"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    copyImageToClipboard(makeup.path);
+                  }}
+                  title="Click to copy makeup reference"
+                />
+                <div className="text-xs">{makeup.name}</div>
+              </button>
+            ))}
+          </div>
+        </div>
         
         <Button 
           className="w-full"
@@ -1179,8 +1293,18 @@ export function StyleNodeView({ node, onDelete, onUpdate, onStartConnection, onE
   );
 }
 
-export function EditNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition, getNodeHistoryInfo, navigateNodeHistory, getCurrentNodeImage }: any) {
+export function LightningNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition, getNodeHistoryInfo, navigateNodeHistory, getCurrentNodeImage }: any) {
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
+  
+  const presetLightings = [
+    { name: "Studio Light", path: "/lighting/light1.jpg" },
+    { name: "Natural Light", path: "/lighting/light2.jpg" },
+    { name: "Dramatic Light", path: "/lighting/light3.jpg" },
+  ];
+
+  const selectLighting = (lightingPath: string, lightingName: string) => {
+    onUpdate(node.id, { lightingImage: lightingPath, selectedLighting: lightingName });
+  };
   
   return (
     <div className="nb-node absolute text-white w-[320px]" style={{ left: localPos.x, top: localPos.y }}>
@@ -1191,13 +1315,20 @@ export function EditNodeView({ node, onDelete, onUpdate, onStartConnection, onEn
         onPointerUp={onPointerUp}
       >
         <Port className="in" nodeId={node.id} isOutput={false} onEndConnection={onEndConnection} />
-        <div className="font-semibold text-sm flex-1 text-center">EDIT</div>
+        <div className="font-semibold text-sm flex-1 text-center">LIGHTNING</div>
         <div className="flex items-center gap-1">
           <Button
             variant="ghost"
             size="icon"
             className="text-destructive hover:bg-destructive/20 h-6 w-6"
-            onClick={() => onDelete(node.id)}
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              if (confirm('Delete this node?')) {
+                onDelete(node.id);
+              }
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
             title="Delete node"
             aria-label="Delete node"
           >
@@ -1219,13 +1350,284 @@ export function EditNodeView({ node, onDelete, onUpdate, onStartConnection, onEn
             </Button>
           </div>
         )}
-        <Textarea
+        <div className="text-xs text-white/70">Lighting Presets</div>
+        
+        <div className="grid grid-cols-2 gap-2">
+          {presetLightings.map((preset) => (
+            <button
+              key={preset.name}
+              className={`p-2 rounded border ${
+                node.selectedLighting === preset.name
+                  ? "border-indigo-400 bg-indigo-500/20"
+                  : "border-white/20 hover:border-white/40"
+              }`}
+              onClick={() => selectLighting(preset.path, preset.name)}
+            >
+              <img 
+                src={preset.path} 
+                alt={preset.name} 
+                className="w-full h-12 object-cover rounded mb-1 cursor-pointer hover:opacity-80"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  copyImageToClipboard(preset.path);
+                }}
+                title="Click to copy lighting reference"
+              />
+              <div className="text-xs">{preset.name}</div>
+            </button>
+          ))}
+        </div>
+        
+        <div>
+          <Slider
+            label="Lighting Strength"
+            valueLabel={`${node.lightingStrength || 75}%`}
+            min={0}
+            max={100}
+            value={node.lightingStrength || 75}
+            onChange={(e) => onUpdate(node.id, { lightingStrength: parseInt((e.target as HTMLInputElement).value) })}
+          />
+        </div>
+        
+        <Button 
           className="w-full"
-          placeholder="Describe what to edit (e.g., 'make it brighter', 'add more contrast', 'make it look vintage')"
-          value={node.editPrompt || ""}
-          onChange={(e) => onUpdate(node.id, { editPrompt: (e.target as HTMLTextAreaElement).value })}
-          rows={3}
+          onClick={() => onProcess(node.id)}
+          disabled={node.isRunning || !node.selectedLighting}
+          title={!node.input ? "Connect an input first" : !node.selectedLighting ? "Select a lighting preset first" : "Apply lighting effect"}
+        >
+          {node.isRunning ? "Processing..." : "Apply Lighting"}
+        </Button>
+        
+        <NodeOutputSection
+          nodeId={node.id}
+          output={node.output}
+          downloadFileName={`lightning-${Date.now()}.png`}
+          getNodeHistoryInfo={getNodeHistoryInfo}
+          navigateNodeHistory={navigateNodeHistory}
+          getCurrentNodeImage={getCurrentNodeImage}
         />
+        {node.error && (
+          <div className="text-xs text-red-400 mt-2">{node.error}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+export function PosesNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition, getNodeHistoryInfo, navigateNodeHistory, getCurrentNodeImage }: any) {
+  const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
+  
+  const presetPoses = [
+    { name: "Standing Pose 1", path: "/poses/stand1.jpg" },
+    { name: "Standing Pose 2", path: "/poses/stand2.jpg" },
+    { name: "Sitting Pose 1", path: "/poses/sit1.jpg" },
+    { name: "Sitting Pose 2", path: "/poses/sit2.jpg" },
+  ];
+
+  const selectPose = (posePath: string, poseName: string) => {
+    onUpdate(node.id, { poseImage: posePath, selectedPose: poseName });
+  };
+  
+  return (
+    <div className="nb-node absolute text-white w-[320px]" style={{ left: localPos.x, top: localPos.y }}>
+      <div 
+        className="nb-header px-3 py-2 flex items-center justify-between rounded-t-[14px] cursor-grab active:cursor-grabbing"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+      >
+        <Port className="in" nodeId={node.id} isOutput={false} onEndConnection={onEndConnection} />
+        <div className="font-semibold text-sm flex-1 text-center">POSES</div>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-destructive hover:bg-destructive/20 h-6 w-6"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              if (confirm('Delete this node?')) {
+                onDelete(node.id);
+              }
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
+            title="Delete node"
+            aria-label="Delete node"
+          >
+            ×
+          </Button>
+          <Port className="out" nodeId={node.id} isOutput={true} onStartConnection={onStartConnection} />
+        </div>
+      </div>
+      <div className="p-3 space-y-3">
+        {node.input && (
+          <div className="flex justify-end mb-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onUpdate(node.id, { input: undefined })}
+              className="text-xs"
+            >
+              Clear Connection
+            </Button>
+          </div>
+        )}
+        <div className="text-xs text-white/70">Pose References</div>
+        
+        <div className="grid grid-cols-2 gap-2">
+          {presetPoses.map((preset) => (
+            <button
+              key={preset.name}
+              className={`p-2 rounded border ${
+                node.selectedPose === preset.name
+                  ? "border-indigo-400 bg-indigo-500/20"
+                  : "border-white/20 hover:border-white/40"
+              }`}
+              onClick={() => selectPose(preset.path, preset.name)}
+            >
+              <img 
+                src={preset.path} 
+                alt={preset.name} 
+                className="w-full h-12 object-cover rounded mb-1 cursor-pointer hover:opacity-80"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  copyImageToClipboard(preset.path);
+                }}
+                title="Click to copy pose reference"
+              />
+              <div className="text-xs">{preset.name}</div>
+            </button>
+          ))}
+        </div>
+        
+        <div>
+          <Slider
+            label="Pose Strength"
+            valueLabel={`${node.poseStrength || 60}%`}
+            min={0}
+            max={100}
+            value={node.poseStrength || 60}
+            onChange={(e) => onUpdate(node.id, { poseStrength: parseInt((e.target as HTMLInputElement).value) })}
+          />
+        </div>
+        
+        <Button 
+          className="w-full"
+          onClick={() => onProcess(node.id)}
+          disabled={node.isRunning || !node.selectedPose}
+          title={!node.input ? "Connect an input first" : !node.selectedPose ? "Select a pose first" : "Apply pose modification"}
+        >
+          {node.isRunning ? "Processing..." : "Apply Pose"}
+        </Button>
+        
+        <NodeOutputSection
+          nodeId={node.id}
+          output={node.output}
+          downloadFileName={`poses-${Date.now()}.png`}
+          getNodeHistoryInfo={getNodeHistoryInfo}
+          navigateNodeHistory={navigateNodeHistory}
+          getCurrentNodeImage={getCurrentNodeImage}
+        />
+        {node.error && (
+          <div className="text-xs text-red-400 mt-2">{node.error}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function EditNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition, getNodeHistoryInfo, navigateNodeHistory, getCurrentNodeImage }: any) {
+  const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
+  
+  return (
+    <div className="nb-node absolute text-white w-[320px]" style={{ left: localPos.x, top: localPos.y }}>
+      <div 
+        className="nb-header px-3 py-2 flex items-center justify-between rounded-t-[14px] cursor-grab active:cursor-grabbing"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+      >
+        <Port className="in" nodeId={node.id} isOutput={false} onEndConnection={onEndConnection} />
+        <div className="font-semibold text-sm flex-1 text-center">EDIT</div>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-destructive hover:bg-destructive/20 h-6 w-6"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              if (confirm('Delete this node?')) {
+                onDelete(node.id);
+              }
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
+            title="Delete node"
+            aria-label="Delete node"
+          >
+            ×
+          </Button>
+          <Port className="out" nodeId={node.id} isOutput={true} onStartConnection={onStartConnection} />
+        </div>
+      </div>
+      <div className="p-3 space-y-3">
+        {node.input && (
+          <div className="flex justify-end mb-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onUpdate(node.id, { input: undefined })}
+              className="text-xs"
+            >
+              Clear Connection
+            </Button>
+          </div>
+        )}
+        <div className="space-y-2">
+          <Textarea
+            className="w-full"
+            placeholder="Describe what to edit (e.g., 'make it brighter', 'add more contrast', 'make it look vintage')"
+            value={node.editPrompt || ""}
+            onChange={(e) => onUpdate(node.id, { editPrompt: (e.target as HTMLTextAreaElement).value })}
+            rows={3}
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full text-xs"
+            onClick={async () => {
+              if (!node.editPrompt) {
+                alert('Please enter an edit description first');
+                return;
+              }
+              
+              try {
+                const response = await fetch('/api/improve-prompt', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ 
+                    prompt: node.editPrompt,
+                    type: 'edit'
+                  })
+                });
+                
+                if (response.ok) {
+                  const { improvedPrompt } = await response.json();
+                  onUpdate(node.id, { editPrompt: improvedPrompt });
+                } else {
+                  alert('Failed to improve prompt. Please try again.');
+                }
+              } catch (error) {
+                console.error('Error improving prompt:', error);
+                alert('Failed to improve prompt. Please try again.');
+              }
+            }}
+            title="Use Gemini 2.5 Flash to improve your edit prompt"
+          >
+            ✨ Improve with Gemini
+          </Button>
+        </div>
         <Button 
           className="w-full"
           onClick={() => onProcess(node.id)}
@@ -1242,6 +1644,9 @@ export function EditNodeView({ node, onDelete, onUpdate, onStartConnection, onEn
           navigateNodeHistory={navigateNodeHistory}
           getCurrentNodeImage={getCurrentNodeImage}
         />
+        {node.error && (
+          <div className="text-xs text-red-400 mt-2">{node.error}</div>
+        )}
       </div>
     </div>
   );

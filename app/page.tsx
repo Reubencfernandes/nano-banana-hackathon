@@ -26,7 +26,9 @@ import {
   EditNodeView,        // General text-based editing
   CameraNodeView,      // Camera effects and settings
   AgeNodeView,         // Age transformation
-  FaceNodeView         // Face modifications
+  FaceNodeView,        // Face modifications
+  LightningNodeView,   // Lighting effects
+  PosesNodeView        // Pose modifications
 } from "./nodes";
 // UI components from shadcn/ui library
 import { Button } from "../components/ui/button";
@@ -107,7 +109,7 @@ The result should look like all subjects were photographed together in the same 
  * All possible node types in the editor
  * Each type represents a different kind of image processing operation
  */
-type NodeType = "CHARACTER" | "MERGE" | "BACKGROUND" | "CLOTHES" | "STYLE" | "EDIT" | "CAMERA" | "AGE" | "FACE" | "BLEND";
+type NodeType = "CHARACTER" | "MERGE" | "BACKGROUND" | "CLOTHES" | "STYLE" | "EDIT" | "CAMERA" | "AGE" | "FACE" | "BLEND" | "LIGHTNING" | "POSES";
 
 /**
  * Base properties that all nodes share
@@ -254,6 +256,8 @@ type FaceNode = NodeBase & {
     changeHairstyle?: string;     // New hairstyle description
     facialExpression?: string;    // Change facial expression
     beardStyle?: string;          // Add/modify facial hair
+    selectedMakeup?: string;      // Selected makeup style
+    makeupImage?: string;         // Path to makeup reference image
   };
   isRunning?: boolean;         // Processing state
   error?: string | null;       // Error message
@@ -273,10 +277,41 @@ type BlendNode = NodeBase & {
 };
 
 /**
+ * LIGHTNING node - Applies lighting effects to images
+ * Uses preset lighting styles and images for realistic lighting effects
+ */
+type LightningNode = NodeBase & {
+  type: "LIGHTNING";
+  input?: string;              // Source node ID
+  output?: string;             // Image with lighting applied
+  selectedLighting?: string;   // Selected lighting preset name
+  lightingImage?: string;      // Path to lighting image
+  lightingStrength?: number;   // Intensity of lighting effect (0-100)
+  isRunning?: boolean;         // Processing state
+  error?: string | null;       // Error message
+};
+
+
+/**
+ * POSES node - Applies pose modifications to subjects
+ * Uses preset pose images to modify subject poses
+ */
+type PosesNode = NodeBase & {
+  type: "POSES";
+  input?: string;              // Source node ID
+  output?: string;             // Image with pose applied
+  selectedPose?: string;       // Selected pose preset name
+  poseImage?: string;          // Path to pose reference image
+  poseStrength?: number;       // How strongly to apply the pose (0-100)
+  isRunning?: boolean;         // Processing state
+  error?: string | null;       // Error message
+};
+
+/**
  * Union type of all possible node types
  * Used for type-safe handling of nodes throughout the application
  */
-type AnyNode = CharacterNode | MergeNode | BackgroundNode | ClothesNode | StyleNode | EditNode | CameraNode | AgeNode | FaceNode | BlendNode;
+type AnyNode = CharacterNode | MergeNode | BackgroundNode | ClothesNode | StyleNode | EditNode | CameraNode | AgeNode | FaceNode | BlendNode | LightningNode | PosesNode;
 
 /* ========================================
    CONSTANTS AND UTILITY FUNCTIONS
@@ -495,13 +530,15 @@ function CharacterNodeView({
         />
         <div className="flex items-center gap-2">
           <Button 
-            variant="ghost" size="icon" className="text-destructive"
+            variant="ghost" size="icon" className="text-destructive hover:bg-destructive/20 h-6 w-6"
             onClick={(e) => {
               e.stopPropagation();
-              if (confirm('Delete MERGE node?')) {
+              e.preventDefault();
+              if (confirm('Delete this character node?')) {
                 onDelete(node.id);
               }
             }}
+            onPointerDown={(e) => e.stopPropagation()}
             title="Delete node"
             aria-label="Delete node"
           >
@@ -520,8 +557,41 @@ function CharacterNodeView({
           <img
             src={node.image}
             alt="character"
-            className="h-full w-full object-contain"
+            className="h-full w-full object-contain cursor-pointer hover:opacity-80 transition-opacity"
             draggable={false}
+            onClick={async () => {
+              try {
+                const response = await fetch(node.image);
+                const blob = await response.blob();
+                await navigator.clipboard.write([
+                  new ClipboardItem({ [blob.type]: blob })
+                ]);
+              } catch (error) {
+                console.error('Failed to copy image:', error);
+              }
+            }}
+            onContextMenu={async (e) => {
+              e.preventDefault();
+              try {
+                const response = await fetch(node.image);
+                const blob = await response.blob();
+                await navigator.clipboard.write([
+                  new ClipboardItem({ [blob.type]: blob })
+                ]);
+                
+                // Show visual feedback
+                const img = e.currentTarget;
+                const originalFilter = img.style.filter;
+                img.style.filter = "brightness(1.2)";
+                
+                setTimeout(() => {
+                  img.style.filter = originalFilter;
+                }, 500);
+              } catch (error) {
+                console.error('Failed to copy image:', error);
+              }
+            }}
+            title="Click or right-click to copy image to clipboard"
           />
         </div>
         <div className="flex gap-2">
@@ -610,18 +680,23 @@ function MergeNodeView({
         />
         <div className="font-semibold tracking-wide text-sm flex-1 text-center">MERGE</div>
         <div className="flex items-center gap-2">
-          <button
-            className="text-2xl leading-none font-bold text-red-400 hover:text-red-300 opacity-50 hover:opacity-100 transition-all hover:scale-110 px-1"
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-destructive hover:bg-destructive/20 h-6 w-6"
             onClick={(e) => {
               e.stopPropagation();
-              if (confirm('Delete MERGE node?')) {
+              e.preventDefault();
+              if (confirm('Delete this merge node?')) {
                 onDelete(node.id);
               }
             }}
+            onPointerDown={(e) => e.stopPropagation()}
             title="Delete node"
+            aria-label="Delete node"
           >
             ×
-          </button>
+          </Button>
           <Port 
             className="out" 
             nodeId={node.id}
@@ -660,7 +735,44 @@ function MergeNodeView({
               <div key={id} className="flex items-center gap-2 bg-white/10 rounded px-2 py-1">
                 {image && (
                   <div className="w-6 h-6 rounded overflow-hidden bg-black/20">
-                    <img src={image} className="w-full h-full object-contain" alt="inp" />
+                    <img 
+                      src={image} 
+                      className="w-full h-full object-contain cursor-pointer hover:opacity-80" 
+                      alt="inp"
+                      onClick={async () => {
+                        try {
+                          const response = await fetch(image);
+                          const blob = await response.blob();
+                          await navigator.clipboard.write([
+                            new ClipboardItem({ [blob.type]: blob })
+                          ]);
+                        } catch (error) {
+                          console.error('Failed to copy image:', error);
+                        }
+                      }}
+                      onContextMenu={async (e) => {
+                        e.preventDefault();
+                        try {
+                          const response = await fetch(image);
+                          const blob = await response.blob();
+                          await navigator.clipboard.write([
+                            new ClipboardItem({ [blob.type]: blob })
+                          ]);
+                          
+                          // Show visual feedback
+                          const img = e.currentTarget;
+                          const originalFilter = img.style.filter;
+                          img.style.filter = "brightness(1.2)";
+                          
+                          setTimeout(() => {
+                            img.style.filter = originalFilter;
+                          }, 300);
+                        } catch (error) {
+                          console.error('Failed to copy image:', error);
+                        }
+                      }}
+                      title="Click or right-click to copy"
+                    />
                   </div>
                 )}
                 <span className="text-xs">{label}</span>
@@ -727,7 +839,50 @@ function MergeNodeView({
           </div>
           <div className="w-full min-h-[200px] max-h-[400px] rounded-xl bg-black/40 grid place-items-center">
             {getCurrentNodeImage(node.id, node.output) ? (
-              <img src={getCurrentNodeImage(node.id, node.output)} className="w-full h-auto max-h-[400px] object-contain rounded-xl" alt="output" />
+              <img 
+                src={getCurrentNodeImage(node.id, node.output)} 
+                className="w-full h-auto max-h-[400px] object-contain rounded-xl cursor-pointer hover:opacity-80 transition-opacity" 
+                alt="output"
+                onClick={async () => {
+                  const currentImage = getCurrentNodeImage(node.id, node.output);
+                  if (currentImage) {
+                    try {
+                      const response = await fetch(currentImage);
+                      const blob = await response.blob();
+                      await navigator.clipboard.write([
+                        new ClipboardItem({ [blob.type]: blob })
+                      ]);
+                    } catch (error) {
+                      console.error('Failed to copy image:', error);
+                    }
+                  }
+                }}
+                onContextMenu={async (e) => {
+                  e.preventDefault();
+                  const currentImage = getCurrentNodeImage(node.id, node.output);
+                  if (currentImage) {
+                    try {
+                      const response = await fetch(currentImage);
+                      const blob = await response.blob();
+                      await navigator.clipboard.write([
+                        new ClipboardItem({ [blob.type]: blob })
+                      ]);
+                      
+                      // Show visual feedback
+                      const img = e.currentTarget;
+                      const originalFilter = img.style.filter;
+                      img.style.filter = "brightness(1.2)";
+                      
+                      setTimeout(() => {
+                        img.style.filter = originalFilter;
+                      }, 500);
+                    } catch (error) {
+                      console.error('Failed to copy image:', error);
+                    }
+                  }
+                }}
+                title="Click or right-click to copy image to clipboard"
+              />
             ) : (
               <span className="text-white/40 text-xs py-16">Run merge to see result</span>
             )}
@@ -1059,12 +1214,12 @@ export default function EditorPage() {
   // Get history info for a node
   const getNodeHistoryInfo = (nodeId: string) => {
     const history = nodeHistories[nodeId] || [];
-    const index = nodeHistoryIndex[nodeId] || 0;
+    const index = Math.max(0, Math.min(nodeHistoryIndex[nodeId] || 0, history.length - 1)); // Clamp index within bounds
     
     return {
       hasHistory: history.length > 1,
-      current: index + 1,
-      total: history.length,
+      current: Math.max(1, index + 1), // Ensure current is at least 1
+      total: Math.max(0, history.length), // Ensure total is at least 0
       canGoBack: index < history.length - 1,
       canGoForward: index > 0,
       currentDescription: history[index]?.description || ''
@@ -1958,6 +2113,12 @@ export default function EditorPage() {
       case "FACE":
         setNodes(prev => [...prev, { ...commonProps, type: "FACE", faceOptions: {} } as FaceNode]);
         break;
+      case "LIGHTNING":
+        setNodes(prev => [...prev, { ...commonProps, type: "LIGHTNING", lightingStrength: 75 } as LightningNode]);
+        break;
+      case "POSES":
+        setNodes(prev => [...prev, { ...commonProps, type: "POSES", poseStrength: 60 } as PosesNode]);
+        break;
     }
     setMenuOpen(false);
   };
@@ -2303,6 +2464,38 @@ export default function EditorPage() {
                       getCurrentNodeImage={getCurrentNodeImage}
                     />
                   );
+                case "LIGHTNING":
+                  return (
+                    <LightningNodeView
+                      key={node.id}
+                      node={node as LightningNode}
+                      onDelete={deleteNode}
+                      onUpdate={updateNode}
+                      onStartConnection={handleStartConnection}
+                      onEndConnection={handleEndSingleConnection}
+                      onProcess={processNode}
+                      onUpdatePosition={updateNodePosition}
+                      getNodeHistoryInfo={getNodeHistoryInfo}
+                      navigateNodeHistory={navigateNodeHistory}
+                      getCurrentNodeImage={getCurrentNodeImage}
+                    />
+                  );
+                case "POSES":
+                  return (
+                    <PosesNodeView
+                      key={node.id}
+                      node={node as PosesNode}
+                      onDelete={deleteNode}
+                      onUpdate={updateNode}
+                      onStartConnection={handleStartConnection}
+                      onEndConnection={handleEndSingleConnection}
+                      onProcess={processNode}
+                      onUpdatePosition={updateNodePosition}
+                      getNodeHistoryInfo={getNodeHistoryInfo}
+                      navigateNodeHistory={navigateNodeHistory}
+                      getCurrentNodeImage={getCurrentNodeImage}
+                    />
+                  );
                 default:
                   return null;
               }
@@ -2327,6 +2520,8 @@ export default function EditorPage() {
               <button className="w-full text-left px-3 py-2 text-sm hover:bg-white/10 rounded-lg" onClick={() => addFromMenu("CAMERA")}>CAMERA</button>
               <button className="w-full text-left px-3 py-2 text-sm hover:bg-white/10 rounded-lg" onClick={() => addFromMenu("AGE")}>AGE</button>
               <button className="w-full text-left px-3 py-2 text-sm hover:bg-white/10 rounded-lg" onClick={() => addFromMenu("FACE")}>FACE</button>
+              <button className="w-full text-left px-3 py-2 text-sm hover:bg-white/10 rounded-lg" onClick={() => addFromMenu("LIGHTNING")}>LIGHTNING</button>
+              <button className="w-full text-left px-3 py-2 text-sm hover:bg-white/10 rounded-lg" onClick={() => addFromMenu("POSES")}>POSES</button>
             </div>
           </div>
         )}
