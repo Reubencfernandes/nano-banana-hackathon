@@ -510,52 +510,77 @@ The result should look like all subjects were photographed together in the same 
       }
       
       if (params.aperture) {
-        if (params.aperture === "f/1.2") {
-          cameraPrompt += `, shot wide open at f/1.2 for extreme shallow depth of field, ethereal bokeh, and cinematic subject isolation with dreamy background blur`;
+        if (params.aperture === "f/0.95") {
+          cameraPrompt += `, shot wide open at f/0.95 for extreme shallow depth of field, ethereal bokeh, and cinematic subject isolation with dreamy background blur`;
+        } else if (params.aperture === "f/1.2") {
+          cameraPrompt += `, captured at f/1.2 for beautiful shallow depth of field, creating that signature cinematic look with smooth background separation and creamy bokeh`;
         } else if (params.aperture === "f/1.4") {
-          cameraPrompt += `, captured at f/1.4 for beautiful shallow depth of field, creating that signature cinematic look with smooth background separation`;
+          cameraPrompt += `, shot at f/1.4 for controlled shallow depth of field, maintaining subject sharpness while creating pleasing background blur and professional bokeh quality`;
+        } else if (params.aperture === "f/1.8") {
+          cameraPrompt += `, captured at f/1.8 for balanced depth of field, keeping key subjects sharp while maintaining smooth background separation and natural bokeh`;
+        } else if (params.aperture === "f/2") {
+          cameraPrompt += `, shot at f/2 for moderate depth of field with excellent subject isolation, maintaining cinematic quality and professional sharpness`;
         } else if (params.aperture === "f/2.8") {
-          cameraPrompt += `, shot at f/2.8 for controlled depth of field, maintaining subject sharpness while creating pleasing background blur`;
+          cameraPrompt += `, photographed at f/2.8 for optimal lens sharpness with controlled depth of field, ideal for professional portrait and documentary work`;
         } else if (params.aperture === "f/4") {
-          cameraPrompt += `, filmed at f/4 for balanced depth of field, keeping key subjects sharp while maintaining some background separation`;
+          cameraPrompt += `, captured at f/4 for extended depth of field with excellent overall sharpness, perfect for group portraits and environmental photography`;
         } else if (params.aperture === "f/5.6") {
-          cameraPrompt += `, captured at f/5.6 for extended depth of field while maintaining cinematic quality and professional sharpness`;
-        } else if (params.aperture === "f/8" || params.aperture === "f/11") {
-          cameraPrompt += `, shot at ${params.aperture} for deep focus cinematography with tack-sharp details throughout the entire frame`;
+          cameraPrompt += `, shot at f/5.6 for deep focus with maximum lens sharpness, ideal for landscape and architectural photography where detail is paramount`;
+        } else if (params.aperture === "f/8") {
+          cameraPrompt += `, photographed at f/8 for optimal depth of field and corner-to-corner sharpness, the sweet spot for landscape and travel photography`;
+        } else if (params.aperture === "f/11") {
+          cameraPrompt += `, captured at f/11 for extensive depth of field with front-to-back sharpness, perfect for sweeping landscapes and architectural details`;
+        } else if (params.aperture === "f/16") {
+          cameraPrompt += `, shot at f/16 for maximum depth of field with hyperfocal distance focusing, ensuring sharp detail from foreground to infinity`;
+        } else if (params.aperture === "f/22") {
+          cameraPrompt += `, photographed at f/22 for extreme depth of field with starburst effects on light sources, creating dramatic landscape and architectural imagery`;
         } else {
-          cameraPrompt += `, professionally exposed at ${params.aperture}`;
+          cameraPrompt += `, professionally exposed at ${params.aperture} with carefully controlled depth of field for optimal image quality`;
         }
       }
       
       if (params.iso) {
         if (params.iso === "ISO 100") {
           cameraPrompt += ", shot at ISO 100 for pristine image quality, zero noise, and maximum dynamic range typical of high-end cinema cameras";
-        } else if (params.iso === "ISO 200") {
-          cameraPrompt += ", captured at ISO 200 for clean shadows and optimal color reproduction with professional cinema camera characteristics";
         } else if (params.iso === "ISO 400") {
           cameraPrompt += ", filmed at ISO 400 for balanced exposure with minimal noise, the sweet spot for most cinematic scenarios";
-        } else if (params.iso === "ISO 800") {
-          cameraPrompt += ", shot at ISO 800 creating subtle film grain texture that adds cinematic character and organic feel";
-        } else if (params.iso === "ISO 1600") {
+        }  else if (params.iso === "ISO 1600") {
           cameraPrompt += ", captured at ISO 1600 with controlled grain for dramatic low-light cinematography and moody atmosphere";
-        } else if (params.iso === "ISO 3200") {
-          cameraPrompt += ", filmed at ISO 3200 with artistic grain structure for gritty, realistic cinema aesthetics";
+        } else if (params.iso === "ISO 6400") {
+          cameraPrompt += ", filmed at ISO 6400 with artistic grain structure for gritty, realistic cinema aesthetics";
         } else {
           cameraPrompt += `, shot at ${params.iso} with appropriate noise characteristics`;
         }
       }
+      if(params.whiteBalance) {
+        cameraPrompt += `, shot with ${params.whiteBalance} white balance`;
+      }
       
       if (params.lighting) {
-        if (params.lighting === "Golden Hour") {
+        if (params.lighting === "Natural Light") {
+          cameraPrompt += ", naturally lit with soft, diffused daylight providing even illumination and organic shadow patterns";
+        } else if (params.lighting === "Golden Hour") {
           cameraPrompt += ", cinematically lit during golden hour with warm, directional sunlight creating magical rim lighting, long shadows, and that coveted cinematic glow";
         } else if (params.lighting === "Blue Hour") {
           cameraPrompt += ", captured during blue hour with soft, even twilight illumination and cool color temperature for moody cinematic atmosphere";
-        } else if (params.lighting === "Studio") {
+        } else if (params.lighting === "Studio Lighting") {
           cameraPrompt += ", professionally lit with multi-point studio lighting setup featuring key light, fill light, and rim light for commercial cinema quality";
-        } else if (params.lighting === "Natural") {
-          cameraPrompt += ", naturally lit with soft, diffused daylight providing even illumination and organic shadow patterns";
-        } else if (params.lighting === "Dramatic") {
-          cameraPrompt += ", dramatically lit with high-contrast lighting creating strong shadows and highlights for cinematic tension";
+        } else if (params.lighting === "Rembrandt") {
+          cameraPrompt += ", lit with Rembrandt lighting creating a distinctive triangle of light on the cheek with dramatic chiaroscuro contrast between light and shadow";
+        } else if (params.lighting === "Split Lighting") {
+          cameraPrompt += ", illuminated with split lighting dividing the face into equal halves of light and shadow for dramatic and mysterious effect";
+        } else if (params.lighting === "Butterfly Lighting") {
+          cameraPrompt += ", lit with butterfly lighting from above creating a butterfly-shaped shadow under the nose for flattering beauty and glamour portraits";
+        } else if (params.lighting === "Loop Lighting") {
+          cameraPrompt += ", illuminated with loop lighting creating a small loop-shaped shadow from the nose for natural and versatile portrait lighting";
+        } else if (params.lighting === "Rim Lighting") {
+          cameraPrompt += ", backlit with rim lighting creating a glowing outline around the subject for dramatic separation and three-dimensional depth";
+        } else if (params.lighting === "Silhouette") {
+          cameraPrompt += ", backlit for silhouette effect with the subject outlined against bright background while facial details remain in shadow";
+        } else if (params.lighting === "High Key") {
+          cameraPrompt += ", lit with high-key lighting using bright, even illumination with minimal shadows for optimistic and clean aesthetic";
+        } else if (params.lighting === "Low Key") {
+          cameraPrompt += ", dramatically lit with low-key lighting emphasizing deep shadows and high contrast for moody and mysterious atmosphere";
         } else {
           cameraPrompt += `, professionally lit with ${params.lighting} lighting setup`;
         }
@@ -565,9 +590,15 @@ The result should look like all subjects were photographed together in the same 
         if (params.bokeh === "Smooth Bokeh") {
           cameraPrompt += ", featuring silky smooth bokeh with perfectly circular out-of-focus highlights and creamy background transitions";
         } else if (params.bokeh === "Swirly Bokeh") {
-          cameraPrompt += ", featuring artistic swirly bokeh with spiral-like background blur patterns for unique visual character";
+          cameraPrompt += ", featuring artistic swirly bokeh with spiral-like background blur patterns and rotational distortion effects typical of vintage Petzval-style lenses";
         } else if (params.bokeh === "Hexagonal Bokeh") {
-          cameraPrompt += ", featuring hexagonal bokeh with geometric six-sided highlight shapes typical of cinema lenses";
+          cameraPrompt += ", featuring hexagonal bokeh with geometric six-sided highlight shapes formed by straight aperture blades typical of cinema lenses";
+        } else if (params.bokeh === "Cat Eye Bokeh") {
+          cameraPrompt += ", featuring cat's eye bokeh with elliptical highlight distortion toward frame edges caused by optical vignetting and field curvature";
+        } else if (params.bokeh === "Bubble Bokeh") {
+          cameraPrompt += ", featuring soap bubble bokeh with bright-edged circular highlights and hollow centers characteristic of Meyer Optik Trioplan lenses";
+        } else if (params.bokeh === "Creamy Bokeh") {
+          cameraPrompt += ", featuring creamy bokeh with smooth gradient transitions and soft edge rendering for professional portrait aesthetics";
         } else {
           cameraPrompt += `, featuring ${params.bokeh} quality bokeh rendering in out-of-focus areas`;
         }
@@ -579,7 +610,7 @@ The result should look like all subjects were photographed together in the same 
         } else if (params.motionBlur === "Medium Motion Blur") {
           cameraPrompt += ", with moderate motion blur creating dynamic energy and sense of movement typical of action cinematography";
         } else if (params.motionBlur === "Heavy Motion Blur") {
-          cameraPrompt += ", with pronounced motion blur creating dramatic movement streaks and high-energy cinematic action";
+          cameraPrompt += ", with pronounced motion blur creating dramatic movement streaks and high-energy cinematic action, giving the moving background subjects a sense of motion blur movement";
         } else if (params.motionBlur === "Radial Blur") {
           cameraPrompt += ", with radial motion blur emanating from the center, creating explosive zoom-like movement and dramatic focus pull";
         } else if (params.motionBlur === "Zoom Blur") {
@@ -590,12 +621,24 @@ The result should look like all subjects were photographed together in the same 
       }
       
       if (params.angle) {
-        if (params.angle === "Low Angle") {
-          cameraPrompt += ", shot from a low-angle perspective looking upward for dramatic impact";
-        } else if (params.angle === "Bird's Eye") {
-          cameraPrompt += ", captured from a bird's eye view directly overhead";
+        if (params.angle === "low angle") {
+          cameraPrompt += ", shot from a low-angle perspective looking upward to convey power, dominance, and heroic stature";
+        } else if (params.angle === "bird's eye") {
+          cameraPrompt += ", captured from a bird's eye view directly overhead to show scale, context, and spatial relationships";
+        } else if (params.angle === "high angle") {
+          cameraPrompt += ", shot from a high-angle perspective looking downward to create vulnerability and diminish subject importance";
+        } else if (params.angle === "eye level") {
+          cameraPrompt += ", shot from eye level for a neutral, natural perspective that connects with the viewer";
+        } else if (params.angle === "over the shoulder") {
+          cameraPrompt += ", captured from an over-the-shoulder angle to establish character relationships and dialogue dynamics";
+        } else if (params.angle === "POV") {
+          cameraPrompt += ", shot from a first-person POV perspective to immerse the viewer in the subject's experience";
+        } else if (params.angle === "Dutch tilt") {
+          cameraPrompt += ", shot with a Dutch tilt angle creating diagonal lines to convey unease, tension, and disorientation";
+        } else if (params.angle === "worm's eye") {
+          cameraPrompt += ", captured from a worm's eye view at ground level looking up for extreme dramatic impact and scale";
         } else {
-          cameraPrompt += `, ${params.angle} camera angle`;
+          cameraPrompt += `, shot from ${params.angle} camera angle`;
         }
       }
       

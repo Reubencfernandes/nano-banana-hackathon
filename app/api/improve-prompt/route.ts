@@ -18,6 +18,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json() as {
       prompt: string;
       type?: string; // 'background', 'edit', etc.
+      apiToken?: string; // User's Google AI API token
     };
 
     if (!body.prompt?.trim()) {
@@ -37,11 +38,11 @@ export async function POST(req: NextRequest) {
       console.error('Error reading HF token from cookies:', error);
     }
 
-    // Get API key
-    const apiKey = process.env.GOOGLE_API_KEY;
+    // Validate and retrieve Google API key from user input or environment
+    const apiKey = body.apiToken || process.env.GOOGLE_API_KEY;
     if (!apiKey || apiKey === 'your_actual_api_key_here') {
       return NextResponse.json(
-        { error: `API key not configured. Please ${isHfProUser ? 'contact support' : 'login with HF Pro'}.` },
+        { error: `API key not provided. Please ${isHfProUser ? 'enter your Google Gemini API token in the top right' : 'login with HF Pro or enter your Google Gemini API token'}.` },
         { status: 500 }
       );
     }

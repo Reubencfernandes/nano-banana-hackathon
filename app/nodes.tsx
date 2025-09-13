@@ -429,6 +429,7 @@ export function BackgroundNodeView({
   onEndConnection,
   onProcess,
   onUpdatePosition,
+  apiToken
 }: any) {
   // Use custom drag hook to handle node positioning in the editor
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
@@ -758,9 +759,10 @@ export function BackgroundNodeView({
                   const response = await fetch('/api/improve-prompt', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
+                    body: JSON.stringify({
                       prompt: node.customPrompt,
-                      type: 'background'
+                      type: 'background',
+                      apiToken: apiToken || undefined
                     })
                   });
                   
@@ -1158,7 +1160,7 @@ export function CameraNodeView({ node, onDelete, onUpdate, onStartConnection, on
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
   
   // Camera lens focal length options (affects field of view and perspective)
-  const focalLengths = ["None", "8mm", "12mm", "24mm", "35mm", "50mm", "85mm"];
+  const focalLengths = ["None", "8mm", "12mm", "24mm", "35mm", "50mm", "85mm", "100mm", "135mm"];
   
   // Aperture settings (affects depth of field and exposure)
   const apertures = ["None", "f/0.95", "f/1.2", "f/1.4", "f/1.8", "f/2", "f/2.8", "f/4", "f/5.6","f/11"];
@@ -2152,17 +2154,18 @@ export function PosesNodeView({ node, onDelete, onUpdate, onStartConnection, onE
  * @param navigateNodeHistory - Function to navigate through node history
  * @param getCurrentNodeImage - Function to get the current image for this node
  */
-export function EditNodeView({ 
-  node, 
-  onDelete, 
-  onUpdate, 
-  onStartConnection, 
-  onEndConnection, 
-  onProcess, 
-  onUpdatePosition, 
-  getNodeHistoryInfo, 
-  navigateNodeHistory, 
-  getCurrentNodeImage 
+export function EditNodeView({
+  node,
+  onDelete,
+  onUpdate,
+  onStartConnection,
+  onEndConnection,
+  onProcess,
+  onUpdatePosition,
+  getNodeHistoryInfo,
+  navigateNodeHistory,
+  getCurrentNodeImage,
+  apiToken
 }: any) {
   // Use custom hook for drag functionality - handles position updates during dragging
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
@@ -2183,9 +2186,10 @@ export function EditNodeView({
       const response = await fetch('/api/improve-prompt', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           prompt: node.editPrompt.trim(),
-          type: 'edit'
+          type: 'edit',
+          apiToken: apiToken || undefined
         })
       });
       

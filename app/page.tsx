@@ -2312,6 +2312,7 @@ export default function EditorPage() {
                       onEndConnection={handleEndSingleConnection}
                       onProcess={processNode}
                       onUpdatePosition={updateNodePosition}
+                      apiToken={apiToken}
                     />
                   );
                 case "CLOTHES":
@@ -2351,6 +2352,7 @@ export default function EditorPage() {
                       onEndConnection={handleEndSingleConnection}
                       onProcess={processNode}
                       onUpdatePosition={updateNodePosition}
+                      apiToken={apiToken}
                     />
                   );
                 case "CAMERA":
