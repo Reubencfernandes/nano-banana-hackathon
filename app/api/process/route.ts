@@ -487,6 +487,7 @@ The result should look like all subjects were photographed together in the same 
       // Build cinematic camera prompt for professional, movie-like results
       let cameraPrompt = "CINEMATIC CAMERA TRANSFORMATION: Transform this image into a professional, cinematic photograph with movie-quality production values";
       
+      // 1. Focal Length (Lens Choice) - First priority as it defines perspective
       if (params.focalLength) {
         if (params.focalLength === "8mm") {
           cameraPrompt += " shot with an ultra-wide 8mm fisheye lens creating dramatic barrel distortion, immersive perspective, and cinematic edge curvature typical of action sequences";
@@ -509,6 +510,7 @@ The result should look like all subjects were photographed together in the same 
         }
       }
       
+      // 2. Aperture (Depth of Field Control) - Core exposure triangle component
       if (params.aperture) {
         if (params.aperture === "f/0.95") {
           cameraPrompt += `, shot wide open at f/0.95 for extreme shallow depth of field, ethereal bokeh, and cinematic subject isolation with dreamy background blur`;
@@ -539,6 +541,24 @@ The result should look like all subjects were photographed together in the same 
         }
       }
       
+      // 3. Shutter Speed (Motion Control) - Core exposure triangle component
+      if (params.shutterSpeed) {
+        if (params.shutterSpeed === "1/1000s") {
+          cameraPrompt += ", captured at 1/1000s shutter speed to freeze fast action and eliminate motion blur with tack-sharp precision";
+        } else if (params.shutterSpeed === "1/250s") {
+          cameraPrompt += ", shot at 1/250s shutter speed for optimal handheld photography with sharp subjects and minimal camera shake";
+        } else if (params.shutterSpeed === "1/30s") {
+          cameraPrompt += ", photographed at 1/30s shutter speed creating subtle motion blur while maintaining subject recognition";
+        } else if (params.shutterSpeed === "1/15s") {
+          cameraPrompt += ", captured at 1/15s shutter speed for intentional motion blur effects and dynamic movement trails";
+        } else if (params.shutterSpeed === "5s") {
+          cameraPrompt += ", shot with 5-second long exposure creating smooth motion blur, light trails, and ethereal atmospheric effects";
+        } else {
+          cameraPrompt += `, captured with ${params.shutterSpeed} shutter speed for controlled motion and exposure effects`;
+        }
+      }
+      
+      // 4. ISO (Sensor Sensitivity) - Final exposure triangle component
       if (params.iso) {
         if (params.iso === "ISO 100") {
           cameraPrompt += ", shot at ISO 100 for pristine image quality, zero noise, and maximum dynamic range typical of high-end cinema cameras";
@@ -552,10 +572,13 @@ The result should look like all subjects were photographed together in the same 
           cameraPrompt += `, shot at ${params.iso} with appropriate noise characteristics`;
         }
       }
+      
+      // 5. White Balance (Color Temperature) - Color accuracy foundation
       if(params.whiteBalance) {
         cameraPrompt += `, shot with ${params.whiteBalance} white balance`;
       }
       
+      // 6. Lighting Setup (Illumination Style) - Mood and atmosphere
       if (params.lighting) {
         if (params.lighting === "Natural Light") {
           cameraPrompt += ", naturally lit with soft, diffused daylight providing even illumination and organic shadow patterns";
@@ -586,40 +609,7 @@ The result should look like all subjects were photographed together in the same 
         }
       }
       
-      if (params.bokeh) {
-        if (params.bokeh === "Smooth Bokeh") {
-          cameraPrompt += ", featuring silky smooth bokeh with perfectly circular out-of-focus highlights and creamy background transitions";
-        } else if (params.bokeh === "Swirly Bokeh") {
-          cameraPrompt += ", featuring artistic swirly bokeh with spiral-like background blur patterns and rotational distortion effects typical of vintage Petzval-style lenses";
-        } else if (params.bokeh === "Hexagonal Bokeh") {
-          cameraPrompt += ", featuring hexagonal bokeh with geometric six-sided highlight shapes formed by straight aperture blades typical of cinema lenses";
-        } else if (params.bokeh === "Cat Eye Bokeh") {
-          cameraPrompt += ", featuring cat's eye bokeh with elliptical highlight distortion toward frame edges caused by optical vignetting and field curvature";
-        } else if (params.bokeh === "Bubble Bokeh") {
-          cameraPrompt += ", featuring soap bubble bokeh with bright-edged circular highlights and hollow centers characteristic of Meyer Optik Trioplan lenses";
-        } else if (params.bokeh === "Creamy Bokeh") {
-          cameraPrompt += ", featuring creamy bokeh with smooth gradient transitions and soft edge rendering for professional portrait aesthetics";
-        } else {
-          cameraPrompt += `, featuring ${params.bokeh} quality bokeh rendering in out-of-focus areas`;
-        }
-      }
-      
-      if (params.motionBlur) {
-        if (params.motionBlur === "Light Motion Blur") {
-          cameraPrompt += ", with subtle motion blur suggesting gentle movement and adding cinematic flow to the image";
-        } else if (params.motionBlur === "Medium Motion Blur") {
-          cameraPrompt += ", with moderate motion blur creating dynamic energy and sense of movement typical of action cinematography";
-        } else if (params.motionBlur === "Heavy Motion Blur") {
-          cameraPrompt += ", with pronounced motion blur creating dramatic movement streaks and high-energy cinematic action, giving the moving background subjects a sense of motion blur movement";
-        } else if (params.motionBlur === "Radial Blur") {
-          cameraPrompt += ", with radial motion blur emanating from the center, creating explosive zoom-like movement and dramatic focus pull";
-        } else if (params.motionBlur === "Zoom Blur") {
-          cameraPrompt += ", with zoom blur effect creating dramatic speed lines and kinetic energy radiating outward from the subject";
-        } else {
-          cameraPrompt += `, with ${params.motionBlur} motion effect`;
-        }
-      }
-      
+      // 7. Camera Angle (Perspective and Composition) - Visual storytelling
       if (params.angle) {
         if (params.angle === "low angle") {
           cameraPrompt += ", shot from a low-angle perspective looking upward to convey power, dominance, and heroic stature";
@@ -642,6 +632,43 @@ The result should look like all subjects were photographed together in the same 
         }
       }
       
+      // 8. Bokeh Quality (Out-of-Focus Rendering) - Aesthetic enhancement
+      if (params.bokeh) {
+        if (params.bokeh === "Smooth Bokeh") {
+          cameraPrompt += ", featuring silky smooth bokeh with perfectly circular out-of-focus highlights and creamy background transitions";
+        } else if (params.bokeh === "Swirly Bokeh") {
+          cameraPrompt += ", featuring artistic swirly bokeh with spiral-like background blur patterns and rotational distortion effects typical of vintage Petzval-style lenses";
+        } else if (params.bokeh === "Hexagonal Bokeh") {
+          cameraPrompt += ", featuring hexagonal bokeh with geometric six-sided highlight shapes formed by straight aperture blades typical of cinema lenses";
+        } else if (params.bokeh === "Cat Eye Bokeh") {
+          cameraPrompt += ", featuring cat's eye bokeh with elliptical highlight distortion toward frame edges caused by optical vignetting and field curvature";
+        } else if (params.bokeh === "Bubble Bokeh") {
+          cameraPrompt += ", featuring soap bubble bokeh with bright-edged circular highlights and hollow centers characteristic of Meyer Optik Trioplan lenses";
+        } else if (params.bokeh === "Creamy Bokeh") {
+          cameraPrompt += ", featuring creamy bokeh with smooth gradient transitions and soft edge rendering for professional portrait aesthetics";
+        } else {
+          cameraPrompt += `, featuring ${params.bokeh} quality bokeh rendering in out-of-focus areas`;
+        }
+      }
+      
+      // 9. Motion Blur Effects (Dynamic Movement) - Creative motion control
+      if (params.motionBlur) {
+        if (params.motionBlur === "Light Motion Blur") {
+          cameraPrompt += ", with subtle motion blur suggesting gentle movement and adding cinematic flow to the image";
+        } else if (params.motionBlur === "Medium Motion Blur") {
+          cameraPrompt += ", with moderate motion blur creating dynamic energy and sense of movement typical of action cinematography";
+        } else if (params.motionBlur === "Heavy Motion Blur") {
+          cameraPrompt += ", with pronounced motion blur creating dramatic movement streaks and high-energy cinematic action, giving the moving background subjects a sense of motion blur movement";
+        } else if (params.motionBlur === "Radial Blur") {
+          cameraPrompt += ", with radial motion blur emanating from the center, creating explosive zoom-like movement and dramatic focus pull";
+        } else if (params.motionBlur === "Zoom Blur") {
+          cameraPrompt += ", with zoom blur effect creating dramatic speed lines and kinetic energy radiating outward from the subject";
+        } else {
+          cameraPrompt += `, with ${params.motionBlur} motion effect`;
+        }
+      }
+      
+      // 10. Film Style Processing (Post-Production Look) - Final aesthetic treatment
       if (params.filmStyle && params.filmStyle !== "RAW") {
         cameraPrompt += `, processed with ${params.filmStyle} film aesthetic and color grading`;
       } else if (params.filmStyle === "RAW") {
