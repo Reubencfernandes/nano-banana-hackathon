@@ -8,6 +8,16 @@ const nextConfig: NextConfig = {
   serverRuntimeConfig: {
     bodySizeLimit: '50mb',
   },
+  // Redirect /editor to main page
+  async redirects() {
+    return [
+      {
+        source: '/editor',
+        destination: '/',
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default nextConfig;
