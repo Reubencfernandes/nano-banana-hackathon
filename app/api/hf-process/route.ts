@@ -185,24 +185,36 @@ export async function POST(req: NextRequest) {
 
             // Handle different image formats
             let parsed: { mimeType: string; data: string } | null = null;
+            let imageUrl = body.image;
 
             // Try parsing as Data URL first
-            parsed = parseDataUrl(body.image);
+            parsed = parseDataUrl(imageUrl);
 
-            // If not a data URL, check if it's an HTTP URL and fetch it
-            if (!parsed && (body.image.startsWith('http://') || body.image.startsWith('https://'))) {
-                try {
-                    console.log('[HF-API] Fetching image from URL:', body.image.substring(0, 100));
-                    const imageResponse = await fetch(body.image);
-                    if (!imageResponse.ok) {
-                        throw new Error(`Failed to fetch image: ${imageResponse.status}`);
+            // If not a data URL, handle various URL formats
+            if (!parsed) {
+                // Convert relative paths to absolute URLs
+                if (imageUrl.startsWith('/')) {
+                    const spaceHost = process.env.SPACE_HOST || 'localhost:3000';
+                    const protocol = spaceHost.includes('localhost') ? 'http' : 'https';
+                    imageUrl = `${protocol}://${spaceHost}${imageUrl}`;
+                    console.log('[HF-API] Converted relative path to:', imageUrl);
+                }
+
+                // Fetch from HTTP(S) URL
+                if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+                    try {
+                        console.log('[HF-API] Fetching image from URL:', imageUrl.substring(0, 100));
+                        const imageResponse = await fetch(imageUrl);
+                        if (!imageResponse.ok) {
+                            throw new Error(`Failed to fetch image: ${imageResponse.status}`);
+                        }
+                        const imageBuffer = await imageResponse.arrayBuffer();
+                        const contentType = imageResponse.headers.get('content-type') || 'image/png';
+                        const base64 = Buffer.from(imageBuffer).toString('base64');
+                        parsed = { mimeType: contentType, data: base64 };
+                    } catch (fetchErr) {
+                        console.error('[HF-API] Failed to fetch image URL:', fetchErr);
                     }
-                    const imageBuffer = await imageResponse.arrayBuffer();
-                    const contentType = imageResponse.headers.get('content-type') || 'image/png';
-                    const base64 = Buffer.from(imageBuffer).toString('base64');
-                    parsed = { mimeType: contentType, data: base64 };
-                } catch (fetchErr) {
-                    console.error('[HF-API] Failed to fetch image URL:', fetchErr);
                 }
             }
 
