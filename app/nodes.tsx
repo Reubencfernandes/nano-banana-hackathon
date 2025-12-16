@@ -55,6 +55,7 @@
 import React, { useState, useRef, useEffect } from "react";
 
 // Import reusable UI components from the shadcn/ui component library
+import { Trash2 } from "lucide-react";       // Trash icon for delete
 import { Button } from "../components/ui/button";       // Standard button component
 import { Select } from "../components/ui/select";       // Dropdown selection component  
 import { Textarea } from "../components/ui/textarea";   // Multi-line text input component
@@ -158,15 +159,60 @@ async function copyImageToClipboard(dataUrl: string) {
  * @param output - Optional current output image (base64 data URL or image URL)
  * @param downloadFileName - Filename to use when downloading (should include extension)
  */
+
 function NodeOutputSection({
-  nodeId,              // Unique identifier for the node
-  output,              // Optional current output image (base64 data URL)
-  downloadFileName,    // Filename to use when downloading the image
+  nodeId,
+  output,
+  downloadFileName,
+  isRunning,
+  startTime,
+  executionTime,
+  usedModel
 }: {
-  nodeId: string;                                                           // Node ID type definition
-  output?: string;                                                          // Optional output image string
-  downloadFileName: string;                                                 // Required download filename
+  nodeId: string;
+  output?: string;
+  downloadFileName: string;
+  isRunning?: boolean;
+  startTime?: number;
+  executionTime?: number;
+  usedModel?: string;
 }) {
+  const [elapsed, setElapsed] = useState("0.0");
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (isRunning && startTime) {
+      interval = setInterval(() => {
+        const seconds = (Date.now() - startTime) / 1000;
+        setElapsed(seconds.toFixed(1));
+      }, 100);
+    } else {
+      setElapsed("0.0");
+    }
+    return () => clearInterval(interval);
+  }, [isRunning, startTime]);
+
+  // Show generating loading state
+  if (isRunning) {
+    return (
+      <div className="space-y-2 animate-pulse">
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <div className="flex items-center gap-2">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+            </span>
+            Generating...
+          </div>
+          <div className="font-mono">{elapsed}s</div>
+        </div>
+        <div className="w-full aspect-video rounded bg-gradient-to-r from-muted/50 via-muted to-muted/50 bg-[length:200%_100%] animate-shimmer flex items-center justify-center border border-border/50">
+          <div className="text-4xl opacity-20">✨</div>
+        </div>
+      </div>
+    );
+  }
+
   // If no image is available, don't render anything
   if (!output) return null;
 
@@ -179,6 +225,14 @@ function NodeOutputSection({
         <div className="flex items-center justify-between">
           {/* Output section label */}
           <div className="text-xs text-white/70">Output</div>
+          {/* Execution details */}
+          {(executionTime || usedModel) && (
+            <div className="text-[10px] text-white/50 text-right leading-tight">
+              {executionTime && <span>{(executionTime / 1000).toFixed(1)}s</span>}
+              {executionTime && usedModel && <span className="mx-1">•</span>}
+              {usedModel && <span>{usedModel}</span>}
+            </div>
+          )}
         </div>
         {/* Output image with click-to-copy functionality */}
         <img
@@ -513,7 +567,7 @@ export function BackgroundNodeView({
             onClick={(e) => {
               e.stopPropagation();
               e.preventDefault();
-              if (confirm('Delete this node?')) {
+              if (confirm('Are you sure you want to delete this specific node? This action cannot be undone.')) {
                 onDelete(node.id);
               }
             }}
@@ -521,7 +575,7 @@ export function BackgroundNodeView({
             title="Delete node"
             aria-label="Delete node"
           >
-            ×
+            <Trash2 className="w-4 h-4" />
           </Button>
           <Port className="out" nodeId={node.id} isOutput={true} onStartConnection={onStartConnection} />
         </div>
@@ -797,6 +851,8 @@ export function BackgroundNodeView({
           nodeId={node.id}
           output={node.output}
           downloadFileName={`background-${Date.now()}.png`}
+          isRunning={node.isRunning}
+          startTime={node.startTime} executionTime={node.executionTime} usedModel={(node as any).usedModel}
         />
         {node.error && (
           <div className="text-xs text-red-400 mt-2">{node.error}</div>
@@ -833,23 +889,27 @@ export function BackgroundNodeView({
  * @param navigateNodeHistory - Function to navigate history
  * @param getCurrentNodeImage - Function to get current image
  */
-export function ClothesNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition, getNodeHistoryInfo, navigateNodeHistory, getCurrentNodeImage }: any) {
+export function ClothesNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition, getNodeHistoryInfo, navigateNodeHistory, getCurrentNodeImage, processingMode }: any) {
   // Handle node dragging functionality
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
+
+  // Check if using HuggingFace mode (text-based)
+  const isHfMode = processingMode === 'huggingface';
 
   /**
    * Preset clothing options available for quick selection
    * Each preset includes a display name and path to the reference image
    */
   const presetClothes = [
-    { name: "Sukajan", path: "/clothes/sukajan.png" },           // Japanese-style embroidered jacket
-    { name: "Blazer", path: "/clothes/blazzer.png" },            // Business blazer/jacket
-    { name: "Suit", path: "/clothes/suit.png" },                 // Formal business suit
-    { name: "Women's Outfit", path: "/clothes/womenoutfit.png" }, // Women's clothing ensemble
+    { name: "Sukajan", path: "/clothes/sukajan.png", description: "Japanese-style embroidered bomber jacket with detailed artwork" },
+    { name: "Blazer", path: "/clothes/blazzer.png", description: "Professional dark blazer jacket, business style" },
+    { name: "Suit", path: "/clothes/suit.png", description: "Formal business suit with tie, professional attire" },
+    { name: "Women's Outfit", path: "/clothes/womenoutfit.png", description: "Stylish women's outfit, elegant fashion" },
   ];
 
   const onDrop = async (e: React.DragEvent) => {
     e.preventDefault();
+    if (isHfMode) return; // Don't allow image drop in HF mode
     const files = e.dataTransfer.files;
     if (files && files.length) {
       const reader = new FileReader();
@@ -859,6 +919,7 @@ export function ClothesNodeView({ node, onDelete, onUpdate, onStartConnection, o
   };
 
   const onPaste = async (e: React.ClipboardEvent) => {
+    if (isHfMode) return; // Don't allow image paste in HF mode
     const items = e.clipboardData.items;
     for (let i = 0; i < items.length; i++) {
       if (items[i].type.startsWith("image/")) {
@@ -877,9 +938,30 @@ export function ClothesNodeView({ node, onDelete, onUpdate, onStartConnection, o
     }
   };
 
-  const selectPreset = (presetPath: string, presetName: string) => {
-    onUpdate(node.id, { clothesImage: presetPath, selectedPreset: presetName });
+  const selectPreset = (presetPath: string, presetName: string, presetDescription: string) => {
+    if (isHfMode) {
+      // In HF mode, use the description instead of the image
+      onUpdate(node.id, { clothesDescription: presetDescription, selectedPreset: presetName, clothesImage: null });
+    } else {
+      onUpdate(node.id, { clothesImage: presetPath, selectedPreset: presetName });
+    }
   };
+
+  // Timer state
+  const [elapsed, setElapsed] = useState("0.0");
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (node.isRunning && node.startTime) {
+      interval = setInterval(() => {
+        const seconds = (Date.now() - node.startTime!) / 1000;
+        setElapsed(seconds.toFixed(1));
+      }, 100);
+    } else {
+      setElapsed("0.0");
+    }
+    return () => clearInterval(interval);
+  }, [node.isRunning, node.startTime]);
 
   return (
     <div
@@ -905,7 +987,7 @@ export function ClothesNodeView({ node, onDelete, onUpdate, onStartConnection, o
             onClick={(e) => {
               e.stopPropagation();
               e.preventDefault();
-              if (confirm('Delete this node?')) {
+              if (confirm('Are you sure you want to delete this specific node? This action cannot be undone.')) {
                 onDelete(node.id);
               }
             }}
@@ -913,7 +995,7 @@ export function ClothesNodeView({ node, onDelete, onUpdate, onStartConnection, o
             title="Delete node"
             aria-label="Delete node"
           >
-            ×
+            <Trash2 className="w-4 h-4" />
           </Button>
           <Port className="out" nodeId={node.id} isOutput={true} onStartConnection={onStartConnection} />
         </div>
@@ -928,11 +1010,21 @@ export function ClothesNodeView({ node, onDelete, onUpdate, onStartConnection, o
               onClick={() => onUpdate(node.id, { input: undefined })}
               className="text-xs"
             >
-              Clear Connection                                    {/* Remove input connection to this node */}
+              Clear Connection
             </Button>
           </div>
         )}
-        <div className="text-xs text-muted-foreground">Clothes Reference</div>
+
+        {/* Mode indicator */}
+        {isHfMode && (
+          <div className="text-xs bg-primary/20 text-primary px-2 py-1 rounded text-center">
+            🤗 Text Mode - Describe clothing
+          </div>
+        )}
+
+        <div className="text-xs text-muted-foreground">
+          {isHfMode ? "Clothing Style" : "Clothes Reference"}
+        </div>
 
         {/* Preset clothes options */}
         <div className="flex gap-2">
@@ -943,7 +1035,7 @@ export function ClothesNodeView({ node, onDelete, onUpdate, onStartConnection, o
                 ? "border-primary bg-primary/20"
                 : "border-border hover:border-primary/50"
                 }`}
-              onClick={() => selectPreset(preset.path, preset.name)}
+              onClick={() => selectPreset(preset.path, preset.name, preset.description)}
             >
               <img src={preset.path} alt={preset.name} className="w-full h-28 object-contain rounded mb-1" />
               <div className="text-xs">{preset.name}</div>
@@ -953,45 +1045,59 @@ export function ClothesNodeView({ node, onDelete, onUpdate, onStartConnection, o
 
         <div className="text-xs text-muted-foreground/50 text-center">— or —</div>
 
-        {/* Custom image upload */}
-        {node.clothesImage && !node.selectedPreset ? (
-          <div className="relative">
-            <img src={node.clothesImage} className="w-full rounded" alt="Clothes" />
-            <Button
-              variant="destructive"
-              size="sm"
-              className="absolute top-2 right-2"
-              onClick={() => onUpdate(node.id, { clothesImage: null, selectedPreset: null })}
-            >
-              Remove
-            </Button>
-          </div>
-        ) : !node.selectedPreset ? (
-          <label className="block">
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => {
-                if (e.target.files?.length) {
-                  const reader = new FileReader();
-                  reader.onload = () => onUpdate(node.id, { clothesImage: reader.result, selectedPreset: null });
-                  reader.readAsDataURL(e.target.files[0]);
-                }
-              }}
+        {/* HuggingFace mode: Text description input */}
+        {isHfMode ? (
+          <div className="space-y-2">
+            <textarea
+              className="w-full p-2 border rounded text-sm bg-background min-h-[80px]"
+              placeholder="Describe the clothing you want (e.g., 'red leather jacket', 'formal black suit with tie', 'casual hoodie')"
+              value={node.clothesDescription || ''}
+              onChange={(e) => onUpdate(node.id, { clothesDescription: e.target.value, selectedPreset: null })}
             />
-            <div className="border-2 border-dashed border-border rounded-lg p-6 text-center cursor-pointer hover:border-primary/50 transition-colors">
-              <div className="text-muted-foreground/40 text-lg mb-2">📁</div>
-              <p className="text-sm text-muted-foreground font-medium">Drop, upload, or paste clothes image</p>
-              <p className="text-xs text-muted-foreground/50 mt-1">JPG, PNG, WebP supported</p>
-            </div>
-          </label>
-        ) : null}
+          </div>
+        ) : (
+          /* Nano Banana Pro mode: Custom image upload */
+          <>
+            {node.clothesImage && !node.selectedPreset ? (
+              <div className="relative">
+                <img src={node.clothesImage} className="w-full rounded" alt="Clothes" />
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="absolute top-2 right-2"
+                  onClick={() => onUpdate(node.id, { clothesImage: null, selectedPreset: null })}
+                >
+                  Remove
+                </Button>
+              </div>
+            ) : !node.selectedPreset ? (
+              <label className="block">
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files?.length) {
+                      const reader = new FileReader();
+                      reader.onload = () => onUpdate(node.id, { clothesImage: reader.result, selectedPreset: null });
+                      reader.readAsDataURL(e.target.files[0]);
+                    }
+                  }}
+                />
+                <div className="border-2 border-dashed border-border rounded-lg p-6 text-center cursor-pointer hover:border-primary/50 transition-colors">
+                  <div className="text-muted-foreground/40 text-lg mb-2">📁</div>
+                  <p className="text-sm text-muted-foreground font-medium">Drop, upload, or paste clothes image</p>
+                  <p className="text-xs text-muted-foreground/50 mt-1">JPG, PNG, WebP supported</p>
+                </div>
+              </label>
+            ) : null}
+          </>
+        )}
 
         <Button
           className="w-full"
           onClick={() => onProcess(node.id)}
-          disabled={node.isRunning || !node.clothesImage}
+          disabled={node.isRunning || (!node.clothesImage && !node.clothesDescription)}
           title={!node.input ? "Connect an input first" : "Process all unprocessed nodes in chain"}
         >
           {node.isRunning ? "Processing..." : "Apply Clothes"}
@@ -1000,6 +1106,8 @@ export function ClothesNodeView({ node, onDelete, onUpdate, onStartConnection, o
           nodeId={node.id}
           output={node.output}
           downloadFileName={`clothes-${Date.now()}.png`}
+          isRunning={node.isRunning}
+          startTime={node.startTime} executionTime={node.executionTime} usedModel={(node as any).usedModel}
         />
         {node.error && (
           <div className="text-xs text-red-400 mt-2">{node.error}</div>
@@ -1061,7 +1169,7 @@ export function AgeNodeView({ node, onDelete, onUpdate, onStartConnection, onEnd
             onClick={(e) => {
               e.stopPropagation();
               e.preventDefault();
-              if (confirm('Delete this node?')) {
+              if (confirm('Are you sure you want to delete this specific node? This action cannot be undone.')) {
                 onDelete(node.id);
               }
             }}
@@ -1069,7 +1177,7 @@ export function AgeNodeView({ node, onDelete, onUpdate, onStartConnection, onEnd
             title="Delete node"
             aria-label="Delete node"
           >
-            ×
+            <Trash2 className="w-4 h-4" />
           </Button>
           <Port className="out" nodeId={node.id} isOutput={true} onStartConnection={onStartConnection} />
         </div>
@@ -1110,6 +1218,8 @@ export function AgeNodeView({ node, onDelete, onUpdate, onStartConnection, onEnd
           nodeId={node.id}
           output={node.output}
           downloadFileName={`age-${Date.now()}.png`}
+          isRunning={node.isRunning}
+          startTime={node.startTime} executionTime={node.executionTime} usedModel={(node as any).usedModel}
         />
         {node.error && (
           <div className="text-xs text-red-400 mt-2">{node.error}</div>
@@ -1206,7 +1316,7 @@ export function CameraNodeView({ node, onDelete, onUpdate, onStartConnection, on
             onClick={(e) => {
               e.stopPropagation();
               e.preventDefault();
-              if (confirm('Delete this node?')) {
+              if (confirm('Are you sure you want to delete this specific node? This action cannot be undone.')) {
                 onDelete(node.id);
               }
             }}
@@ -1214,7 +1324,7 @@ export function CameraNodeView({ node, onDelete, onUpdate, onStartConnection, on
             title="Delete node"
             aria-label="Delete node"
           >
-            ×
+            <Trash2 className="w-4 h-4" />
           </Button>
           <Port className="out" nodeId={node.id} isOutput={true} onStartConnection={onStartConnection} />
         </div>
@@ -1372,6 +1482,8 @@ export function CameraNodeView({ node, onDelete, onUpdate, onStartConnection, on
             nodeId={node.id}
             output={node.output}
             downloadFileName={`camera-${Date.now()}.png`}
+            isRunning={node.isRunning}
+            startTime={node.startTime} executionTime={node.executionTime} usedModel={(node as any).usedModel}
           />
         </div>
         {node.error && (
@@ -1446,7 +1558,7 @@ export function FaceNodeView({ node, onDelete, onUpdate, onStartConnection, onEn
             onClick={(e) => {
               e.stopPropagation();
               e.preventDefault();
-              if (confirm('Delete this node?')) {
+              if (confirm('Are you sure you want to delete this specific node? This action cannot be undone.')) {
                 onDelete(node.id);
               }
             }}
@@ -1454,7 +1566,7 @@ export function FaceNodeView({ node, onDelete, onUpdate, onStartConnection, onEn
             title="Delete node"
             aria-label="Delete node"
           >
-            ×
+            <Trash2 className="w-4 h-4" />
           </Button>
           <Port className="out" nodeId={node.id} isOutput={true} onStartConnection={onStartConnection} />
         </div>
@@ -1623,6 +1735,8 @@ export function FaceNodeView({ node, onDelete, onUpdate, onStartConnection, onEn
             nodeId={node.id}
             output={node.output}
             downloadFileName={`face-${Date.now()}.png`}
+            isRunning={node.isRunning}
+            startTime={node.startTime} executionTime={node.executionTime} usedModel={(node as any).usedModel}
           />
         </div>
         {node.error && (
@@ -1712,7 +1826,7 @@ export function StyleNodeView({ node, onDelete, onUpdate, onStartConnection, onE
             onClick={(e) => {
               e.stopPropagation();
               e.preventDefault();
-              if (confirm('Delete this node?')) {
+              if (confirm('Are you sure you want to delete this specific node? This action cannot be undone.')) {
                 onDelete(node.id);
               }
             }}
@@ -1720,7 +1834,7 @@ export function StyleNodeView({ node, onDelete, onUpdate, onStartConnection, onE
             title="Delete node"
             aria-label="Delete node"
           >
-            ×
+            <Trash2 className="w-4 h-4" />
           </Button>
           <Port className="out" nodeId={node.id} isOutput={true} onStartConnection={onStartConnection} />
         </div>
@@ -1785,6 +1899,8 @@ export function StyleNodeView({ node, onDelete, onUpdate, onStartConnection, onE
           nodeId={node.id}
           output={node.output}
           downloadFileName={`style-${Date.now()}.png`}
+          isRunning={node.isRunning}
+          startTime={node.startTime} executionTime={node.executionTime} usedModel={(node as any).usedModel}
         />
         {node.error && (
           <div className="text-xs text-red-400 mt-2">{node.error}</div>
@@ -1884,7 +2000,7 @@ export function LightningNodeView({ node, onDelete, onUpdate, onStartConnection,
             onClick={(e) => {
               e.stopPropagation();
               e.preventDefault();
-              if (confirm('Delete this node?')) {
+              if (confirm('Are you sure you want to delete this specific node? This action cannot be undone.')) {
                 onDelete(node.id);
               }
             }}
@@ -1892,7 +2008,7 @@ export function LightningNodeView({ node, onDelete, onUpdate, onStartConnection,
             title="Delete node"
             aria-label="Delete node"
           >
-            ×
+            <Trash2 className="w-4 h-4" />
           </Button>
           <Port className="out" nodeId={node.id} isOutput={true} onStartConnection={onStartConnection} />
         </div>
@@ -1947,6 +2063,8 @@ export function LightningNodeView({ node, onDelete, onUpdate, onStartConnection,
           nodeId={node.id}
           output={node.output}
           downloadFileName={`lightning-${Date.now()}.png`}
+          isRunning={node.isRunning}
+          startTime={node.startTime} executionTime={node.executionTime} usedModel={(node as any).usedModel}
         />
         {node.error && (
           <div className="text-xs text-red-400 mt-2">{node.error}</div>
@@ -2052,7 +2170,7 @@ export function PosesNodeView({ node, onDelete, onUpdate, onStartConnection, onE
             onClick={(e) => {
               e.stopPropagation();
               e.preventDefault();
-              if (confirm('Delete this node?')) {
+              if (confirm('Are you sure you want to delete this specific node? This action cannot be undone.')) {
                 onDelete(node.id);
               }
             }}
@@ -2060,7 +2178,7 @@ export function PosesNodeView({ node, onDelete, onUpdate, onStartConnection, onE
             title="Delete node"
             aria-label="Delete node"
           >
-            ×
+            <Trash2 className="w-4 h-4" />
           </Button>
           <Port className="out" nodeId={node.id} isOutput={true} onStartConnection={onStartConnection} />
         </div>
@@ -2115,6 +2233,8 @@ export function PosesNodeView({ node, onDelete, onUpdate, onStartConnection, onE
           nodeId={node.id}
           output={node.output}
           downloadFileName={`poses-${Date.now()}.png`}
+          isRunning={node.isRunning}
+          startTime={node.startTime} executionTime={node.executionTime} usedModel={(node as any).usedModel}
         />
         {node.error && (
           <div className="text-xs text-red-400 mt-2">{node.error}</div>
@@ -2208,7 +2328,7 @@ export function EditNodeView({
     e.stopPropagation();  // Prevent triggering drag
     e.preventDefault();
 
-    if (confirm('Delete this node?')) {
+    if (confirm('Are you sure you want to delete this specific node? This action cannot be undone.')) {
       onDelete(node.id);
     }
   };
@@ -2253,7 +2373,7 @@ export function EditNodeView({
             title="Delete node"
             aria-label="Delete node"
           >
-            ×
+            <Trash2 className="w-4 h-4" />
           </Button>
 
           {/* Output port (right side) - where connections go out */}
@@ -2322,7 +2442,233 @@ export function EditNodeView({
           nodeId={node.id}
           output={node.output}
           downloadFileName={`edit-${Date.now()}.png`}
+          isRunning={node.isRunning}
+          startTime={node.startTime} executionTime={node.executionTime} usedModel={(node as any).usedModel}
         />
+
+        {/* Error display */}
+        {node.error && (
+          <div className="text-xs text-red-400 mt-2 p-2 bg-red-900/20 rounded">
+            {node.error}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * VIDEO NODE VIEW COMPONENT
+ * 
+ * Generates videos from images (image-to-video) or text prompts (text-to-video).
+ * Uses Wan2.2 models via fal-ai provider for video generation.
+ * 
+ * Key Features:
+ * - Image-to-video: Animate a static image with motion
+ * - Text-to-video: Generate video from text description
+ * - Adjustable duration (2-8 seconds)
+ * - Motion prompt for describing desired animation
+ */
+export function VideoNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition, processingMode }: any) {
+  const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
+
+  // Timer state
+  const [elapsed, setElapsed] = useState("0.0");
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (node.isRunning && node.startTime) {
+      interval = setInterval(() => {
+        const seconds = (Date.now() - node.startTime!) / 1000;
+        setElapsed(seconds.toFixed(1));
+      }, 100);
+    } else {
+      setElapsed("0.0");
+    }
+    return () => clearInterval(interval);
+  }, [node.isRunning, node.startTime]);
+
+  // Check if HuggingFace mode is active (required for video generation)
+  const isHfMode = processingMode === 'huggingface';
+
+  // Default to image-to-video mode if input is connected
+  const videoMode = node.input ? 'image-to-video' : 'text-to-video';
+
+  return (
+    <div
+      className="nb-node absolute w-[320px]"
+      style={{ left: localPos.x, top: localPos.y }}
+    >
+      <div
+        className="nb-header px-3 py-2 flex items-center justify-between rounded-t-[14px] cursor-grab active:cursor-grabbing"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+      >
+        <Port className="in" nodeId={node.id} isOutput={false} onEndConnection={onEndConnection} onDisconnect={(nodeId) => onUpdate(nodeId, { input: undefined })} />
+        <div className="font-semibold text-sm flex-1 text-center">🎬 VIDEO</div>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-white hover:bg-white/20 h-6 w-6"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (confirm('Are you sure you want to delete this specific node? This action cannot be undone.')) onDelete(node.id);
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
+            title="Delete node"
+          >
+            <Trash2 className="w-4 h-4" />
+          </Button>
+          <Port className="out" nodeId={node.id} isOutput={true} onStartConnection={onStartConnection} />
+        </div>
+      </div>
+
+      <div className="p-3 space-y-3">
+        {/* Mode indicator */}
+        <div className={`text-xs px-2 py-1 rounded text-center ${isHfMode ? 'bg-primary/20 text-primary' : 'bg-destructive/20 text-destructive'
+          }`}>
+          {isHfMode ? '🤗 Video Generation Ready' : '⚠️ Requires HuggingFace Mode'}
+        </div>
+
+        {/* Video mode indicator */}
+        <div className="text-xs text-muted-foreground text-center">
+          {videoMode === 'image-to-video'
+            ? '📷→🎬 Image to Video (connect an image source)'
+            : '✏️→🎬 Text to Video (no image connected)'}
+        </div>
+
+        {node.input && (
+          <div className="flex justify-end">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onUpdate(node.id, { input: undefined })}
+              className="text-xs"
+            >
+              Clear Connection
+            </Button>
+          </div>
+        )}
+
+        {/* Video Model Selector */}
+        <div className="space-y-1">
+          <label className="text-xs text-muted-foreground mr-2">Model</label>
+          <select
+            className="w-full text-xs p-1 rounded border bg-background"
+            value={node.videoModel || (videoMode === 'image-to-video' ? 'Wan2.1-I2V' : 'Wan2.1-T2V')}
+            onChange={(e) => onUpdate(node.id, { videoModel: e.target.value })}
+          >
+            {videoMode === 'image-to-video' ? (
+              <>
+                <option value="Wan2.1-I2V">Wan 2.1 (Image-to-Video)</option>
+                <option value="Kling-1.6-I2V">Kling 1.6 Pro</option>
+              </>
+            ) : (
+              <>
+                <option value="Wan2.1-T2V">Wan 2.1 (Text-to-Video)</option>
+              </>
+            )}
+          </select>
+        </div>
+
+        {/* Motion/Video Prompt */}
+        <div className="space-y-2">
+          <label className="text-xs text-muted-foreground">
+            {videoMode === 'image-to-video'
+              ? 'Describe the motion/animation'
+              : 'Describe the video to generate'}
+          </label>
+          <textarea
+            className="w-full p-2 border rounded text-sm bg-background min-h-[80px]"
+            placeholder={videoMode === 'image-to-video'
+              ? "E.g., 'The person slowly turns their head and smiles', 'Wind gently blowing through hair', 'Camera slowly zooms in'"
+              : "E.g., 'A beautiful sunset over the ocean with waves gently rolling', 'A cat playing with a ball of yarn'"
+            }
+            value={node.videoPrompt || ''}
+            onChange={(e) => onUpdate(node.id, { videoPrompt: e.target.value })}
+          />
+        </div>
+
+        {/* Duration slider */}
+        <div className="space-y-2">
+          <label className="text-xs text-muted-foreground">
+            Duration: {node.duration || 4} seconds
+          </label>
+          <input
+            type="range"
+            min="2"
+            max="8"
+            step="1"
+            value={node.duration || 4}
+            onChange={(e) => onUpdate(node.id, { duration: parseInt(e.target.value) })}
+            className="w-full"
+          />
+          <div className="flex justify-between text-xs text-muted-foreground/50">
+            <span>2s</span>
+            <span>8s</span>
+          </div>
+        </div>
+
+        {/* Generate button */}
+        <Button
+          className="w-full"
+          onClick={() => onProcess(node.id)}
+          disabled={node.isRunning || !isHfMode || !node.videoPrompt?.trim() || (videoMode === 'image-to-video' && !node.input)}
+          title={
+            !isHfMode ? 'Switch to HuggingFace mode to generate videos' :
+              !node.videoPrompt?.trim() ? 'Enter a video prompt first' :
+                (videoMode === 'image-to-video' && !node.input) ? 'Connect an image source for image-to-video' :
+                  'Generate video'
+          }
+        >
+          {node.isRunning ? "Generating Video..." : "🎬 Generate Video"}
+        </Button>
+
+
+        {/* Loading State */}
+        {node.isRunning && (
+          <div className="space-y-2 animate-pulse mt-2">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+                </span>
+                Generating Video...
+              </div>
+              <div className="font-mono">{elapsed}s</div>
+            </div>
+            <div className="w-full aspect-video rounded bg-gradient-to-r from-muted/50 via-muted to-muted/50 bg-[length:200%_100%] animate-shimmer flex items-center justify-center border border-border/50">
+              <div className="text-4xl opacity-20">🎬</div>
+            </div>
+          </div>
+        )}
+
+        {/* Video Output */}
+        {!node.isRunning && node.output && (
+          <div className="space-y-2">
+            <div className="text-xs text-muted-foreground">Generated Video</div>
+            <video
+              src={node.output}
+              controls
+              loop
+              className="w-full rounded border"
+              autoPlay
+              muted
+            />
+            <a
+              href={node.output}
+              download={`video-${Date.now()}.mp4`}
+              className="block w-full"
+            >
+              <Button variant="outline" className="w-full" size="sm">
+                ⬇️ Download Video
+              </Button>
+            </a>
+          </div>
+        )}
 
         {/* Error display */}
         {node.error && (

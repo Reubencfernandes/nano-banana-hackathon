@@ -28,7 +28,8 @@ import {
   AgeNodeView,         // Age transformation
   FaceNodeView,        // Face modifications
   LightningNodeView,   // Lighting effects
-  PosesNodeView        // Pose modifications
+  PosesNodeView,       // Pose modifications
+  VideoNodeView        // Video generation
 } from "./nodes";
 // UI components from shadcn/ui library
 import { Button } from "../components/ui/button";
@@ -151,7 +152,7 @@ async function copyImageToClipboard(dataUrl: string) {
  * All possible node types in the editor
  * Each type represents a different kind of image processing operation
  */
-type NodeType = "CHARACTER" | "MERGE" | "BACKGROUND" | "CLOTHES" | "STYLE" | "EDIT" | "CAMERA" | "AGE" | "FACE" | "BLEND" | "LIGHTNING" | "POSES";
+type NodeType = "CHARACTER" | "MERGE" | "BACKGROUND" | "CLOTHES" | "STYLE" | "EDIT" | "CAMERA" | "AGE" | "FACE" | "BLEND" | "LIGHTNING" | "POSES" | "VIDEO";
 
 /**
  * Base properties that all nodes share
@@ -162,6 +163,10 @@ type NodeBase = {
   type: NodeType;      // What kind of operation this node performs
   x: number;           // X position in world coordinates (not screen pixels)
   y: number;           // Y position in world coordinates (not screen pixels)
+  isRunning?: boolean; // Whether the node is currently processing
+  startTime?: number;  // Timestamp when processing started
+  executionTime?: number; // Time taken in ms
+  usedModel?: string;     // Name of the model used
 };
 
 /**
@@ -368,10 +373,25 @@ type PosesNode = NodeBase & {
 };
 
 /**
+ * VIDEO node - Generates videos from images or text
+ * Supports image-to-video and text-to-video generation
+ */
+type VideoNode = NodeBase & {
+  type: "VIDEO";
+  input?: string;              // Source node ID (for image-to-video)
+  output?: string;             // Generated video URL
+  videoPrompt?: string;        // Text prompt describing the motion/action
+  duration?: number;           // Video duration in seconds (2-8)
+  videoModel?: string;         // Selected video model (Wan2.1-I2V or Wan2.1-T2V or Kling)
+  isRunning?: boolean;         // Processing state
+  error?: string | null;       // Error message
+};
+
+/**
  * Union type of all possible node types
  * Used for type-safe handling of nodes throughout the application
  */
-type AnyNode = CharacterNode | MergeNode | BackgroundNode | ClothesNode | StyleNode | EditNode | CameraNode | AgeNode | FaceNode | BlendNode | LightningNode | PosesNode;
+type AnyNode = CharacterNode | MergeNode | BackgroundNode | ClothesNode | StyleNode | EditNode | CameraNode | AgeNode | FaceNode | BlendNode | LightningNode | PosesNode | VideoNode;
 
 /* ========================================
    CONSTANTS AND UTILITY FUNCTIONS
@@ -722,6 +742,22 @@ function MergeNodeView({
     onUpdatePosition
   );
 
+  // Timer state
+  const [elapsed, setElapsed] = useState("0.0");
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (node.isRunning && node.startTime) {
+      interval = setInterval(() => {
+        const seconds = (Date.now() - node.startTime!) / 1000;
+        setElapsed(seconds.toFixed(1));
+      }, 100);
+    } else {
+      setElapsed("0.0");
+    }
+    return () => clearInterval(interval);
+  }, [node.isRunning, node.startTime]);
+
 
   return (
     <div className="nb-node absolute w-[420px]" style={{ left: pos.x, top: pos.y }}>
@@ -873,7 +909,23 @@ function MergeNodeView({
             <div className="text-xs text-white/70">Output</div>
           </div>
           <div className="w-full min-h-[200px] max-h-[400px] rounded-xl bg-black/40 grid place-items-center">
-            {node.output ? (
+            {node.isRunning ? (
+              <div className="flex flex-col items-center gap-2 p-4 w-full h-full justify-center animate-pulse">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground w-full justify-between">
+                  <span className="flex items-center gap-2">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+                    </span>
+                    Merging...
+                  </span>
+                  <span className="font-mono">{elapsed}s</span>
+                </div>
+                <div className="w-full h-32 rounded-xl bg-gradient-to-r from-muted/50 via-muted to-muted/50 bg-[length:200%_100%] animate-shimmer flex items-center justify-center border border-border/50">
+                  <span className="text-4xl opacity-20">🔄</span>
+                </div>
+              </div>
+            ) : node.output ? (
               <img
                 src={node.output}
                 className="w-full h-auto max-h-[400px] object-contain rounded-xl cursor-pointer hover:opacity-80 transition-opacity"
@@ -983,6 +1035,10 @@ export default function EditorPage() {
     scaleRef.current = scale;
   }, [scale]);
 
+
+  // HF User Info
+  const [hfUserInfo, setHfUserInfo] = useState<{ name?: string; picture?: string; username?: string } | null>(null);
+
   // HF OAUTH CHECK
   useEffect(() => {
     (async () => {
@@ -994,16 +1050,28 @@ export default function EditorPage() {
           // Store the token server-side
           await fetch('/api/auth/callback', {
             method: 'POST',
-            body: JSON.stringify({ hf_token: oauth.accessToken }),
+            body: JSON.stringify({
+              hf_token: oauth.accessToken,
+              user_info: oauth.userInfo
+            }),
             headers: { 'Content-Type': 'application/json' }
           });
           setIsHfProLoggedIn(true);
+          // Store user info
+          setHfUserInfo({
+            name: oauth.userInfo.name,
+            picture: oauth.userInfo.picture,
+            username: oauth.userInfo.preferred_username
+          });
         } else {
           // Check if already logged in
           const response = await fetch('/api/auth/callback', { method: 'GET' });
           if (response.ok) {
             const data = await response.json();
             setIsHfProLoggedIn(data.isLoggedIn);
+            if (data.userInfo) {
+              setHfUserInfo(data.userInfo);
+            }
           }
         }
       } catch (error) {
@@ -1035,7 +1103,8 @@ export default function EditorPage() {
 
       window.location.href = await oauthLoginUrl({
         clientId,
-        redirectUrl: `${window.location.origin}/api/auth/callback`
+        redirectUrl: `${window.location.origin}/`,
+        scopes: "inference-api"
       });
     }
   };
@@ -1050,28 +1119,26 @@ export default function EditorPage() {
 
   // Processing Mode: 'nanobananapro' uses Gemini API, 'huggingface' uses HF models
   type ProcessingMode = 'nanobananapro' | 'huggingface';
-  const [processingMode, setProcessingMode] = useState<ProcessingMode>('nanobananapro');
+  const [processingMode, setProcessingMode] = useState<ProcessingMode>('huggingface');
 
   // Available HF models
   const HF_MODELS = {
+    // Image-to-Image
     "FLUX.1-Kontext-dev": {
       id: "black-forest-labs/FLUX.1-Kontext-dev",
       name: "FLUX.1 Kontext",
       type: "image-to-image",
       description: "Advanced image editing with context understanding",
+      hidden: false,
     },
     "Qwen-Image-Edit": {
       id: "Qwen/Qwen-Image-Edit",
       name: "Qwen Image Edit",
       type: "image-to-image",
       description: "Powerful image editing and manipulation",
+      hidden: false,
     },
-    "FLUX.1-dev": {
-      id: "black-forest-labs/FLUX.1-dev",
-      name: "FLUX.1 Dev",
-      type: "text-to-image",
-      description: "High-quality text-to-image generation",
-    },
+    // Text-to-Image
   };
 
   const [selectedHfModel, setSelectedHfModel] = useState<keyof typeof HF_MODELS>("FLUX.1-Kontext-dev");
@@ -1254,9 +1321,14 @@ export default function EditorPage() {
         }
         break;
       case "CLOTHES":
-        if ((node as ClothesNode).clothesImage) {
-          config.clothesImage = (node as ClothesNode).clothesImage;
-          config.selectedPreset = (node as ClothesNode).selectedPreset;
+        const clothesNode = node as ClothesNode;
+        if (clothesNode.clothesImage) {
+          config.clothesImage = clothesNode.clothesImage;
+          config.selectedPreset = clothesNode.selectedPreset;
+        }
+        // For HuggingFace text-based mode
+        if ((clothesNode as any).clothesDescription) {
+          config.clothesDescription = (clothesNode as any).clothesDescription;
         }
         break;
       case "STYLE":
@@ -1321,6 +1393,14 @@ export default function EditorPage() {
         if ((node as PosesNode).posePrompt && (node as PosesNode).selectedPose) {
           config.posePrompt = (node as PosesNode).posePrompt;
           config.selectedPose = (node as PosesNode).selectedPose;
+        }
+        break;
+      case "VIDEO":
+        const videoNode = node as VideoNode;
+        if (videoNode.videoPrompt) {
+          config.videoPrompt = videoNode.videoPrompt;
+          config.duration = videoNode.duration || 4;
+          config.videoModel = videoNode.videoModel;
         }
         break;
     }
@@ -1508,7 +1588,7 @@ export default function EditorPage() {
     // Set loading state for all nodes being processed
     setNodes(prev => prev.map(n => {
       if (n.id === nodeId || processedNodes.includes(n.id)) {
-        return { ...n, isRunning: true, error: null };
+        return { ...n, isRunning: true, startTime: Date.now(), error: null };
       }
       return n;
     }));
@@ -1536,6 +1616,14 @@ export default function EditorPage() {
 
       // Log request details for debugging
 
+      // Convert local paths to absolute URLs for HF processing
+      let processImage = inputImage;
+      if (inputImage.startsWith('/') && !inputImage.startsWith('//')) {
+        // Local path - convert to absolute URL
+        processImage = `${window.location.origin}${inputImage}`;
+        console.log('Converted local path to URL:', processImage);
+      }
+
       // Conditionally use HuggingFace or Gemini API based on processing mode
       let res: Response;
 
@@ -1545,13 +1633,19 @@ export default function EditorPage() {
           throw new Error("Please login with HuggingFace to use HF models. Click 'Login with HuggingFace' in the header.");
         }
 
+        // For VIDEO nodes, determine the right model based on whether there's input
+        let modelToUse = selectedHfModel;
+        if (node.type === "VIDEO") {
+          throw new Error("Video generation is currently disabled.");
+        }
+
         res = await fetch("/api/hf-process", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             type: "COMBINED",
-            model: selectedHfModel,
-            image: inputImage,
+            model: modelToUse,
+            image: processImage,
             params
           }),
         });
@@ -1591,11 +1685,26 @@ export default function EditorPage() {
       setNodes(prev => prev.map(n => {
         if (n.id === nodeId) {
           // Only the current node gets the final output displayed
-          return { ...n, output: data.image, isRunning: false, error: null };
+          // Handle both image and video responses
+          const output = data.image || data.video;
+          const executionTime = n.startTime ? Date.now() - n.startTime : undefined;
+          // Determine model name
+          let usedModel = processingMode === 'nanobananapro' ? 'Gemini 1.5 Pro' : (selectedHfModel as string);
+          if (n.type === "VIDEO" && (n as any).videoModel) usedModel = (n as any).videoModel;
+
+          return {
+            ...n,
+            output: output,
+            isRunning: false,
+            startTime: undefined,
+            error: null,
+            executionTime,
+            usedModel
+          };
         } else if (processedNodes.includes(n.id)) {
           // Mark intermediate nodes as no longer running but don't give them output
           // This way they remain unprocessed visually but their configs were used
-          return { ...n, isRunning: false, error: null };
+          return { ...n, isRunning: false, startTime: undefined, error: null };
         }
         return n;
       }));
@@ -1613,7 +1722,7 @@ export default function EditorPage() {
       // Clear loading state for all nodes
       setNodes(prev => prev.map(n => {
         if (n.id === nodeId || processedNodes.includes(n.id)) {
-          return { ...n, isRunning: false, error: e?.message || "Error" };
+          return { ...n, isRunning: false, startTime: undefined, error: e?.message || "Error" };
         }
         return n;
       }));
@@ -1771,13 +1880,16 @@ export default function EditorPage() {
   };
 
   const runMerge = async (mergeId: string) => {
-    // Check if using HuggingFace mode - MERGE is not supported
+    // Check if using HuggingFace mode - only FLUX.2-dev supports MERGE
     if (processingMode === 'huggingface') {
-      setNodes((prev) => prev.map((n) => (n.id === mergeId && n.type === "MERGE" ? {
-        ...n,
-        error: "MERGE requires Nano Banana Pro mode. HuggingFace models only accept single images. Please switch to '🍌 Nano Banana Pro' in the header and enter your Gemini API key."
-      } : n)));
-      return;
+      const currentModel = HF_MODELS[selectedHfModel];
+      if (!(currentModel as any).supportsMultiImage) {
+        setNodes((prev) => prev.map((n) => (n.id === mergeId && n.type === "MERGE" ? {
+          ...n,
+          error: `MERGE requires a multi-image model. Please select FLUX.2-dev or switch to Nano Banana Pro mode.`
+        } : n)));
+        return;
+      }
     }
 
     setNodes((prev) => prev.map((n) => (n.id === mergeId && n.type === "MERGE" ? { ...n, isRunning: true, error: null } : n)));
@@ -1823,34 +1935,36 @@ export default function EditorPage() {
       const prompt = generateMergePrompt(inputData);
       const imgs = inputData.map(d => d.image);
 
-      // ORIGINAL RUNMERGE LOGIC RESTORED (HF processing commented out)
-      /*
-      if (!isHfProLoggedIn) {
-        throw new Error("Please login with HF Pro to use fal.ai processing");
+      let res: Response;
+
+      // Route to appropriate API based on processing mode
+      if (processingMode === 'huggingface' && (HF_MODELS[selectedHfModel] as any).supportsMultiImage) {
+        // Use HuggingFace API for MERGE with FLUX.2-dev
+        res = await fetch("/api/hf-process", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: "MERGE",
+            model: selectedHfModel,
+            params: {
+              images: imgs,
+              prompt
+            }
+          }),
+        });
+      } else {
+        // Use the Gemini process route with MERGE type
+        res = await fetch("/api/process", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: "MERGE",
+            images: imgs,
+            prompt,
+            apiToken: apiToken || undefined
+          }),
+        });
       }
-
-      const res = await fetch("/api/hf-process", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          type: "MERGE",
-          images: imgs, 
-          prompt
-        }),
-      });
-      */
-
-      // Use the process route with MERGE type
-      const res = await fetch("/api/process", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: "MERGE",
-          images: imgs,
-          prompt,
-          apiToken: apiToken || undefined
-        }),
-      });
 
       // Check if response is actually JSON before parsing
       const contentType = res.headers.get("content-type");
@@ -2105,6 +2219,9 @@ export default function EditorPage() {
       case "POSES":
         setNodes(prev => [...prev, { ...commonProps, type: "POSES", poseStrength: 60 } as PosesNode]);
         break;
+      case "VIDEO":
+        setNodes(prev => [...prev, { ...commonProps, type: "VIDEO", duration: 4 } as VideoNode]);
+        break;
     }
     setMenuOpen(false);
   };
@@ -2117,11 +2234,12 @@ export default function EditorPage() {
         </h1>
         <div className="flex items-center gap-3">
           {/* Processing Mode Toggle */}
-          <div className="flex items-center gap-2 p-1 bg-muted/50 rounded-lg">
+          {/* Processing Mode Toggle */}
+          <div className="flex items-center p-1 bg-muted rounded-lg">
             <button
-              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${processingMode === 'nanobananapro'
-                ? 'bg-primary text-primary-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-200 ${processingMode === 'nanobananapro'
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
                 }`}
               onClick={() => setProcessingMode('nanobananapro')}
               title="Use Google Gemini API - supports all features including MERGE"
@@ -2129,9 +2247,9 @@ export default function EditorPage() {
               🍌 Nano Banana Pro
             </button>
             <button
-              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${processingMode === 'huggingface'
-                ? 'bg-primary text-primary-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-200 ${processingMode === 'huggingface'
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
                 }`}
               onClick={() => setProcessingMode('huggingface')}
               title="Use HuggingFace models - requires HF login"
@@ -2159,16 +2277,41 @@ export default function EditorPage() {
           ) : (
             <>
               <div className="h-6 w-px bg-border" />
-              {/* HF Login Button */}
-              <Button
-                variant={isHfProLoggedIn ? "outline" : "default"}
-                size="sm"
-                className="h-8"
-                onClick={handleHfProLogin}
-                disabled={isCheckingAuth}
-              >
-                {isCheckingAuth ? "Checking..." : isHfProLoggedIn ? "✓ HF Connected" : "Login with HuggingFace"}
-              </Button>
+              {/* HF Login Button or Profile */}
+              {isHfProLoggedIn ? (
+                <div className="flex items-center gap-2">
+                  {/* User Profile */}
+                  {hfUserInfo?.picture && (
+                    <img
+                      src={hfUserInfo.picture}
+                      alt="Profile"
+                      className="w-7 h-7 rounded-full border border-border"
+                    />
+                  )}
+                  <span className="text-sm font-medium text-foreground">
+                    {hfUserInfo?.name || hfUserInfo?.username || 'Connected'}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
+                    onClick={handleHfProLogin}
+                    title="Disconnect from HuggingFace"
+                  >
+                    Logout
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="h-8"
+                  onClick={handleHfProLogin}
+                  disabled={isCheckingAuth}
+                >
+                  {isCheckingAuth ? "Checking..." : "Login with HuggingFace"}
+                </Button>
+              )}
 
               {/* Model Selector - only show when logged in */}
               {isHfProLoggedIn && (
@@ -2182,11 +2325,13 @@ export default function EditorPage() {
                     onChange={(e) => setSelectedHfModel(e.target.value as keyof typeof HF_MODELS)}
                     className="h-8 px-2 text-sm bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
                   >
-                    {Object.entries(HF_MODELS).map(([key, model]) => (
-                      <option key={key} value={key}>
-                        {model.name} ({model.type})
-                      </option>
-                    ))}
+                    {Object.entries(HF_MODELS)
+                      .filter(([_, model]) => !(model as any).hidden)
+                      .map(([key, model]) => (
+                        <option key={key} value={key}>
+                          {model.name} ({model.type})
+                        </option>
+                      ))}
                   </select>
                 </>
               )}
@@ -2247,11 +2392,14 @@ export default function EditorPage() {
                   </div>
                 </div>
 
-                {/* MERGE Warning */}
-                <div className="p-4 bg-destructive/10 border border-destructive/30 rounded-lg">
-                  <h4 className="font-semibold text-destructive mb-2">⚠️ MERGE Node Limitation</h4>
+                {/* MERGE Info */}
+                {/* MERGE Node Support */}
+                <div className="p-4 bg-primary/10 border border-primary/30 rounded-lg">
+                  <h4 className="font-semibold text-primary mb-2">✅ MERGE Node Support</h4>
                   <p className="text-sm text-muted-foreground">
-                    The <strong>MERGE</strong> node requires <strong>Nano Banana Pro</strong> because it combines multiple images into one cohesive group photo. HuggingFace models only accept single images, so MERGE won't work in HuggingFace mode.
+                    The <strong>MERGE</strong> node combines multiple images into one cohesive group photo.
+                    For best results, use <strong>Nano Banana Pro</strong> (Gemini API) which supports complex multi-person composition.
+                    HuggingFace models (FLUX.1 Kontext) are optimized for single-image editing.
                   </p>
                 </div>
 
@@ -2261,15 +2409,11 @@ export default function EditorPage() {
                   <div className="text-sm text-muted-foreground space-y-2">
                     <div className="p-2 bg-muted/50 rounded">
                       <p className="font-medium">FLUX.1 Kontext</p>
-                      <p className="text-xs">Image editing with context understanding</p>
+                      <p className="text-xs">Advanced image editing with context understanding</p>
                     </div>
                     <div className="p-2 bg-muted/50 rounded">
                       <p className="font-medium">Qwen Image Edit</p>
                       <p className="text-xs">Powerful image editing and manipulation</p>
-                    </div>
-                    <div className="p-2 bg-muted/50 rounded">
-                      <p className="font-medium">FLUX.1 Dev</p>
-                      <p className="text-xs">Text-to-image generation (for CHARACTER nodes)</p>
                     </div>
                   </div>
                 </div>
@@ -2425,6 +2569,7 @@ export default function EditorPage() {
                       onEndConnection={handleEndSingleConnection}
                       onProcess={processNode}
                       onUpdatePosition={updateNodePosition}
+                      processingMode={processingMode}
                     />
                   );
                 case "STYLE":
@@ -2519,6 +2664,20 @@ export default function EditorPage() {
                       onUpdatePosition={updateNodePosition}
                     />
                   );
+                case "VIDEO":
+                  return (
+                    <VideoNodeView
+                      key={node.id}
+                      node={node as VideoNode}
+                      onDelete={deleteNode}
+                      onUpdate={updateNode}
+                      onStartConnection={handleStartConnection}
+                      onEndConnection={handleEndSingleConnection}
+                      onProcess={processNode}
+                      onUpdatePosition={updateNodePosition}
+                      processingMode={processingMode}
+                    />
+                  );
                 default:
                   return null;
               }
@@ -2548,6 +2707,7 @@ export default function EditorPage() {
               <button className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground rounded-lg transition-colors" onClick={() => addFromMenu("FACE")}>FACE</button>
               <button className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground rounded-lg transition-colors" onClick={() => addFromMenu("LIGHTNING")}>LIGHTNING</button>
               <button className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground rounded-lg transition-colors" onClick={() => addFromMenu("POSES")}>POSES</button>
+
             </div>
           </div>
         )}
