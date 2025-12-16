@@ -66,10 +66,10 @@ const uid = () => Math.random().toString(36).slice(2, 9);
  */
 function generateMergePrompt(characterData: { image: string; label: string }[]): string {
   const count = characterData.length;
-  
+
   // Create a summary of all images being processed
   const labels = characterData.map((d, i) => `Image ${i + 1} (${d.label})`).join(", ");
-  
+
   // Return comprehensive prompt with specific instructions for natural-looking merge
   return `MERGE TASK: Create a natural, cohesive group photo combining ALL subjects from ${count} provided images.
 
@@ -109,13 +109,13 @@ async function copyImageToClipboard(dataUrl: string) {
   try {
     const response = await fetch(dataUrl);
     const blob = await response.blob();
-    
+
     // Convert to PNG if not already PNG
     if (blob.type !== 'image/png') {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
       const img = new Image();
-      
+
       await new Promise((resolve) => {
         img.onload = () => {
           canvas.width = img.width;
@@ -125,11 +125,11 @@ async function copyImageToClipboard(dataUrl: string) {
         };
         img.src = dataUrl;
       });
-      
+
       const pngBlob = await new Promise<Blob>((resolve) => {
         canvas.toBlob((blob) => resolve(blob!), 'image/png');
       });
-      
+
       await navigator.clipboard.write([
         new ClipboardItem({ 'image/png': pngBlob })
       ]);
@@ -198,24 +198,24 @@ type BackgroundNode = NodeBase & {
   output?: string;                   // Processed image with new background
   backgroundType: "color" | "gradient" | "image" | "city" | "photostudio" | "upload" | "custom";  // Type of background to apply
   backgroundColor?: string;          // Hex color code for solid color backgrounds
-  
+
   // Gradient background properties
   gradientDirection?: string;        // Direction of gradient (to right, to bottom, radial, etc.)
   gradientStartColor?: string;       // Starting color of gradient
   gradientEndColor?: string;         // Ending color of gradient
-  
+
   backgroundImage?: string;          // URL/path for preset background images
-  
+
   // City scene properties
   citySceneType?: string;           // Type of city scene (busy_street, times_square, etc.)
   cityTimeOfDay?: string;           // Time of day for city scene
-  
+
   // Photo studio properties
   studioSetup?: string;             // Studio background setup type
   studioBackgroundColor?: string;   // Color for colored seamless background
   studioLighting?: string;          // Studio lighting setup
   faceCamera?: boolean;             // Whether to position character facing camera
-  
+
   customBackgroundImage?: string;    // User-uploaded background image data
   customPrompt?: string;            // AI prompt for generating custom backgrounds
   isRunning?: boolean;              // Processing state indicator
@@ -440,7 +440,7 @@ function screenToWorld(
 
 function useNodeDrag(
   nodeId: string,
-  scaleRef: React.MutableRefObject<number>, 
+  scaleRef: React.MutableRefObject<number>,
   initial: { x: number; y: number },
   onUpdatePosition: (id: string, x: number, y: number) => void
 ) {
@@ -449,11 +449,11 @@ function useNodeDrag(
   const start = useRef<{ sx: number; sy: number; ox: number; oy: number } | null>(
     null
   );
-  
+
   useEffect(() => {
     setLocalPos(initial);
   }, [initial.x, initial.y]);
-  
+
   const onPointerDown = (e: React.PointerEvent) => {
     e.stopPropagation();
     dragging.current = true;
@@ -477,13 +477,13 @@ function useNodeDrag(
   return { pos: localPos, onPointerDown, onPointerMove, onPointerUp };
 }
 
-function Port({ 
-  className, 
+function Port({
+  className,
   nodeId,
   isOutput,
   onStartConnection,
   onEndConnection
-}: { 
+}: {
   className?: string;
   nodeId?: string;
   isOutput?: boolean;
@@ -496,7 +496,7 @@ function Port({
       onStartConnection(nodeId);
     }
   };
-  
+
   const handlePointerUp = (e: React.PointerEvent) => {
     e.stopPropagation();
     if (!isOutput && nodeId && onEndConnection) {
@@ -505,8 +505,8 @@ function Port({
   };
 
   return (
-    <div 
-      className={cx("nb-port", className)} 
+    <div
+      className={cx("nb-port", className)}
       onPointerDown={handlePointerDown}
       onPointerUp={handlePointerUp}
       onPointerEnter={handlePointerUp}
@@ -533,7 +533,7 @@ function CharacterNodeView({
 }) {
   const { pos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(
     node.id,
-    scaleRef, 
+    scaleRef,
     { x: node.x, y: node.y },
     onUpdatePosition
   );
@@ -570,7 +570,7 @@ function CharacterNodeView({
 
   return (
     <div
-      className="nb-node absolute text-white w-[340px] select-none"
+      className="nb-node absolute w-[340px] select-none"
       style={{ left: pos.x, top: pos.y }}
       onDrop={onDrop}
       onDragOver={(e) => e.preventDefault()}
@@ -588,7 +588,7 @@ function CharacterNodeView({
           onChange={(e) => onChangeLabel(node.id, e.target.value)}
         />
         <div className="flex items-center gap-2">
-          <Button 
+          <Button
             variant="ghost" size="icon" className="text-destructive hover:bg-destructive/20 h-6 w-6"
             onClick={(e) => {
               e.stopPropagation();
@@ -603,8 +603,8 @@ function CharacterNodeView({
           >
             ×
           </Button>
-          <Port 
-            className="out" 
+          <Port
+            className="out"
             nodeId={node.id}
             isOutput={true}
             onStartConnection={onStartConnection}
@@ -612,7 +612,7 @@ function CharacterNodeView({
         </div>
       </div>
       <div className="p-3 space-y-3">
-        <div className="aspect-[4/5] w-full rounded-xl bg-black/40 grid place-items-center overflow-hidden">
+        <div className="aspect-[4/5] w-full rounded-xl bg-muted/30 grid place-items-center overflow-hidden border border-border/10">
           <img
             src={node.image}
             alt="character"
@@ -637,12 +637,12 @@ function CharacterNodeView({
                 await navigator.clipboard.write([
                   new ClipboardItem({ [blob.type]: blob })
                 ]);
-                
+
                 // Show visual feedback
                 const img = e.currentTarget;
                 const originalFilter = img.style.filter;
                 img.style.filter = "brightness(1.2)";
-                
+
                 setTimeout(() => {
                   img.style.filter = originalFilter;
                 }, 500);
@@ -654,7 +654,7 @@ function CharacterNodeView({
           />
         </div>
         <div className="flex gap-2">
-          <label className="text-xs bg-white/10 hover:bg-white/20 rounded px-3 py-1 cursor-pointer">
+          <label className="text-xs bg-secondary hover:bg-secondary/80 text-secondary-foreground transition-colors rounded px-3 py-1 cursor-pointer">
             Upload
             <input
               type="file"
@@ -668,20 +668,20 @@ function CharacterNodeView({
                   // Reset input safely
                   try {
                     e.currentTarget.value = "";
-                  } catch {}
+                  } catch { }
                 }
               }}
             />
           </label>
           <button
-            className="text-xs bg-white/10 hover:bg-white/20 rounded px-3 py-1"
+            className="text-xs bg-secondary hover:bg-secondary/80 text-secondary-foreground transition-colors rounded px-3 py-1"
             onClick={async () => {
               try {
                 const text = await navigator.clipboard.readText();
                 if (text && (text.startsWith("http") || text.startsWith("data:image"))) {
                   onChangeImage(node.id, text);
                 }
-              } catch {}
+              } catch { }
             }}
           >
             Paste URL
@@ -724,15 +724,15 @@ function MergeNodeView({
 
 
   return (
-    <div className="nb-node absolute text-white w-[420px]" style={{ left: pos.x, top: pos.y }}>
+    <div className="nb-node absolute w-[420px]" style={{ left: pos.x, top: pos.y }}>
       <div
         className="nb-header cursor-grab active:cursor-grabbing rounded-t-[14px] px-3 py-2 flex items-center justify-between"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
       >
-        <Port 
-          className="in" 
+        <Port
+          className="in"
           nodeId={node.id}
           isOutput={false}
           onEndConnection={onEndConnection}
@@ -756,8 +756,8 @@ function MergeNodeView({
           >
             ×
           </Button>
-          <Port 
-            className="out" 
+          <Port
+            className="out"
             nodeId={node.id}
             isOutput={true}
             onStartConnection={onStartConnection}
@@ -765,16 +765,16 @@ function MergeNodeView({
         </div>
       </div>
       <div className="p-3 space-y-3">
-        <div className="text-xs text-white/70">Inputs</div>
+        <div className="text-xs text-muted-foreground font-medium">Inputs</div>
         <div className="flex flex-wrap gap-2">
           {node.inputs.map((id) => {
             const inputNode = allNodes.find((n) => n.id === id);
             if (!inputNode) return null;
-            
+
             // Get image and label based on node type
             let image: string | null = null;
             let label = "";
-            
+
             if (inputNode.type === "CHARACTER") {
               image = (inputNode as CharacterNode).image;
               label = (inputNode as CharacterNode).label || "Character";
@@ -789,14 +789,14 @@ function MergeNodeView({
               // Node without output yet
               label = `${inputNode.type} (pending)`;
             }
-            
+
             return (
-              <div key={id} className="flex items-center gap-2 bg-white/10 rounded px-2 py-1">
+              <div key={id} className="flex items-center gap-2 bg-secondary/50 border border-border/50 text-secondary-foreground rounded px-2 py-1">
                 {image && (
-                  <div className="w-6 h-6 rounded overflow-hidden bg-black/20">
-                    <img 
-                      src={image} 
-                      className="w-full h-full object-contain cursor-pointer hover:opacity-80" 
+                  <div className="w-6 h-6 rounded overflow-hidden bg-muted">
+                    <img
+                      src={image}
+                      className="w-full h-full object-contain cursor-pointer hover:opacity-80"
                       alt="inp"
                       onClick={async () => {
                         try {
@@ -817,12 +817,12 @@ function MergeNodeView({
                           await navigator.clipboard.write([
                             new ClipboardItem({ [blob.type]: blob })
                           ]);
-                          
+
                           // Show visual feedback
                           const img = e.currentTarget;
                           const originalFilter = img.style.filter;
                           img.style.filter = "brightness(1.2)";
-                          
+
                           setTimeout(() => {
                             img.style.filter = originalFilter;
                           }, 300);
@@ -874,9 +874,9 @@ function MergeNodeView({
           </div>
           <div className="w-full min-h-[200px] max-h-[400px] rounded-xl bg-black/40 grid place-items-center">
             {node.output ? (
-              <img 
-                src={node.output} 
-                className="w-full h-auto max-h-[400px] object-contain rounded-xl cursor-pointer hover:opacity-80 transition-opacity" 
+              <img
+                src={node.output}
+                className="w-full h-auto max-h-[400px] object-contain rounded-xl cursor-pointer hover:opacity-80 transition-opacity"
                 alt="output"
                 onClick={async () => {
                   if (node.output) {
@@ -900,12 +900,12 @@ function MergeNodeView({
                       await navigator.clipboard.write([
                         new ClipboardItem({ [blob.type]: blob })
                       ]);
-                      
+
                       // Show visual feedback
                       const img = e.currentTarget;
                       const originalFilter = img.style.filter;
                       img.style.filter = "brightness(1.2)";
-                      
+
                       setTimeout(() => {
                         img.style.filter = originalFilter;
                       }, 500);
@@ -1032,7 +1032,7 @@ export default function EditorPage() {
         alert('OAuth client ID not configured. Please check environment variables.');
         return;
       }
-      
+
       window.location.href = await oauthLoginUrl({
         clientId,
         redirectUrl: `${window.location.origin}/api/auth/callback`
@@ -1042,12 +1042,41 @@ export default function EditorPage() {
 
   // Connection dragging state
   const [draggingFrom, setDraggingFrom] = useState<string | null>(null);
-  const [dragPos, setDragPos] = useState<{x: number, y: number} | null>(null);
-  
+  const [dragPos, setDragPos] = useState<{ x: number, y: number } | null>(null);
+
   // API Token state (restored for manual review)
   const [apiToken, setApiToken] = useState("");
   const [showHelpSidebar, setShowHelpSidebar] = useState(false);
-  
+
+  // Processing Mode: 'nanobananapro' uses Gemini API, 'huggingface' uses HF models
+  type ProcessingMode = 'nanobananapro' | 'huggingface';
+  const [processingMode, setProcessingMode] = useState<ProcessingMode>('nanobananapro');
+
+  // Available HF models
+  const HF_MODELS = {
+    "FLUX.1-Kontext-dev": {
+      id: "black-forest-labs/FLUX.1-Kontext-dev",
+      name: "FLUX.1 Kontext",
+      type: "image-to-image",
+      description: "Advanced image editing with context understanding",
+    },
+    "Qwen-Image-Edit": {
+      id: "Qwen/Qwen-Image-Edit",
+      name: "Qwen Image Edit",
+      type: "image-to-image",
+      description: "Powerful image editing and manipulation",
+    },
+    "FLUX.1-dev": {
+      id: "black-forest-labs/FLUX.1-dev",
+      name: "FLUX.1 Dev",
+      type: "text-to-image",
+      description: "High-quality text-to-image generation",
+    },
+  };
+
+  const [selectedHfModel, setSelectedHfModel] = useState<keyof typeof HF_MODELS>("FLUX.1-Kontext-dev");
+
+
   // HF PRO AUTHENTICATION
   const [isHfProLoggedIn, setIsHfProLoggedIn] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
@@ -1143,9 +1172,9 @@ export default function EditorPage() {
         // - MERGE nodes (can have output after merging)
         // - Any processing node (BACKGROUND, CLOTHES, BLEND, etc.)
         // - Even unprocessed nodes (for configuration chaining)
-        
+
         // All nodes can be connected for chaining
-        setNodes(prev => prev.map(n => 
+        setNodes(prev => prev.map(n =>
           n.id === nodeId ? { ...n, input: draggingFrom } : n
         ));
       }
@@ -1161,14 +1190,14 @@ export default function EditorPage() {
   const countPendingConfigurations = (startNodeId: string): number => {
     let count = 0;
     const visited = new Set<string>();
-    
+
     const traverse = (nodeId: string) => {
       if (visited.has(nodeId)) return;
       visited.add(nodeId);
-      
+
       const node = nodes.find(n => n.id === nodeId);
       if (!node) return;
-      
+
       // Check if this node has configuration but no output
       if (!(node as any).output && node.type !== "CHARACTER" && node.type !== "MERGE") {
         const config = getNodeConfiguration(node);
@@ -1176,22 +1205,22 @@ export default function EditorPage() {
           count++;
         }
       }
-      
+
       // Check upstream
       const upstreamId = (node as any).input;
       if (upstreamId) {
         traverse(upstreamId);
       }
     };
-    
+
     traverse(startNodeId);
     return count;
   };
-  
+
   // Helper to extract configuration from a node
   const getNodeConfiguration = (node: AnyNode): Record<string, unknown> => {
     const config: Record<string, unknown> = {};
-    
+
     switch (node.type) {
       case "BACKGROUND":
         if ((node as BackgroundNode).backgroundType) {
@@ -1201,20 +1230,20 @@ export default function EditorPage() {
           config.backgroundImage = bgNode.backgroundImage;
           config.customBackgroundImage = bgNode.customBackgroundImage;
           config.customPrompt = bgNode.customPrompt;
-          
+
           // Gradient properties
           if (bgNode.backgroundType === "gradient") {
             config.gradientDirection = bgNode.gradientDirection;
             config.gradientStartColor = bgNode.gradientStartColor;
             config.gradientEndColor = bgNode.gradientEndColor;
           }
-          
+
           // City scene properties
           if (bgNode.backgroundType === "city") {
             config.citySceneType = bgNode.citySceneType;
             config.cityTimeOfDay = bgNode.cityTimeOfDay;
           }
-          
+
           // Photo studio properties
           if (bgNode.backgroundType === "photostudio") {
             config.studioSetup = bgNode.studioSetup;
@@ -1295,7 +1324,7 @@ export default function EditorPage() {
         }
         break;
     }
-    
+
     return config;
   };
 
@@ -1312,34 +1341,34 @@ export default function EditorPage() {
     let accumulatedParams: any = {};
     const processedNodes: string[] = []; // Track which nodes' configs we're applying
     const inputId = (node as any).input;
-    
+
     if (inputId) {
       // Track unprocessed MERGE nodes that need to be executed
       const unprocessedMerges: MergeNode[] = [];
-      
+
       // Find the source image by traversing the chain backwards
       const findSourceImage = (currentNodeId: string, visited: Set<string> = new Set()): string | null => {
         if (visited.has(currentNodeId)) return null;
         visited.add(currentNodeId);
-        
+
         const currentNode = nodes.find(n => n.id === currentNodeId);
         if (!currentNode) return null;
-        
+
         // If this is a CHARACTER node, return its image
         if (currentNode.type === "CHARACTER") {
           return (currentNode as CharacterNode).image;
         }
-        
+
         // If this is a MERGE node with output, return its output
         if (currentNode.type === "MERGE" && (currentNode as MergeNode).output) {
           return (currentNode as MergeNode).output || null;
         }
-        
+
         // If any node has been processed, return its output
         if ((currentNode as any).output) {
           return (currentNode as any).output;
         }
-        
+
         // For MERGE nodes without output, we need to process them first
         if (currentNode.type === "MERGE") {
           const merge = currentNode as MergeNode;
@@ -1355,39 +1384,39 @@ export default function EditorPage() {
             if (inputImage) return inputImage;
           }
         }
-        
+
         // Otherwise, check upstream
         const upstreamId = (currentNode as any).input;
         if (upstreamId) {
           return findSourceImage(upstreamId, visited);
         }
-        
+
         return null;
       };
-      
+
       // Collect all configurations from unprocessed nodes in the chain
       const collectConfigurations = (currentNodeId: string, visited: Set<string> = new Set()): any => {
         if (visited.has(currentNodeId)) return {};
         visited.add(currentNodeId);
-        
+
         const currentNode = nodes.find(n => n.id === currentNodeId);
         if (!currentNode) return {};
-        
+
         let configs: any = {};
-        
+
         // First, collect from upstream nodes
         const upstreamId = (currentNode as any).input;
         if (upstreamId) {
           configs = collectConfigurations(upstreamId, visited);
         }
-        
+
         // Add this node's configuration only if:
         // 1. It's the current node being processed, OR
         // 2. It hasn't been processed yet (no output) AND it's not the current node
-        const shouldIncludeConfig = 
+        const shouldIncludeConfig =
           currentNodeId === nodeId || // Always include current node's config
           (!(currentNode as any).output && currentNodeId !== nodeId); // Include unprocessed intermediate nodes
-        
+
         if (shouldIncludeConfig) {
           const nodeConfig = getNodeConfiguration(currentNode);
           if (Object.keys(nodeConfig).length > 0) {
@@ -1398,66 +1427,66 @@ export default function EditorPage() {
             }
           }
         }
-        
+
         return configs;
       };
-      
+
       // Find the source image
       inputImage = findSourceImage(inputId);
-      
+
       // If we found unprocessed merges, we need to execute them first
       if (unprocessedMerges.length > 0 && !inputImage) {
-        
+
         // Process each merge node
         for (const merge of unprocessedMerges) {
           // Set loading state for the merge
-          setNodes(prev => prev.map(n => 
+          setNodes(prev => prev.map(n =>
             n.id === merge.id ? { ...n, isRunning: true, error: null } : n
           ));
-          
+
           try {
             const mergeOutput = await executeMerge(merge);
-            
+
             // Update the merge node with output
-            setNodes(prev => prev.map(n => 
+            setNodes(prev => prev.map(n =>
               n.id === merge.id ? { ...n, output: mergeOutput || undefined, isRunning: false, error: null } : n
             ));
-            
+
             // Track that we processed this merge as part of the chain
             processedNodes.push(merge.id);
-            
+
             // Now use this as our input image if it's the direct input
             if (inputId === merge.id) {
               inputImage = mergeOutput;
             }
           } catch (e: any) {
             console.error("Auto-merge error:", e);
-            setNodes(prev => prev.map(n => 
+            setNodes(prev => prev.map(n =>
               n.id === merge.id ? { ...n, isRunning: false, error: e?.message || "Merge failed" } : n
             ));
             // Abort the main processing if merge failed
-            setNodes(prev => prev.map(n => 
+            setNodes(prev => prev.map(n =>
               n.id === nodeId ? { ...n, error: "Failed to process upstream MERGE node", isRunning: false } : n
             ));
             return;
           }
         }
-        
+
         // After processing merges, try to find the source image again
         if (!inputImage) {
           inputImage = findSourceImage(inputId);
         }
       }
-      
+
       // Collect configurations from the chain
       accumulatedParams = collectConfigurations(inputId, new Set());
     }
 
     if (!inputImage) {
-      const errorMsg = inputId 
+      const errorMsg = inputId
         ? "No source image found in the chain. Connect to a CHARACTER node or processed node."
         : "No input connected. Connect an image source to this node.";
-      setNodes(prev => prev.map(n => 
+      setNodes(prev => prev.map(n =>
         n.id === nodeId ? { ...n, error: errorMsg, isRunning: false } : n
       ));
       return;
@@ -1466,11 +1495,11 @@ export default function EditorPage() {
     // Add current node's configuration
     const currentNodeConfig = getNodeConfiguration(node);
     const params = { ...accumulatedParams, ...currentNodeConfig };
-    
+
     // Count how many unprocessed nodes we're combining
-    const unprocessedNodeCount = Object.keys(params).length > 0 ? 
+    const unprocessedNodeCount = Object.keys(params).length > 0 ?
       (processedNodes.length + 1) : 1;
-    
+
     // Show info about batch processing
     if (unprocessedNodeCount > 1) {
     } else {
@@ -1489,7 +1518,7 @@ export default function EditorPage() {
       if (inputImage && inputImage.length > 10 * 1024 * 1024) { // 10MB limit warning
         console.warn("Large input image detected, size:", (inputImage.length / (1024 * 1024)).toFixed(2) + "MB");
       }
-      
+
       // Check if params contains custom images and validate them
       if (params.clothesImage) {
         // Validate it's a proper data URL
@@ -1497,49 +1526,48 @@ export default function EditorPage() {
           throw new Error("Invalid clothes image format. Please upload a valid image.");
         }
       }
-      
+
       if (params.customBackgroundImage) {
         // Validate it's a proper data URL
         if (!params.customBackgroundImage.startsWith('data:') && !params.customBackgroundImage.startsWith('http') && !params.customBackgroundImage.startsWith('/')) {
           throw new Error("Invalid background image format. Please upload a valid image.");
         }
       }
-      
-      // Log request details for debugging
-      
-      // ORIGINAL PROCESSING LOGIC RESTORED (HF processing commented out)
-      /*
-      // Only use HF + fal.ai processing
-      if (!isHfProLoggedIn) {
-        setNodes(prev => prev.map(n => 
-          n.id === nodeId ? { ...n, error: "Please login with HF Pro to use fal.ai processing", isRunning: false } : n
-        ));
-        return;
-      }
 
-      // Make a SINGLE API call with fal.ai processing
-      const res = await fetch("/api/hf-process", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: "COMBINED", 
-          image: inputImage, 
-          params
-        }),
-      });
-      */
-      
-      // Make a SINGLE API call with all accumulated parameters
-      const res = await fetch("/api/process", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: "COMBINED", // Indicate this is a combined processing
-          image: inputImage,
-          params,
-          apiToken: apiToken || undefined
-        }),
-      });
+      // Log request details for debugging
+
+      // Conditionally use HuggingFace or Gemini API based on processing mode
+      let res: Response;
+
+      if (processingMode === 'huggingface') {
+        // Use HuggingFace models
+        if (!isHfProLoggedIn) {
+          throw new Error("Please login with HuggingFace to use HF models. Click 'Login with HuggingFace' in the header.");
+        }
+
+        res = await fetch("/api/hf-process", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: "COMBINED",
+            model: selectedHfModel,
+            image: inputImage,
+            params
+          }),
+        });
+      } else {
+        // Use Nano Banana Pro (Gemini API)
+        res = await fetch("/api/process", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: "COMBINED",
+            image: inputImage,
+            params,
+            apiToken: apiToken || undefined
+          }),
+        });
+      }
 
       // Check if response is actually JSON before parsing
       const contentType = res.headers.get("content-type");
@@ -1552,8 +1580,8 @@ export default function EditorPage() {
       const data = await res.json();
       if (!res.ok) {
         // Handle both string and object error formats
-        const errorMessage = typeof data.error === 'string' 
-          ? data.error 
+        const errorMessage = typeof data.error === 'string'
+          ? data.error
           : data.error?.message || JSON.stringify(data.error) || "Processing failed";
         throw new Error(errorMessage);
       }
@@ -1573,11 +1601,11 @@ export default function EditorPage() {
       }));
 
       // Add to node's history
-      const description = unprocessedNodeCount > 1 
+      const description = unprocessedNodeCount > 1
         ? `Combined ${unprocessedNodeCount} transformations`
         : `${node.type} transformation`;
-      
-      
+
+
       if (unprocessedNodeCount > 1) {
       }
     } catch (e: any) {
@@ -1660,13 +1688,13 @@ export default function EditorPage() {
     // Get images from merge inputs - now accepts any node type
     const mergeImages: string[] = [];
     const inputData: { image: string; label: string }[] = [];
-    
+
     for (const inputId of merge.inputs) {
       const inputNode = nodes.find(n => n.id === inputId);
       if (inputNode) {
         let image: string | null = null;
         let label = "";
-        
+
         if (inputNode.type === "CHARACTER") {
           image = (inputNode as CharacterNode).image;
           label = (inputNode as CharacterNode).label || "";
@@ -1680,7 +1708,7 @@ export default function EditorPage() {
           image = mergeOutput !== undefined ? mergeOutput : null;
           label = "Merged Image";
         }
-        
+
         if (image) {
           // Validate image format
           if (!image.startsWith('data:') && !image.startsWith('http') && !image.startsWith('/')) {
@@ -1692,15 +1720,15 @@ export default function EditorPage() {
         }
       }
     }
-    
+
     if (mergeImages.length < 2) {
       throw new Error("Not enough valid inputs for merge. Need at least 2 images.");
     }
-    
+
     // Log merge details for debugging
-    
+
     const prompt = generateMergePrompt(inputData);
-    
+
     // ORIGINAL MERGE LOGIC RESTORED (HF processing commented out)
     /*
     const res = await fetch("/api/hf-process", {
@@ -1713,19 +1741,19 @@ export default function EditorPage() {
       }),
     });
     */
-    
+
     // Use the process route instead of merge route
     const res = await fetch("/api/process", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ 
+      body: JSON.stringify({
         type: "MERGE",
-        images: mergeImages, 
+        images: mergeImages,
         prompt,
         apiToken: apiToken || undefined
       }),
     });
-    
+
     // Check if response is actually JSON before parsing
     const contentType = res.headers.get("content-type");
     if (!contentType || !contentType.includes("application/json")) {
@@ -1733,31 +1761,40 @@ export default function EditorPage() {
       console.error("Non-JSON response received:", textResponse);
       throw new Error("Server returned an error page instead of JSON. Check your API key configuration.");
     }
-    
+
     const data = await res.json();
     if (!res.ok) {
       throw new Error(data.error || "Merge failed");
     }
-    
+
     return data.image || (data.images?.[0] as string) || null;
   };
-  
+
   const runMerge = async (mergeId: string) => {
+    // Check if using HuggingFace mode - MERGE is not supported
+    if (processingMode === 'huggingface') {
+      setNodes((prev) => prev.map((n) => (n.id === mergeId && n.type === "MERGE" ? {
+        ...n,
+        error: "MERGE requires Nano Banana Pro mode. HuggingFace models only accept single images. Please switch to '🍌 Nano Banana Pro' in the header and enter your Gemini API key."
+      } : n)));
+      return;
+    }
+
     setNodes((prev) => prev.map((n) => (n.id === mergeId && n.type === "MERGE" ? { ...n, isRunning: true, error: null } : n)));
     try {
       const merge = (nodes.find((n) => n.id === mergeId) as MergeNode) || null;
       if (!merge) return;
-      
+
       // Get input nodes with their labels - now accepts any node type
       const inputData = merge.inputs
         .map((id, index) => {
           const inputNode = nodes.find((n) => n.id === id);
           if (!inputNode) return null;
-          
+
           // Support CHARACTER nodes, processed nodes, and MERGE outputs
           let image: string | null = null;
           let label = "";
-          
+
           if (inputNode.type === "CHARACTER") {
             image = (inputNode as CharacterNode).image;
             label = (inputNode as CharacterNode).label || `CHARACTER ${index + 1}`;
@@ -1771,17 +1808,17 @@ export default function EditorPage() {
             image = mergeOutput !== undefined ? mergeOutput : null;
             label = `Merged Image ${index + 1}`;
           }
-          
+
           if (!image) return null;
-          
+
           return { image, label };
         })
         .filter(Boolean) as { image: string; label: string }[];
-      
+
       if (inputData.length < 2) throw new Error("Connect at least two nodes with images (CHARACTER nodes or processed nodes).");
-      
+
       // Debug: Log what we're sending
-      
+
       // Generate dynamic prompt based on number of inputs
       const prompt = generateMergePrompt(inputData);
       const imgs = inputData.map(d => d.image);
@@ -1807,14 +1844,14 @@ export default function EditorPage() {
       const res = await fetch("/api/process", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           type: "MERGE",
-          images: imgs, 
+          images: imgs,
           prompt,
           apiToken: apiToken || undefined
         }),
       });
-      
+
       // Check if response is actually JSON before parsing
       const contentType = res.headers.get("content-type");
       if (!contentType || !contentType.includes("application/json")) {
@@ -1822,7 +1859,7 @@ export default function EditorPage() {
         console.error("Non-JSON response received:", textResponse);
         throw new Error("Server returned an error page instead of JSON. Check your API key configuration.");
       }
-      
+
       const js = await res.json();
       if (!res.ok) {
         // Show more helpful error messages
@@ -1834,7 +1871,7 @@ export default function EditorPage() {
       }
       const out = js.image || (js.images?.[0] as string) || null;
       setNodes((prev) => prev.map((n) => (n.id === mergeId && n.type === "MERGE" ? { ...n, output: out, isRunning: false } : n)));
-      
+
       // Add merge result to node's history
       if (out) {
         const inputLabels = merge.inputs.map((id, index) => {
@@ -1844,7 +1881,7 @@ export default function EditorPage() {
           }
           return `${inputNode?.type || 'Node'} ${index + 1}`;
         });
-        
+
       }
     } catch (e: any) {
       console.error("Merge error:", e);
@@ -1861,11 +1898,11 @@ export default function EditorPage() {
       maxX = Math.max(maxX, node.x + 500);
       maxY = Math.max(maxY, node.y + 500);
     });
-    return { 
-      x: minX, 
-      y: minY, 
-      width: maxX - minX, 
-      height: maxY - minY 
+    return {
+      x: minX,
+      y: minY,
+      width: maxX - minX,
+      height: maxY - minY
     };
   }, [nodes]);
 
@@ -1887,9 +1924,9 @@ export default function EditorPage() {
       const width = widths[n.type] || 320;
       return { x: n.x + width - 10, y: n.y + 25 };
     };
-    
+
     const getNodeInputPort = (n: AnyNode) => ({ x: n.x + 10, y: n.y + 25 });
-    
+
     const createPath = (x1: number, y1: number, x2: number, y2: number) => {
       const dx = x2 - x1;
       const dy = y2 - y1;
@@ -1897,9 +1934,9 @@ export default function EditorPage() {
       const controlOffset = Math.min(200, Math.max(50, distance * 0.3));
       return `M ${x1} ${y1} C ${x1 + controlOffset} ${y1}, ${x2 - controlOffset} ${y2}, ${x2} ${y2}`;
     };
-    
+
     const paths: { path: string; active?: boolean; processing?: boolean }[] = [];
-    
+
     // Handle all connections
     for (const node of nodes) {
       if (node.type === "MERGE") {
@@ -1911,7 +1948,7 @@ export default function EditorPage() {
             const start = getNodeOutputPort(inputNode);
             const end = getNodeInputPort(node);
             const isProcessing = merge.isRunning; // Only animate to the currently processing merge node
-            paths.push({ 
+            paths.push({
               path: createPath(start.x, start.y, end.x, end.y),
               processing: isProcessing
             });
@@ -1925,26 +1962,26 @@ export default function EditorPage() {
           const start = getNodeOutputPort(inputNode);
           const end = getNodeInputPort(node);
           const isProcessing = (node as any).isRunning; // Only animate to the currently processing node
-          paths.push({ 
+          paths.push({
             path: createPath(start.x, start.y, end.x, end.y),
             processing: isProcessing
           });
         }
       }
     }
-    
+
     // Dragging path
     if (draggingFrom && dragPos) {
       const sourceNode = nodes.find(n => n.id === draggingFrom);
       if (sourceNode) {
         const start = getNodeOutputPort(sourceNode);
-        paths.push({ 
-          path: createPath(start.x, start.y, dragPos.x, dragPos.y), 
-          active: true 
+        paths.push({
+          path: createPath(start.x, start.y, dragPos.x, dragPos.y),
+          active: true
         });
       }
     }
-    
+
     return paths;
   }, [nodes, draggingFrom, dragPos]);
 
@@ -1997,29 +2034,29 @@ export default function EditorPage() {
     const rect = containerRef.current!.getBoundingClientRect();
     const world = screenToWorld(e.clientX, e.clientY, rect, tx, ty, scale);
     setMenuWorld(world);
-    
+
     // Menu dimensions
     const menuWidth = 224; // w-56 = 224px
     const menuHeight = 320; // Approximate height with max-h-[300px] + padding
-    
+
     // Calculate position relative to container
     let x = e.clientX - rect.left;
     let y = e.clientY - rect.top;
-    
+
     // Adjust if menu would go off right edge
     if (x + menuWidth > rect.width) {
       x = rect.width - menuWidth - 10;
     }
-    
+
     // Adjust if menu would go off bottom edge  
     if (y + menuHeight > rect.height) {
       y = rect.height - menuHeight - 10;
     }
-    
+
     // Ensure minimum margins from edges
     x = Math.max(10, x);
     y = Math.max(10, y);
-    
+
     setMenuPos({ x, y });
     setMenuOpen(true);
   };
@@ -2030,8 +2067,8 @@ export default function EditorPage() {
       x: menuWorld.x,
       y: menuWorld.y,
     };
-    
-    switch(kind) {
+
+    switch (kind) {
       case "CHARACTER":
         addCharacter(menuWorld);
         break;
@@ -2074,24 +2111,89 @@ export default function EditorPage() {
 
   return (
     <div className="min-h-[100svh] bg-background text-foreground">
-      <header className="flex items-center justify-between px-6 py-4 border-b border-border/60 bg-card/70 backdrop-blur">
+      <header className="flex items-center justify-between px-6 py-3 border-b border-border/60 bg-card/70 backdrop-blur">
         <h1 className="text-lg font-semibold tracking-wide">
           <span className="mr-2" aria-hidden>🍌</span>Nano Banana Editor
         </h1>
         <div className="flex items-center gap-3">
-          {/* ORIGINAL API TOKEN INPUT RESTORED */}
-          <label htmlFor="api-token" className="text-sm font-medium text-muted-foreground">
-            API Token:
-          </label>
-          <Input
-            id="api-token"
-            type="password"
-            placeholder="Enter your Google Gemini API token"
-            value={apiToken}
-            onChange={(e) => setApiToken(e.target.value)}
-            className="w-64"
-          />
-          
+          {/* Processing Mode Toggle */}
+          <div className="flex items-center gap-2 p-1 bg-muted/50 rounded-lg">
+            <button
+              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${processingMode === 'nanobananapro'
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+                }`}
+              onClick={() => setProcessingMode('nanobananapro')}
+              title="Use Google Gemini API - supports all features including MERGE"
+            >
+              🍌 Nano Banana Pro
+            </button>
+            <button
+              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${processingMode === 'huggingface'
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+                }`}
+              onClick={() => setProcessingMode('huggingface')}
+              title="Use HuggingFace models - requires HF login"
+            >
+              🤗 HuggingFace
+            </button>
+          </div>
+
+          {/* Conditional UI based on processing mode */}
+          {processingMode === 'nanobananapro' ? (
+            <>
+              <div className="h-6 w-px bg-border" />
+              <label htmlFor="api-token" className="text-sm font-medium text-muted-foreground">
+                Gemini API Key:
+              </label>
+              <Input
+                id="api-token"
+                type="password"
+                placeholder="Enter your Google Gemini API key"
+                value={apiToken}
+                onChange={(e) => setApiToken(e.target.value)}
+                className="w-56"
+              />
+            </>
+          ) : (
+            <>
+              <div className="h-6 w-px bg-border" />
+              {/* HF Login Button */}
+              <Button
+                variant={isHfProLoggedIn ? "outline" : "default"}
+                size="sm"
+                className="h-8"
+                onClick={handleHfProLogin}
+                disabled={isCheckingAuth}
+              >
+                {isCheckingAuth ? "Checking..." : isHfProLoggedIn ? "✓ HF Connected" : "Login with HuggingFace"}
+              </Button>
+
+              {/* Model Selector - only show when logged in */}
+              {isHfProLoggedIn && (
+                <>
+                  <label htmlFor="hf-model" className="text-sm font-medium text-muted-foreground">
+                    Model:
+                  </label>
+                  <select
+                    id="hf-model"
+                    value={selectedHfModel}
+                    onChange={(e) => setSelectedHfModel(e.target.value as keyof typeof HF_MODELS)}
+                    className="h-8 px-2 text-sm bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    {Object.entries(HF_MODELS).map(([key, model]) => (
+                      <option key={key} value={key}>
+                        {model.name} ({model.type})
+                      </option>
+                    ))}
+                  </select>
+                </>
+              )}
+            </>
+          )}
+
+          <div className="h-6 w-px bg-border" />
           <Button
             variant="outline"
             size="sm"
@@ -2101,8 +2203,6 @@ export default function EditorPage() {
           >
             Help
           </Button>
-          
-
         </div>
       </header>
 
@@ -2110,7 +2210,7 @@ export default function EditorPage() {
       {showHelpSidebar && (
         <>
           {/* Backdrop */}
-          <div 
+          <div
             className="fixed inset-0 bg-black/50 z-[9998]"
             onClick={() => setShowHelpSidebar(false)}
           />
@@ -2128,73 +2228,72 @@ export default function EditorPage() {
                   <span className="text-lg">×</span>
                 </Button>
               </div>
-              
+
               <div className="space-y-6">
-                {/* ORIGINAL HELP CONTENT RESTORED (HF help commented out) */}
-                {/*
+                {/* Processing Modes Explanation */}
                 <div>
-                  <h3 className="font-semibold mb-3 text-foreground">🤗 HF Pro Login</h3>
+                  <h3 className="font-semibold mb-3 text-foreground">⚙️ Processing Modes</h3>
                   <div className="text-sm text-muted-foreground space-y-3">
                     <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg">
-                      <p className="font-medium text-primary mb-2">Step 1: Login with Hugging Face</p>
-                      <p>Click "Login HF PRO" to authenticate with your Hugging Face account.</p>
+                      <p className="font-medium text-primary mb-2">🍌 Nano Banana Pro (Gemini API)</p>
+                      <p>Uses Google's Gemini API. <strong>Supports ALL nodes</strong> including MERGE for combining multiple images into group photos.</p>
+                      <p className="mt-1 text-xs">Requires a Google Gemini API key from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">AI Studio</a>.</p>
                     </div>
                     <div className="p-3 bg-secondary border border-border rounded-lg">
-                      <p className="font-medium text-secondary-foreground mb-2">Step 2: Access fal.ai Models</p>
-                      <p>Once logged in, you'll have access to fal.ai's Gemini 2.5 Flash Image models.</p>
-                    </div>
-                    <div className="p-3 bg-accent border border-border rounded-lg">
-                      <p className="font-medium text-accent-foreground mb-2">Step 3: Start Creating</p>
-                      <p>Use the powerful fal.ai models for image generation, merging, editing, and style transfers.</p>
+                      <p className="font-medium text-secondary-foreground mb-2">🤗 HuggingFace Models</p>
+                      <p>Uses HuggingFace inference API with models like FLUX.1-Kontext and Qwen-Image-Edit. Supports single-image editing nodes.</p>
+                      <p className="mt-1 text-xs">Requires HuggingFace login. Uses your HF inference credits.</p>
                     </div>
                   </div>
                 </div>
-                */}
-                
+
+                {/* MERGE Warning */}
+                <div className="p-4 bg-destructive/10 border border-destructive/30 rounded-lg">
+                  <h4 className="font-semibold text-destructive mb-2">⚠️ MERGE Node Limitation</h4>
+                  <p className="text-sm text-muted-foreground">
+                    The <strong>MERGE</strong> node requires <strong>Nano Banana Pro</strong> because it combines multiple images into one cohesive group photo. HuggingFace models only accept single images, so MERGE won't work in HuggingFace mode.
+                  </p>
+                </div>
+
+                {/* Available HF Models */}
                 <div>
-                  <h3 className="font-semibold mb-3 text-foreground">🔑 API Token Setup</h3>
-                  <div className="text-sm text-muted-foreground space-y-3">
-                    <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg">
-                      <p className="font-medium text-primary mb-2">Step 1: Get Your API Key</p>
-                      <p>Visit <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium">Google AI Studio</a> to create your free Gemini API key.</p>
+                  <h3 className="font-semibold mb-3 text-foreground">🤖 HuggingFace Models</h3>
+                  <div className="text-sm text-muted-foreground space-y-2">
+                    <div className="p-2 bg-muted/50 rounded">
+                      <p className="font-medium">FLUX.1 Kontext</p>
+                      <p className="text-xs">Image editing with context understanding</p>
                     </div>
-                    <div className="p-3 bg-secondary border border-border rounded-lg">
-                      <p className="font-medium text-secondary-foreground mb-2">Step 2: Add Your Token</p>
-                      <p>Paste your API key in the "API Token" field in the top navigation bar.</p>
+                    <div className="p-2 bg-muted/50 rounded">
+                      <p className="font-medium">Qwen Image Edit</p>
+                      <p className="text-xs">Powerful image editing and manipulation</p>
                     </div>
-                    <div className="p-3 bg-accent border border-border rounded-lg">
-                      <p className="font-medium text-accent-foreground mb-2">Step 3: Start Creating</p>
-                      <p>Your token enables all AI features: image generation, merging, editing, and style transfers.</p>
+                    <div className="p-2 bg-muted/50 rounded">
+                      <p className="font-medium">FLUX.1 Dev</p>
+                      <p className="text-xs">Text-to-image generation (for CHARACTER nodes)</p>
                     </div>
                   </div>
                 </div>
-                
+
+                {/* How to Use */}
                 <div>
-                   <h3 className="font-semibold mb-3 text-foreground">🎨 How to Use the Editor</h3>
-                   <div className="text-sm text-muted-foreground space-y-2">
-                     <p>• <strong>Adding Nodes:</strong> Right-click on the editor canvas and choose the node type you want, then drag and drop to position it</p>
-                     <p>• <strong>Character Nodes:</strong> Upload or drag images to create character nodes</p>
-                     <p>• <strong>Merge Nodes:</strong> Connect multiple characters to create group photos</p>
-                     <p>• <strong>Style Nodes:</strong> Apply artistic styles and filters</p>
-                     <p>• <strong>Background Nodes:</strong> Change or generate new backgrounds</p>
-                     <p>• <strong>Edit Nodes:</strong> Make specific modifications with text prompts</p>
-                   </div>
-                 </div>
-                
+                  <h3 className="font-semibold mb-3 text-foreground">🎨 How to Use the Editor</h3>
+                  <div className="text-sm text-muted-foreground space-y-2">
+                    <p>• <strong>Adding Nodes:</strong> Right-click on the canvas to add nodes</p>
+                    <p>• <strong>Character Nodes:</strong> Upload or drag images as starting points</p>
+                    <p>• <strong>Merge Nodes:</strong> Connect multiple characters (Nano Banana Pro only)</p>
+                    <p>• <strong>Editing Nodes:</strong> Background, Style, Face, Age, Camera, etc.</p>
+                    <p>• <strong>Connecting:</strong> Drag from output port to input port</p>
+                  </div>
+                </div>
+
+                {/* Privacy */}
                 <div className="p-4 bg-muted border border-border rounded-lg">
                   <h4 className="font-semibold text-foreground mb-2">🔒 Privacy & Security</h4>
                   <div className="text-sm text-muted-foreground space-y-1">
-                    {/* ORIGINAL PRIVACY INFO RESTORED (HF privacy info commented out) */}
-                    {/*
-                    <p>• Your HF token is stored securely in HTTP-only cookies</p>
-                    <p>• Authentication happens through Hugging Face OAuth</p>
-                    <p>• You can logout anytime to revoke access</p>
-                    <p>• Processing happens via fal.ai's secure infrastructure</p>
-                    */}
-                    <p>• Your API token is stored locally in your browser</p>
-                    <p>• Tokens are never sent to our servers</p>
-                    <p>• Keep your API key secure and don't share it</p>
-                    <p>• You can revoke keys anytime in Google AI Studio</p>
+                    <p>• Gemini API keys are stored locally in your browser</p>
+                    <p>• HuggingFace tokens are stored in secure HTTP-only cookies</p>
+                    <p>• All processing happens through official APIs</p>
+                    <p>• No data is stored on our servers</p>
                   </div>
                 </div>
               </div>
@@ -2229,17 +2328,17 @@ export default function EditorPage() {
       >
         <div
           className="absolute left-0 top-0 will-change-transform"
-          style={{ 
-            transform: `translate3d(${tx}px, ${ty}px, 0) scale(${scale})`, 
+          style={{
+            transform: `translate3d(${tx}px, ${ty}px, 0) scale(${scale})`,
             transformOrigin: "0 0",
             transformStyle: "preserve-3d",
             backfaceVisibility: "hidden"
           }}
         >
-          <svg 
-            className="absolute pointer-events-none z-0" 
-            style={{ 
-              left: `${svgBounds.x}px`, 
+          <svg
+            className="absolute pointer-events-none z-0"
+            style={{
+              left: `${svgBounds.x}px`,
               top: `${svgBounds.y}px`,
               width: `${svgBounds.width}px`,
               height: `${svgBounds.height}px`
@@ -2248,10 +2347,10 @@ export default function EditorPage() {
           >
             <defs>
               <filter id="glow">
-                <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                <feGaussianBlur stdDeviation="3" result="coloredBlur" />
                 <feMerge>
-                  <feMergeNode in="coloredBlur"/>
-                  <feMergeNode in="SourceGraphic"/>
+                  <feMergeNode in="coloredBlur" />
+                  <feMergeNode in="SourceGraphic" />
                 </feMerge>
               </filter>
             </defs>
@@ -2427,26 +2526,26 @@ export default function EditorPage() {
 
         {menuOpen && (
           <div
-            className="absolute z-50 rounded-xl border border-white/10 bg-[#111]/95 backdrop-blur p-1 w-56 shadow-2xl"
+            className="absolute z-50 rounded-xl border border-border bg-popover/95 backdrop-blur p-1 w-56 shadow-2xl text-popover-foreground"
             style={{ left: menuPos.x, top: menuPos.y }}
             onMouseLeave={() => setMenuOpen(false)}
           >
-            <div className="px-3 py-2 text-xs text-white/60">Add node</div>
-            <div 
+            <div className="px-3 py-2 text-xs text-muted-foreground">Add node</div>
+            <div
               className="max-h-[300px] overflow-y-auto scrollbar-thin pr-1"
               onWheel={(e) => e.stopPropagation()}
             >
-              <button className="w-full text-left px-3 py-2 text-sm hover:bg-white/10 rounded-lg" onClick={() => addFromMenu("CHARACTER")}>CHARACTER</button>
-              <button className="w-full text-left px-3 py-2 text-sm hover:bg-white/10 rounded-lg" onClick={() => addFromMenu("MERGE")}>MERGE</button>
-              <button className="w-full text-left px-3 py-2 text-sm hover:bg-white/10 rounded-lg" onClick={() => addFromMenu("BACKGROUND")}>BACKGROUND</button>
-              <button className="w-full text-left px-3 py-2 text-sm hover:bg-white/10 rounded-lg" onClick={() => addFromMenu("CLOTHES")}>CLOTHES</button>
-              <button className="w-full text-left px-3 py-2 text-sm hover:bg-white/10 rounded-lg" onClick={() => addFromMenu("STYLE")}>STYLE</button>
-              <button className="w-full text-left px-3 py-2 text-sm hover:bg-white/10 rounded-lg" onClick={() => addFromMenu("EDIT")}>EDIT</button>
-              <button className="w-full text-left px-3 py-2 text-sm hover:bg-white/10 rounded-lg" onClick={() => addFromMenu("CAMERA")}>CAMERA</button>
-              <button className="w-full text-left px-3 py-2 text-sm hover:bg-white/10 rounded-lg" onClick={() => addFromMenu("AGE")}>AGE</button>
-              <button className="w-full text-left px-3 py-2 text-sm hover:bg-white/10 rounded-lg" onClick={() => addFromMenu("FACE")}>FACE</button>
-              <button className="w-full text-left px-3 py-2 text-sm hover:bg-white/10 rounded-lg" onClick={() => addFromMenu("LIGHTNING")}>LIGHTNING</button>
-              <button className="w-full text-left px-3 py-2 text-sm hover:bg-white/10 rounded-lg" onClick={() => addFromMenu("POSES")}>POSES</button>
+              <button className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground rounded-lg transition-colors" onClick={() => addFromMenu("CHARACTER")}>CHARACTER</button>
+              <button className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground rounded-lg transition-colors" onClick={() => addFromMenu("MERGE")}>MERGE</button>
+              <button className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground rounded-lg transition-colors" onClick={() => addFromMenu("BACKGROUND")}>BACKGROUND</button>
+              <button className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground rounded-lg transition-colors" onClick={() => addFromMenu("CLOTHES")}>CLOTHES</button>
+              <button className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground rounded-lg transition-colors" onClick={() => addFromMenu("STYLE")}>STYLE</button>
+              <button className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground rounded-lg transition-colors" onClick={() => addFromMenu("EDIT")}>EDIT</button>
+              <button className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground rounded-lg transition-colors" onClick={() => addFromMenu("CAMERA")}>CAMERA</button>
+              <button className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground rounded-lg transition-colors" onClick={() => addFromMenu("AGE")}>AGE</button>
+              <button className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground rounded-lg transition-colors" onClick={() => addFromMenu("FACE")}>FACE</button>
+              <button className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground rounded-lg transition-colors" onClick={() => addFromMenu("LIGHTNING")}>LIGHTNING</button>
+              <button className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground rounded-lg transition-colors" onClick={() => addFromMenu("POSES")}>POSES</button>
             </div>
           </div>
         )}

@@ -162,11 +162,13 @@ body {
 
 /* Nano Banana Editor - node visuals */
 .nb-node {
-  background: hsl(var(--card) / 0.9);
-  border: 1px solid hsl(var(--border) / 0.6);
-  box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+  background: hsl(var(--card) / 0.85);
+  color: hsl(var(--card-foreground));
+  border: 1px solid hsl(var(--border));
+  box-shadow: 0 10px 30px -10px hsl(var(--shadow) / 0.2), 0 4px 12px -4px hsl(var(--shadow) / 0.1);
   border-radius: var(--radius);
-  backdrop-filter: blur(6px);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   /* Prevent blurring on zoom */
   image-rendering: -webkit-optimize-contrast;
   image-rendering: crisp-edges;
@@ -176,6 +178,12 @@ body {
   -moz-osx-font-smoothing: grayscale;
   backface-visibility: hidden;
   perspective: 1000px;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.nb-node:hover {
+  border-color: hsl(var(--ring) / 0.5);
+  box-shadow: 0 14px 40px -10px hsl(var(--shadow) / 0.3), 0 4px 12px -4px hsl(var(--shadow) / 0.2);
 }
 
 /* Prevent text selection on node elements except inputs */
@@ -189,54 +197,84 @@ body {
 .nb-node select {
   user-select: text;
   -webkit-user-select: text;
+  background: hsl(var(--background) / 0.5);
+  color: hsl(var(--foreground));
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 4px);
 }
+
+.nb-node input:focus,
+.nb-node textarea:focus,
+.nb-node select:focus {
+  outline: none;
+  border-color: hsl(var(--ring));
+  box-shadow: 0 0 0 2px hsl(var(--ring) / 0.2);
+}
+
 .nb-node .nb-header {
-  background: linear-gradient(to bottom, hsl(var(--muted) / 0.35), hsl(var(--muted) / 0.08));
+  background: hsl(var(--muted) / 0.5);
+  border-bottom: 1px solid hsl(var(--border) / 0.5);
+  color: hsl(var(--foreground));
 }
+
 .nb-port {
-  width: 20px;
-  height: 20px;
+  width: 16px;
+  height: 16px;
   border-radius: 9999px;
-  border: 3px solid rgba(255,255,255,0.6);
-  background: hsl(var(--popover));
+  border: 2px solid hsl(var(--background));
+  background: hsl(var(--muted-foreground));
   cursor: crosshair;
   transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
   position: relative;
   user-select: none;
   -webkit-user-select: none;
+  box-shadow: 0 0 0 1px hsl(var(--border));
 }
+
 .nb-port:hover {
-  transform: scale(1.25);
-  background: hsl(var(--accent));
-  box-shadow: 0 0 12px hsl(var(--ring) / 0.4);
-}
-.nb-port.out { 
-  border-color: hsl(var(--primary)); 
-}
-.nb-port.out:hover { 
+  transform: scale(1.4);
   background: hsl(var(--primary));
-  box-shadow: 0 0 16px hsl(var(--primary) / 0.6);
+  box-shadow: 0 0 0 4px hsl(var(--primary) / 0.2);
 }
-.nb-port.in { 
-  border-color: #34d399; 
+
+.nb-port.out {
+  background: hsl(var(--primary));
+  border-color: hsl(var(--background));
 }
-.nb-port.in:hover { 
-  background: #34d399;
-  box-shadow: 0 0 16px rgba(52,211,153,0.6);
+
+.nb-port.out:hover {
+  background: hsl(var(--primary));
+  box-shadow: 0 0 0 4px hsl(var(--primary) / 0.3);
+}
+
+.nb-port.in {
+  background: hsl(var(--secondary-foreground));
+  border-color: hsl(var(--background));
+}
+
+.nb-port.in:hover {
+  background: hsl(var(--secondary-foreground));
+  box-shadow: 0 0 0 4px hsl(var(--secondary-foreground) / 0.3);
 }
 
 .nb-line {
-  stroke: #7c7c7c;
+  stroke: hsl(var(--muted-foreground));
   stroke-width: 2.5;
+  transition: stroke 0.2s ease, stroke-width 0.2s ease;
 }
-.nb-line.active { stroke: #8b5cf6; }
+
+.nb-line.active {
+  stroke: hsl(var(--primary));
+  stroke-width: 3.5;
+  filter: drop-shadow(0 0 4px hsl(var(--primary) / 0.5));
+}
 
 /* Canvas grid */
 .nb-canvas {
   background-color: hsl(var(--background));
   background-image:
-    radial-gradient(circle at 1px 1px, hsl(var(--muted-foreground) / 0.18) 1px, transparent 0),
-    radial-gradient(circle at 1px 1px, hsl(var(--muted-foreground) / 0.09) 1px, transparent 0);
+    radial-gradient(circle at 1px 1px, hsl(var(--muted-foreground) / 0.2) 1px, transparent 0),
+    radial-gradient(circle at 1px 1px, hsl(var(--muted-foreground) / 0.1) 1px, transparent 0);
   background-size: 20px 20px, 100px 100px;
 }
 
@@ -247,7 +285,8 @@ body {
 }
 
 .nb-node img {
-  image-rendering: auto; /* Keep images smooth */
+  image-rendering: auto;
+  /* Keep images smooth */
   image-rendering: -webkit-optimize-contrast;
 }
 
@@ -261,7 +300,7 @@ body {
 }
 
 /* Force GPU acceleration for transforms */
-.nb-canvas > div {
+.nb-canvas>div {
   transform-style: preserve-3d;
   -webkit-transform-style: preserve-3d;
 }
