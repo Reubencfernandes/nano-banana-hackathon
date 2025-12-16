@@ -157,11 +157,21 @@ type NodeType = "CHARACTER" | "MERGE" | "BACKGROUND" | "CLOTHES" | "STYLE" | "ED
  * Base properties that all nodes share
  * Every node has an ID, type, and position in the editor world space
  */
+import { Loader2, Clock } from "lucide-react";
+
+// ... existing imports ...
+
+/**
+ * Base properties that all nodes share
+ * Every node has an ID, type, and position in the editor world space
+ */
 type NodeBase = {
   id: string;          // Unique identifier for the node
   type: NodeType;      // What kind of operation this node performs
   x: number;           // X position in world coordinates (not screen pixels)
   y: number;           // Y position in world coordinates (not screen pixels)
+  startTime?: number;  // Timestamp when processing started
+  executionTime?: number; // Total processing time in milliseconds
 };
 
 /**
@@ -514,6 +524,38 @@ function Port({
   );
 }
 
+/**
+ * Timer component that shows execution time
+ * Uses a green checkmark when finished or a spinner when running
+ */
+export function NodeTimer({ startTime, executionTime, isRunning }: { startTime?: number, executionTime?: number, isRunning?: boolean }) {
+  const [elapsed, setElapsed] = React.useState(0);
+
+  React.useEffect(() => {
+    if (!isRunning || !startTime) return;
+    const interval = setInterval(() => {
+      setElapsed(Date.now() - startTime);
+    }, 100);
+    return () => clearInterval(interval);
+  }, [isRunning, startTime]);
+
+  if (!startTime && !executionTime) return null;
+
+  const timeToShow = isRunning ? elapsed : (executionTime || 0);
+  const seconds = (timeToShow / 1000).toFixed(1);
+
+  return (
+    <div className="absolute top-2 right-2 flex items-center gap-1.5 bg-background/80 text-foreground text-[10px] px-2 py-1 rounded-md border shadow-sm z-50 backdrop-blur-sm">
+      {isRunning ? (
+        <Loader2 className="w-3 h-3 animate-spin text-banana-500" />
+      ) : (
+        <span className="text-green-500 font-bold">✓</span>
+      )}
+      <span className="font-mono">{seconds}s</span>
+    </div>
+  );
+}
+
 function CharacterNodeView({
   node,
   scaleRef,
@@ -731,6 +773,7 @@ function MergeNodeView({
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
       >
+        <NodeTimer startTime={node.startTime} executionTime={node.executionTime} isRunning={node.isRunning} />
         <Port
           className="in"
           nodeId={node.id}
@@ -1070,15 +1113,9 @@ export default function EditorPage() {
       type: "image-to-image",
       description: "Powerful image editing and manipulation",
     },
-    "FLUX.1-dev": {
-      id: "black-forest-labs/FLUX.1-dev",
-      name: "FLUX.1 Dev",
-      type: "text-to-image",
-      description: "High-quality text-to-image generation",
-    },
   };
 
-  const [selectedHfModel, setSelectedHfModel] = useState<keyof typeof HF_MODELS>("FLUX.1-Kontext-dev");
+  const [selectedHfModel, setSelectedHfModel] = useState<keyof typeof HF_MODELS>("Qwen-Image-Edit");
 
 
   // HF PRO AUTHENTICATION
@@ -1259,9 +1296,8 @@ export default function EditorPage() {
         }
         break;
       case "CLOTHES":
-        if ((node as ClothesNode).clothesImage) {
-          config.clothesImage = (node as ClothesNode).clothesImage;
-          config.selectedPreset = (node as ClothesNode).selectedPreset;
+        if ((node as ClothesNode).clothesPrompt) {
+          config.clothesPrompt = (node as ClothesNode).clothesPrompt;
         }
         break;
       case "STYLE":
@@ -1511,9 +1547,10 @@ export default function EditorPage() {
     }
 
     // Set loading state for all nodes being processed
+    const startTime = Date.now();
     setNodes(prev => prev.map(n => {
       if (n.id === nodeId || processedNodes.includes(n.id)) {
-        return { ...n, isRunning: true, error: null };
+        return { ...n, isRunning: true, error: null, startTime, executionTime: undefined };
       }
       return n;
     }));
@@ -1525,12 +1562,9 @@ export default function EditorPage() {
       }
 
       // Check if params contains custom images and validate them
-      if (params.clothesImage) {
-        // Validate it's a proper data URL
-        if (!params.clothesImage.startsWith('data:') && !params.clothesImage.startsWith('http') && !params.clothesImage.startsWith('/')) {
-          throw new Error("Invalid clothes image format. Please upload a valid image.");
-        }
-      }
+
+      // Removed clothesImage validation as we now use text prompts
+
 
       if (params.customBackgroundImage) {
         // Validate it's a proper data URL
@@ -1617,14 +1651,17 @@ export default function EditorPage() {
 
       // Only update the current node with the output
       // Don't show output in intermediate nodes - they were just used for configuration
+      const endTime = Date.now();
+      const executionTime = endTime - startTime;
+
       setNodes(prev => prev.map(n => {
         if (n.id === nodeId) {
           // Only the current node gets the final output displayed
-          return { ...n, output: data.image, isRunning: false, error: null };
+          return { ...n, output: data.image, isRunning: false, error: null, executionTime };
         } else if (processedNodes.includes(n.id)) {
           // Mark intermediate nodes as no longer running but don't give them output
           // This way they remain unprocessed visually but their configs were used
-          return { ...n, isRunning: false, error: null };
+          return { ...n, isRunning: false, error: null, executionTime };
         }
         return n;
       }));

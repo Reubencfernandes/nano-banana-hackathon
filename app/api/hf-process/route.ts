@@ -264,6 +264,11 @@ export async function POST(req: NextRequest) {
                 prompts.push(params.editPrompt);
             }
 
+            // Clothing modifications
+            if (params.clothesPrompt) {
+                prompts.push(`Change clothing to: ${params.clothesPrompt}`);
+            }
+
             // Age transformation
             if (params.targetAge) {
                 prompts.push(`Transform the person to look ${params.targetAge} years old.`);

@@ -61,6 +61,39 @@ import { Textarea } from "../components/ui/textarea";   // Multi-line text input
 import { Slider } from "../components/ui/slider";       // Range slider input component
 import { ColorPicker } from "../components/ui/color-picker"; // Color selection component
 import { Checkbox } from "../components/ui/checkbox";   // Checkbox input component
+import { Loader2 } from "lucide-react";               // Loading spinner icon
+
+/**
+ * Timer component that shows execution time
+ * Uses a green checkmark when finished or a spinner when running
+ */
+function NodeTimer({ startTime, executionTime, isRunning }: { startTime?: number, executionTime?: number, isRunning?: boolean }) {
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    if (!isRunning || !startTime) return;
+    const interval = setInterval(() => {
+      setElapsed(Date.now() - startTime);
+    }, 100);
+    return () => clearInterval(interval);
+  }, [isRunning, startTime]);
+
+  if (!startTime && !executionTime) return null;
+
+  const timeToShow = isRunning ? elapsed : (executionTime || 0);
+  const seconds = (timeToShow / 1000).toFixed(1);
+
+  return (
+    <div className="absolute top-2 right-2 flex items-center gap-1.5 bg-background/80 text-foreground text-[10px] px-2 py-1 rounded-md border shadow-sm z-50 backdrop-blur-sm">
+      {isRunning ? (
+        <Loader2 className="w-3 h-3 animate-spin text-banana-500" />
+      ) : (
+        <span className="text-green-500 font-bold">✓</span>
+      )}
+      <span className="font-mono">{seconds}s</span>
+    </div>
+  );
+}
 
 /**
  * Helper function to download processed images
@@ -496,6 +529,7 @@ export function BackgroundNodeView({
       onDragOver={(e) => e.preventDefault()}
       onPaste={handleImagePaste}
     >
+      <NodeTimer startTime={node.startTime} executionTime={node.executionTime} isRunning={node.isRunning} />
       <div
         className="nb-header px-3 py-2 flex items-center justify-between rounded-t-[14px] cursor-grab active:cursor-grabbing"
         onPointerDown={onPointerDown}
@@ -835,58 +869,12 @@ export function ClothesNodeView({ node, onDelete, onUpdate, onStartConnection, o
   // Handle node dragging functionality
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
 
-  /**
-   * Preset clothing options available for quick selection
-   * Each preset includes a display name and path to the reference image
-   */
-  const presetClothes = [
-    { name: "Sukajan", path: "/clothes/sukajan.png" },           // Japanese-style embroidered jacket
-    { name: "Blazer", path: "/clothes/blazzer.png" },            // Business blazer/jacket
-    { name: "Suit", path: "/clothes/suit.png" },                 // Formal business suit
-    { name: "Women's Outfit", path: "/clothes/womenoutfit.png" }, // Women's clothing ensemble
-  ];
-
-  const onDrop = async (e: React.DragEvent) => {
-    e.preventDefault();
-    const files = e.dataTransfer.files;
-    if (files && files.length) {
-      const reader = new FileReader();
-      reader.onload = () => onUpdate(node.id, { clothesImage: reader.result, selectedPreset: null });
-      reader.readAsDataURL(files[0]);
-    }
-  };
-
-  const onPaste = async (e: React.ClipboardEvent) => {
-    const items = e.clipboardData.items;
-    for (let i = 0; i < items.length; i++) {
-      if (items[i].type.startsWith("image/")) {
-        const file = items[i].getAsFile();
-        if (file) {
-          const reader = new FileReader();
-          reader.onload = () => onUpdate(node.id, { clothesImage: reader.result, selectedPreset: null });
-          reader.readAsDataURL(file);
-          return;
-        }
-      }
-    }
-    const text = e.clipboardData.getData("text");
-    if (text && (text.startsWith("http") || text.startsWith("data:image"))) {
-      onUpdate(node.id, { clothesImage: text, selectedPreset: null });
-    }
-  };
-
-  const selectPreset = (presetPath: string, presetName: string) => {
-    onUpdate(node.id, { clothesImage: presetPath, selectedPreset: presetName });
-  };
-
   return (
     <div
       className="nb-node absolute w-[320px]"
       style={{ left: localPos.x, top: localPos.y }}
-      onDrop={onDrop}
-      onDragOver={(e) => e.preventDefault()}
-      onPaste={onPaste}
     >
+      <NodeTimer startTime={node.startTime} executionTime={node.executionTime} isRunning={node.isRunning} />
       <div
         className="nb-header px-3 py-2 flex items-center justify-between rounded-t-[14px] cursor-grab active:cursor-grabbing"
         onPointerDown={onPointerDown}
@@ -930,67 +918,21 @@ export function ClothesNodeView({ node, onDelete, onUpdate, onStartConnection, o
             </Button>
           </div>
         )}
-        <div className="text-xs text-muted-foreground">Clothes Reference</div>
+        <div className="text-xs text-muted-foreground">Clothing Description</div>
 
-        {/* Preset clothes options */}
-        <div className="flex gap-2">
-          {presetClothes.map((preset) => (
-            <button
-              key={preset.name}
-              className={`flex-1 p-2 rounded border ${node.selectedPreset === preset.name
-                ? "border-primary bg-primary/20"
-                : "border-border hover:border-primary/50"
-                }`}
-              onClick={() => selectPreset(preset.path, preset.name)}
-            >
-              <img src={preset.path} alt={preset.name} className="w-full h-28 object-contain rounded mb-1" />
-              <div className="text-xs">{preset.name}</div>
-            </button>
-          ))}
-        </div>
-
-        <div className="text-xs text-muted-foreground/50 text-center">— or —</div>
-
-        {/* Custom image upload */}
-        {node.clothesImage && !node.selectedPreset ? (
-          <div className="relative">
-            <img src={node.clothesImage} className="w-full rounded" alt="Clothes" />
-            <Button
-              variant="destructive"
-              size="sm"
-              className="absolute top-2 right-2"
-              onClick={() => onUpdate(node.id, { clothesImage: null, selectedPreset: null })}
-            >
-              Remove
-            </Button>
-          </div>
-        ) : !node.selectedPreset ? (
-          <label className="block">
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => {
-                if (e.target.files?.length) {
-                  const reader = new FileReader();
-                  reader.onload = () => onUpdate(node.id, { clothesImage: reader.result, selectedPreset: null });
-                  reader.readAsDataURL(e.target.files[0]);
-                }
-              }}
-            />
-            <div className="border-2 border-dashed border-border rounded-lg p-6 text-center cursor-pointer hover:border-primary/50 transition-colors">
-              <div className="text-muted-foreground/40 text-lg mb-2">📁</div>
-              <p className="text-sm text-muted-foreground font-medium">Drop, upload, or paste clothes image</p>
-              <p className="text-xs text-muted-foreground/50 mt-1">JPG, PNG, WebP supported</p>
-            </div>
-          </label>
-        ) : null}
+        <Textarea
+          className="w-full"
+          placeholder="Describe the clothing (e.g. 'black leather jacket', 'floral summer dress', 'navy blue business suit')"
+          value={node.clothesPrompt || ""}
+          onChange={(e) => onUpdate(node.id, { clothesPrompt: e.target.value })}
+          rows={3}
+        />
 
         <Button
           className="w-full"
           onClick={() => onProcess(node.id)}
-          disabled={node.isRunning || !node.clothesImage}
-          title={!node.input ? "Connect an input first" : "Process all unprocessed nodes in chain"}
+          disabled={node.isRunning || !node.clothesPrompt}
+          title={!node.input ? "Connect an input first" : !node.clothesPrompt ? "Enter a clothing description" : "Apply Clothing"}
         >
           {node.isRunning ? "Processing..." : "Apply Clothes"}
         </Button>
@@ -1043,6 +985,7 @@ export function AgeNodeView({ node, onDelete, onUpdate, onStartConnection, onEnd
 
   return (
     <div className="nb-node absolute w-[280px]" style={{ left: localPos.x, top: localPos.y }}>
+      <NodeTimer startTime={node.startTime} executionTime={node.executionTime} isRunning={node.isRunning} />
       <div
         className="nb-header px-3 py-2 flex items-center justify-between rounded-t-[14px] cursor-grab active:cursor-grabbing"
         onPointerDown={onPointerDown}
@@ -1188,6 +1131,7 @@ export function CameraNodeView({ node, onDelete, onUpdate, onStartConnection, on
 
   return (
     <div className="nb-node absolute w-[360px]" style={{ left: localPos.x, top: localPos.y }}>
+      <NodeTimer startTime={node.startTime} executionTime={node.executionTime} isRunning={node.isRunning} />
       <div
         className="nb-header px-3 py-2 flex items-center justify-between rounded-t-[14px] cursor-grab active:cursor-grabbing"
         onPointerDown={onPointerDown}
@@ -1428,6 +1372,7 @@ export function FaceNodeView({ node, onDelete, onUpdate, onStartConnection, onEn
 
   return (
     <div className="nb-node absolute w-[340px]" style={{ left: localPos.x, top: localPos.y }}>
+      <NodeTimer startTime={node.startTime} executionTime={node.executionTime} isRunning={node.isRunning} />
       <div
         className="nb-header px-3 py-2 flex items-center justify-between rounded-t-[14px] cursor-grab active:cursor-grabbing"
         onPointerDown={onPointerDown}
@@ -1694,6 +1639,7 @@ export function StyleNodeView({ node, onDelete, onUpdate, onStartConnection, onE
       className="nb-node absolute w-[320px]"
       style={{ left: localPos.x, top: localPos.y }}
     >
+      <NodeTimer startTime={node.startTime} executionTime={node.executionTime} isRunning={node.isRunning} />
       <div
         className="nb-header px-3 py-2 flex items-center justify-between rounded-t-[14px] cursor-grab active:cursor-grabbing"
         onPointerDown={onPointerDown}
@@ -1866,6 +1812,7 @@ export function LightningNodeView({ node, onDelete, onUpdate, onStartConnection,
 
   return (
     <div className="nb-node absolute text-white w-[320px]" style={{ left: localPos.x, top: localPos.y }}>
+      <NodeTimer startTime={node.startTime} executionTime={node.executionTime} isRunning={node.isRunning} />
       <div
         className="nb-header px-3 py-2 flex items-center justify-between rounded-t-[14px] cursor-grab active:cursor-grabbing"
         onPointerDown={onPointerDown}
@@ -2034,6 +1981,7 @@ export function PosesNodeView({ node, onDelete, onUpdate, onStartConnection, onE
 
   return (
     <div className="nb-node absolute w-[320px]" style={{ left: localPos.x, top: localPos.y }}>
+      <NodeTimer startTime={node.startTime} executionTime={node.executionTime} isRunning={node.isRunning} />
       <div
         className="nb-header px-3 py-2 flex items-center justify-between rounded-t-[14px] cursor-grab active:cursor-grabbing"
         onPointerDown={onPointerDown}
@@ -2224,6 +2172,7 @@ export function EditNodeView({
 
   return (
     <div className="nb-node absolute w-[320px]" style={{ left: localPos.x, top: localPos.y }}>
+      <NodeTimer startTime={node.startTime} executionTime={node.executionTime} isRunning={node.isRunning} />
       {/* Node Header - Contains title, delete button, and connection ports */}
       <div
         className="nb-header px-3 py-2 flex items-center justify-between rounded-t-[14px] cursor-grab active:cursor-grabbing"
