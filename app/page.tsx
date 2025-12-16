@@ -946,8 +946,7 @@ function MergeNodeView({
                   <p>To fix this:</p>
                   <ol className="list-decimal list-inside space-y-1">
                     <li>Get key from: <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-blue-400 hover:underline">Google AI Studio</a></li>
-                    <li>Edit .env.local file in project root</li>
-                    <li>Replace placeholder with your key</li>
+                    <li>Replace APi key placeholder with your key</li>
                     <li>Restart server (Ctrl+C, npm run dev)</li>
                   </ol>
                 </div>
@@ -988,26 +987,17 @@ export default function EditorPage() {
     (async () => {
       setIsCheckingAuth(true);
       try {
-        // Handle OAuth redirect if present
-        const oauth = await oauthHandleRedirectIfPresent();
-        if (oauth) {
-          // Store the token server-side
-          await fetch('/api/auth/callback', {
-            method: 'POST',
-            body: JSON.stringify({ hf_token: oauth.accessToken }),
-            headers: { 'Content-Type': 'application/json' }
-          });
-          setIsHfProLoggedIn(true);
-        } else {
-          // Check if already logged in
-          const response = await fetch('/api/auth/callback', { method: 'GET' });
-          if (response.ok) {
-            const data = await response.json();
-            setIsHfProLoggedIn(data.isLoggedIn);
+        // Check if already logged in (callback handles token exchange)
+        const response = await fetch('/api/auth/callback', { method: 'GET' });
+        if (response.ok) {
+          const data = await response.json();
+          setIsHfProLoggedIn(data.isLoggedIn);
+          if (data.user) {
+            setHfUser(data.user);
           }
         }
       } catch (error) {
-        console.error('OAuth error:', error);
+        console.error('Auth check error:', error);
       } finally {
         setIsCheckingAuth(false);
       }
@@ -1021,22 +1011,36 @@ export default function EditorPage() {
       try {
         await fetch('/api/auth/callback', { method: 'DELETE' });
         setIsHfProLoggedIn(false);
+        setHfUser(null);
       } catch (error) {
         console.error('Logout error:', error);
       }
     } else {
       // Login with HF OAuth
-      const clientId = process.env.NEXT_PUBLIC_OAUTH_CLIENT_ID;
-      if (!clientId) {
-        console.error('OAuth client ID not configured');
-        alert('OAuth client ID not configured. Please check environment variables.');
-        return;
-      }
+      // Fetch OAuth login URL from server-side API (ensures correct redirect URL)
+      try {
+        const response = await fetch('/api/oauth-config');
+        const { isConfigured, loginUrl, redirectUrl } = await response.json();
 
-      window.location.href = await oauthLoginUrl({
-        clientId,
-        redirectUrl: `${window.location.origin}/api/auth/callback`
-      });
+        console.log('OAuth Config from API:', {
+          isConfigured,
+          loginUrl: loginUrl ? 'present' : 'missing',
+          redirectUrl
+        });
+
+        if (!isConfigured || !loginUrl) {
+          console.error('OAuth not configured on server. Check Space settings.');
+          alert('OAuth is not configured for this Space. Please ensure:\n1. hf_oauth: true is set in README.md\n2. Space has been rebuilt\n3. Check Space logs for OAuth configuration');
+          return;
+        }
+
+        // Use the server-generated login URL directly
+        // This ensures the redirect_uri uses the correct public Space URL
+        window.location.href = loginUrl;
+      } catch (error) {
+        console.error('Failed to get OAuth config:', error);
+        alert('Failed to initialize OAuth login. Please try again.');
+      }
     }
   };
 
@@ -1050,7 +1054,7 @@ export default function EditorPage() {
 
   // Processing Mode: 'nanobananapro' uses Gemini API, 'huggingface' uses HF models
   type ProcessingMode = 'nanobananapro' | 'huggingface';
-  const [processingMode, setProcessingMode] = useState<ProcessingMode>('nanobananapro');
+  const [processingMode, setProcessingMode] = useState<ProcessingMode>('huggingface');
 
   // Available HF models
   const HF_MODELS = {
@@ -1080,6 +1084,7 @@ export default function EditorPage() {
   // HF PRO AUTHENTICATION
   const [isHfProLoggedIn, setIsHfProLoggedIn] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [hfUser, setHfUser] = useState<{ name?: string; username?: string; avatarUrl?: string } | null>(null);
 
 
   const characters = nodes.filter((n) => n.type === "CHARACTER") as CharacterNode[];
@@ -1536,6 +1541,22 @@ export default function EditorPage() {
 
       // Log request details for debugging
 
+      // Ensure inputImage is a Data URL (convert Blob URL if needed)
+      // This fixes "invalid image url" errors when passing blob: URLs to server
+      if (inputImage && inputImage.startsWith('blob:')) {
+        try {
+          const blobRes = await fetch(inputImage);
+          const blob = await blobRes.blob();
+          inputImage = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(blob);
+          });
+        } catch (e) {
+          console.error("Failed to convert blob URL:", e);
+        }
+      }
+
       // Conditionally use HuggingFace or Gemini API based on processing mode
       let res: Response;
 
@@ -1544,6 +1565,14 @@ export default function EditorPage() {
         if (!isHfProLoggedIn) {
           throw new Error("Please login with HuggingFace to use HF models. Click 'Login with HuggingFace' in the header.");
         }
+
+        // Debug: Log what we're sending
+        console.log('[HF Debug] Sending to /api/hf-process:', {
+          hasImage: !!inputImage,
+          imageType: inputImage ? (inputImage.startsWith('data:') ? 'dataURL' : inputImage.startsWith('blob:') ? 'blobURL' : inputImage.startsWith('http') ? 'httpURL' : 'unknown') : 'null',
+          imagePreview: inputImage?.substring(0, 80),
+          model: selectedHfModel,
+        });
 
         res = await fetch("/api/hf-process", {
           method: "POST",
@@ -2159,16 +2188,37 @@ export default function EditorPage() {
           ) : (
             <>
               <div className="h-6 w-px bg-border" />
-              {/* HF Login Button */}
-              <Button
-                variant={isHfProLoggedIn ? "outline" : "default"}
-                size="sm"
-                className="h-8"
-                onClick={handleHfProLogin}
-                disabled={isCheckingAuth}
-              >
-                {isCheckingAuth ? "Checking..." : isHfProLoggedIn ? "✓ HF Connected" : "Login with HuggingFace"}
-              </Button>
+              {/* HF Login Button / User Info */}
+              {isHfProLoggedIn && hfUser ? (
+                <div className="flex items-center gap-2">
+                  {hfUser.avatarUrl && (
+                    <img
+                      src={hfUser.avatarUrl}
+                      alt={hfUser.name || 'User'}
+                      className="w-6 h-6 rounded-full"
+                    />
+                  )}
+                  <span className="text-sm font-medium">{hfUser.name || hfUser.username}</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2 text-xs"
+                    onClick={handleHfProLogin}
+                  >
+                    Logout
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="h-8"
+                  onClick={handleHfProLogin}
+                  disabled={isCheckingAuth}
+                >
+                  {isCheckingAuth ? "Checking..." : "Login with HuggingFace"}
+                </Button>
+              )}
 
               {/* Model Selector - only show when logged in */}
               {isHfProLoggedIn && (

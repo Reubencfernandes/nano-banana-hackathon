@@ -183,10 +183,33 @@ export async function POST(req: NextRequest) {
                 );
             }
 
-            const parsed = parseDataUrl(body.image);
+            // Handle different image formats
+            let parsed: { mimeType: string; data: string } | null = null;
+
+            // Try parsing as Data URL first
+            parsed = parseDataUrl(body.image);
+
+            // If not a data URL, check if it's an HTTP URL and fetch it
+            if (!parsed && (body.image.startsWith('http://') || body.image.startsWith('https://'))) {
+                try {
+                    console.log('[HF-API] Fetching image from URL:', body.image.substring(0, 100));
+                    const imageResponse = await fetch(body.image);
+                    if (!imageResponse.ok) {
+                        throw new Error(`Failed to fetch image: ${imageResponse.status}`);
+                    }
+                    const imageBuffer = await imageResponse.arrayBuffer();
+                    const contentType = imageResponse.headers.get('content-type') || 'image/png';
+                    const base64 = Buffer.from(imageBuffer).toString('base64');
+                    parsed = { mimeType: contentType, data: base64 };
+                } catch (fetchErr) {
+                    console.error('[HF-API] Failed to fetch image URL:', fetchErr);
+                }
+            }
+
             if (!parsed) {
+                console.error('[HF-API] Invalid image format. Image starts with:', body.image?.substring(0, 50));
                 return NextResponse.json(
-                    { error: "Invalid image format. Please use a valid image." },
+                    { error: "Invalid image format. Expected a data URL (data:image/...) or HTTP URL. Please re-upload or reconnect your image." },
                     { status: 400 }
                 );
             }
