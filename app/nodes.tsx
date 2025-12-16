@@ -84,7 +84,7 @@ export function NodeTimer({ startTime, executionTime, isRunning }: { startTime?:
   const seconds = (timeToShow / 1000).toFixed(1);
 
   return (
-    <div className="absolute top-2 right-2 flex items-center gap-1.5 bg-background/80 text-foreground text-[10px] px-2 py-1 rounded-md border shadow-sm z-50 backdrop-blur-sm">
+    <div className="absolute -top-9 right-2 flex items-center gap-1.5 bg-background/80 text-foreground text-[10px] px-2 py-1 rounded-md border shadow-sm z-50 backdrop-blur-sm">
       {isRunning ? (
         <Loader2 className="w-3 h-3 animate-spin text-banana-500" />
       ) : (
