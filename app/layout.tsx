@@ -13,8 +13,10 @@
  */
 
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";  // Modern Google Fonts
-import "./globals.css";  // Tailwind CSS and global styles
+import { Geist, Geist_Mono } from "next/font/google";
+import "./globals.css";
+import { ThemeProvider } from "@/components/theme-provider";
+import { ModeToggle } from "@/components/mode-toggle";
 
 /**
  * Configure Geist Sans font
@@ -60,11 +62,19 @@ export default function RootLayout({
   children: React.ReactNode;  // Type-safe children prop
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground font-sans`}
       >
-        {children}
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          {children}
+          <ModeToggle />
+        </ThemeProvider>
       </body>
     </html>
   );
