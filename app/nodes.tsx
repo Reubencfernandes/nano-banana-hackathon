@@ -89,7 +89,7 @@ async function copyImageToClipboard(dataUrl: string) {
     // Fetch the data URL and convert it to a Blob object
     const response = await fetch(dataUrl);          // Fetch the base64 data URL
     const blob = await response.blob();             // Convert response to Blob format
-    
+
     // The browser clipboard API only supports PNG format for images
     // If the image is not PNG, we need to convert it first
     if (blob.type !== 'image/png') {
@@ -97,7 +97,7 @@ async function copyImageToClipboard(dataUrl: string) {
       const canvas = document.createElement('canvas');    // Create invisible canvas
       const ctx = canvas.getContext('2d');                // Get 2D drawing context
       const img = new Image();                            // Create image element
-      
+
       // Wait for the image to load before processing
       await new Promise((resolve) => {
         img.onload = () => {                              // When image loads
@@ -108,12 +108,12 @@ async function copyImageToClipboard(dataUrl: string) {
         };
         img.src = dataUrl;                                // Start loading the image
       });
-      
+
       // Convert the canvas content to PNG blob
       const pngBlob = await new Promise<Blob>((resolve) => {
         canvas.toBlob((blob) => resolve(blob!), 'image/png');  // Convert canvas to PNG blob
       });
-      
+
       // Write the converted PNG blob to clipboard
       await navigator.clipboard.write([
         new ClipboardItem({ 'image/png': pngBlob })       // Create clipboard item with PNG data
@@ -169,7 +169,7 @@ function NodeOutputSection({
 }) {
   // If no image is available, don't render anything
   if (!output) return null;
-  
+
   return (
     // Main container for output section with vertical spacing
     <div className="space-y-2">
@@ -181,7 +181,7 @@ function NodeOutputSection({
           <div className="text-xs text-white/70">Output</div>
         </div>
         {/* Output image with click-to-copy functionality */}
-        <img 
+        <img
           src={output}  // Display the output image
           className="w-full rounded cursor-pointer hover:opacity-80 transition-all duration-200 hover:ring-2 hover:ring-white/30"  // Styling with hover effects
           alt="Output"  // Accessibility description
@@ -189,14 +189,14 @@ function NodeOutputSection({
           onContextMenu={(e) => { // Right-click context menu handler
             e.preventDefault(); // Prevent browser context menu from appearing
             copyImageToClipboard(output); // Copy image to clipboard
-            
+
             // Show brief visual feedback when image is copied
             const img = e.currentTarget; // Get the image element
             const originalTitle = img.title; // Store original tooltip text
             img.title = "Copied to clipboard!"; // Update tooltip to show success
             img.style.filter = "brightness(1.2)"; // Brighten the image briefly
             img.style.transform = "scale(0.98)"; // Slightly scale down the image
-            
+
             // Reset visual feedback after 300ms
             setTimeout(() => {
               img.title = originalTitle; // Restore original tooltip
@@ -270,12 +270,12 @@ function useNodeDrag(node: any, onUpdatePosition?: (id: string, x: number, y: nu
   const [localPos, setLocalPos] = useState({ x: node.x, y: node.y });  // Local position for smooth dragging
   const dragging = useRef(false);                                      // Track drag state
   const start = useRef<{ sx: number; sy: number; ox: number; oy: number } | null>(null);  // Drag start coordinates
-  
+
   // Sync local position when parent position changes
   useEffect(() => {
     setLocalPos({ x: node.x, y: node.y });
   }, [node.x, node.y]);
-  
+
   /**
    * Handle pointer down - start dragging
    * Captures the pointer and records starting positions
@@ -286,7 +286,7 @@ function useNodeDrag(node: any, onUpdatePosition?: (id: string, x: number, y: nu
     start.current = { sx: e.clientX, sy: e.clientY, ox: localPos.x, oy: localPos.y };  // Record start positions
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); // Capture pointer for reliable tracking
   };
-  
+
   /**
    * Handle pointer move - update position during drag
    * Calculates new position based on mouse movement delta
@@ -300,7 +300,7 @@ function useNodeDrag(node: any, onUpdatePosition?: (id: string, x: number, y: nu
     setLocalPos({ x: newX, y: newY });                 // Update local position for immediate visual feedback
     if (onUpdatePosition) onUpdatePosition(node.id, newX, newY);  // Update parent state
   };
-  
+
   /**
    * Handle pointer up - end dragging
    * Releases pointer capture and resets drag state
@@ -310,7 +310,7 @@ function useNodeDrag(node: any, onUpdatePosition?: (id: string, x: number, y: nu
     start.current = null;                                            // Clear start position
     (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);  // Release pointer
   };
-  
+
   return { localPos, onPointerDown, onPointerMove, onPointerUp };
 }
 
@@ -331,14 +331,14 @@ function useNodeDrag(node: any, onUpdatePosition?: (id: string, x: number, y: nu
  * @param onStartConnection Callback when starting a connection from this port
  * @param onEndConnection Callback when ending a connection at this port
  */
-function Port({ 
-  className, 
+function Port({
+  className,
   nodeId,
   isOutput,
   onStartConnection,
   onEndConnection,
   onDisconnect
-}: { 
+}: {
   className?: string;
   nodeId?: string;
   isOutput?: boolean;
@@ -355,7 +355,7 @@ function Port({
       onStartConnection(nodeId);  // Start connection from this output port
     }
   };
-  
+
   /**
    * Handle ending a connection (pointer up on input port)
    */
@@ -378,15 +378,15 @@ function Port({
   };
 
   return (
-    <div 
+    <div
       className={cx("nb-port", className)}              // Combine base port classes with custom ones
       onPointerDown={handlePointerDown}                 // Start connection drag from output ports
       onPointerUp={handlePointerUp}                     // End connection drag at input ports
       onPointerEnter={handlePointerUp}                  // Also accept connections on hover (better UX)
       onClick={handleClick}                             // Allow clicking input ports to disconnect
       title={
-        isOutput 
-          ? "Drag from here to connect to another node's input" 
+        isOutput
+          ? "Drag from here to connect to another node's input"
           : "Drop connections here or click to disconnect"
       }
     />
@@ -432,7 +432,7 @@ export function BackgroundNodeView({
 }: any) {
   // Use custom drag hook to handle node positioning in the editor
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
-  
+
   /**
    * Handle image file upload from file input
    * Converts uploaded file to base64 data URL for storage and preview
@@ -446,14 +446,14 @@ export function BackgroundNodeView({
       reader.readAsDataURL(e.target.files[0]);                    // Convert file to base64
     }
   };
-  
+
   /**
    * Handle image paste from clipboard
    * Supports both image files and image URLs pasted from clipboard
    */
   const handleImagePaste = (e: React.ClipboardEvent) => {
     const items = e.clipboardData.items;                           // Get clipboard items
-    
+
     // First, try to find image files in clipboard
     for (let i = 0; i < items.length; i++) {
       if (items[i].type.startsWith("image/")) {                   // Check if item is an image
@@ -468,14 +468,14 @@ export function BackgroundNodeView({
         }
       }
     }
-    
+
     // If no image files, check for text that might be image URLs
     const text = e.clipboardData.getData("text");                 // Get text from clipboard
     if (text && (text.startsWith("http") || text.startsWith("data:image"))) {
       onUpdate(node.id, { customBackgroundImage: text });         // Use URL directly
     }
   };
-  
+
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     const files = e.dataTransfer.files;
@@ -487,16 +487,16 @@ export function BackgroundNodeView({
       reader.readAsDataURL(files[0]);
     }
   };
-  
+
   return (
-    <div 
-      className="nb-node absolute text-white w-[320px]" 
+    <div
+      className="nb-node absolute text-white w-[320px]"
       style={{ left: localPos.x, top: localPos.y }}
       onDrop={handleDrop}
       onDragOver={(e) => e.preventDefault()}
       onPaste={handleImagePaste}
     >
-      <div 
+      <div
         className="nb-header px-3 py-2 flex items-center justify-between rounded-t-[14px] cursor-grab active:cursor-grabbing"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -539,7 +539,7 @@ export function BackgroundNodeView({
             </Button>
           </div>
         )}
-        <Select 
+        <Select
           className="w-full"
           value={node.backgroundType || "color"}
           onChange={(e) => onUpdate(node.id, { backgroundType: (e.target as HTMLSelectElement).value })}
@@ -552,7 +552,7 @@ export function BackgroundNodeView({
           <option value="upload">Upload Image</option>
           <option value="custom">Custom Prompt</option>
         </Select>
-        
+
         {node.backgroundType === "color" && (
           <ColorPicker
             className="w-full"
@@ -560,11 +560,11 @@ export function BackgroundNodeView({
             onChange={(e) => onUpdate(node.id, { backgroundColor: (e.target as HTMLInputElement).value })}
           />
         )}
-        
+
         {node.backgroundType === "gradient" && (
           <div className="space-y-3">
             <label className="text-xs text-white/70">Gradient Direction</label>
-            <Select 
+            <Select
               className="w-full"
               value={node.gradientDirection || "to right"}
               onChange={(e) => onUpdate(node.id, { gradientDirection: (e.target as HTMLSelectElement).value })}
@@ -591,10 +591,10 @@ export function BackgroundNodeView({
               value={node.gradientEndColor || "#4ecdc4"}
               onChange={(e) => onUpdate(node.id, { gradientEndColor: (e.target as HTMLInputElement).value })}
             />
-            <div 
+            <div
               className="w-full h-8 rounded-md border border-white/20"
               style={{
-                background: node.gradientDirection === "radial" 
+                background: node.gradientDirection === "radial"
                   ? `radial-gradient(circle, ${node.gradientStartColor || "#ff6b6b"} 0%, ${node.gradientEndColor || "#4ecdc4"} 100%)`
                   : `linear-gradient(${node.gradientDirection || "to right"}, ${node.gradientStartColor || "#ff6b6b"} 0%, ${node.gradientEndColor || "#4ecdc4"} 100%)`
               }}
@@ -602,9 +602,9 @@ export function BackgroundNodeView({
             />
           </div>
         )}
-        
+
         {node.backgroundType === "image" && (
-          <Select 
+          <Select
             className="w-full"
             value={node.backgroundImage || ""}
             onChange={(e) => onUpdate(node.id, { backgroundImage: (e.target as HTMLSelectElement).value })}
@@ -617,11 +617,11 @@ export function BackgroundNodeView({
             <option value="city">City Skyline</option>
           </Select>
         )}
-        
+
         {node.backgroundType === "city" && (
           <div className="space-y-3">
             <label className="text-xs text-white/70">City Scene Type</label>
-            <Select 
+            <Select
               className="w-full"
               value={node.citySceneType || "busy_street"}
               onChange={(e) => onUpdate(node.id, { citySceneType: (e.target as HTMLSelectElement).value })}
@@ -639,7 +639,7 @@ export function BackgroundNodeView({
               <option value="matrix_alley">Matrix Style Urban Alley</option>
             </Select>
             <label className="text-xs text-white/70">Time of Day</label>
-            <Select 
+            <Select
               className="w-full"
               value={node.cityTimeOfDay || "daytime"}
               onChange={(e) => onUpdate(node.id, { cityTimeOfDay: (e.target as HTMLSelectElement).value })}
@@ -653,11 +653,11 @@ export function BackgroundNodeView({
             </Select>
           </div>
         )}
-        
+
         {node.backgroundType === "photostudio" && (
           <div className="space-y-3">
             <label className="text-xs text-white/70">Studio Setup</label>
-            <Select 
+            <Select
               className="w-full"
               value={node.studioSetup || "white_seamless"}
               onChange={(e) => onUpdate(node.id, { studioSetup: (e.target as HTMLSelectElement).value })}
@@ -680,7 +680,7 @@ export function BackgroundNodeView({
               </>
             )}
             <label className="text-xs text-white/70">Lighting Setup</label>
-            <Select 
+            <Select
               className="w-full"
               value={node.studioLighting || "key_fill"}
               onChange={(e) => onUpdate(node.id, { studioLighting: (e.target as HTMLSelectElement).value })}
@@ -703,13 +703,13 @@ export function BackgroundNodeView({
             </div>
           </div>
         )}
-        
+
         {node.backgroundType === "upload" && (
           <div className="space-y-2">
             {node.customBackgroundImage ? (
               <div className="relative">
                 <img src={node.customBackgroundImage} className="w-full rounded" alt="Custom Background" />
-                <Button 
+                <Button
                   variant="destructive"
                   size="sm"
                   className="absolute top-2 right-2"
@@ -734,7 +734,7 @@ export function BackgroundNodeView({
             )}
           </div>
         )}
-        
+
         {node.backgroundType === "custom" && (
           <div className="space-y-2">
             <Textarea
@@ -753,17 +753,17 @@ export function BackgroundNodeView({
                   alert('Please enter a background description first');
                   return;
                 }
-                
+
                 try {
                   const response = await fetch('/api/improve-prompt', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
+                    body: JSON.stringify({
                       prompt: node.customPrompt,
                       type: 'background'
                     })
                   });
-                  
+
                   if (response.ok) {
                     const { improvedPrompt } = await response.json();
                     onUpdate(node.id, { customPrompt: improvedPrompt });
@@ -781,8 +781,8 @@ export function BackgroundNodeView({
             </Button>
           </div>
         )}
-        
-        <Button 
+
+        <Button
           className="w-full"
           onClick={() => onProcess(node.id)}
           disabled={node.isRunning}
@@ -790,7 +790,7 @@ export function BackgroundNodeView({
         >
           {node.isRunning ? "Processing..." : "Apply Background"}
         </Button>
-        
+
         <NodeOutputSection
           nodeId={node.id}
           output={node.output}
@@ -834,7 +834,7 @@ export function BackgroundNodeView({
 export function ClothesNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition, getNodeHistoryInfo, navigateNodeHistory, getCurrentNodeImage }: any) {
   // Handle node dragging functionality
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
-  
+
   /**
    * Preset clothing options available for quick selection
    * Each preset includes a display name and path to the reference image
@@ -878,16 +878,16 @@ export function ClothesNodeView({ node, onDelete, onUpdate, onStartConnection, o
   const selectPreset = (presetPath: string, presetName: string) => {
     onUpdate(node.id, { clothesImage: presetPath, selectedPreset: presetName });
   };
-  
+
   return (
-    <div 
-      className="nb-node absolute text-white w-[320px]"
+    <div
+      className="nb-node absolute w-[320px]"
       style={{ left: localPos.x, top: localPos.y }}
       onDrop={onDrop}
       onDragOver={(e) => e.preventDefault()}
       onPaste={onPaste}
     >
-      <div 
+      <div
         className="nb-header px-3 py-2 flex items-center justify-between rounded-t-[14px] cursor-grab active:cursor-grabbing"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -930,18 +930,17 @@ export function ClothesNodeView({ node, onDelete, onUpdate, onStartConnection, o
             </Button>
           </div>
         )}
-        <div className="text-xs text-white/70">Clothes Reference</div>
-        
+        <div className="text-xs text-muted-foreground">Clothes Reference</div>
+
         {/* Preset clothes options */}
         <div className="flex gap-2">
           {presetClothes.map((preset) => (
             <button
               key={preset.name}
-              className={`flex-1 p-2 rounded border ${
-                node.selectedPreset === preset.name
-                  ? "border-indigo-400 bg-indigo-500/20"
-                  : "border-white/20 hover:border-white/40"
-              }`}
+              className={`flex-1 p-2 rounded border ${node.selectedPreset === preset.name
+                ? "border-primary bg-primary/20"
+                : "border-border hover:border-primary/50"
+                }`}
               onClick={() => selectPreset(preset.path, preset.name)}
             >
               <img src={preset.path} alt={preset.name} className="w-full h-28 object-contain rounded mb-1" />
@@ -949,14 +948,14 @@ export function ClothesNodeView({ node, onDelete, onUpdate, onStartConnection, o
             </button>
           ))}
         </div>
-        
-        <div className="text-xs text-white/50 text-center">— or —</div>
-        
+
+        <div className="text-xs text-muted-foreground/50 text-center">— or —</div>
+
         {/* Custom image upload */}
         {node.clothesImage && !node.selectedPreset ? (
           <div className="relative">
             <img src={node.clothesImage} className="w-full rounded" alt="Clothes" />
-            <Button 
+            <Button
               variant="destructive"
               size="sm"
               className="absolute top-2 right-2"
@@ -979,15 +978,15 @@ export function ClothesNodeView({ node, onDelete, onUpdate, onStartConnection, o
                 }
               }}
             />
-            <div className="border-2 border-dashed border-white/20 rounded-lg p-6 text-center cursor-pointer hover:border-white/40 transition-colors">
-              <div className="text-white/40 text-lg mb-2">📁</div>
-              <p className="text-sm text-white/70 font-medium">Drop, upload, or paste clothes image</p>
-              <p className="text-xs text-white/50 mt-1">JPG, PNG, WebP supported</p>
+            <div className="border-2 border-dashed border-border rounded-lg p-6 text-center cursor-pointer hover:border-primary/50 transition-colors">
+              <div className="text-muted-foreground/40 text-lg mb-2">📁</div>
+              <p className="text-sm text-muted-foreground font-medium">Drop, upload, or paste clothes image</p>
+              <p className="text-xs text-muted-foreground/50 mt-1">JPG, PNG, WebP supported</p>
             </div>
           </label>
         ) : null}
-        
-        <Button 
+
+        <Button
           className="w-full"
           onClick={() => onProcess(node.id)}
           disabled={node.isRunning || !node.clothesImage}
@@ -1041,10 +1040,10 @@ export function ClothesNodeView({ node, onDelete, onUpdate, onStartConnection, o
 export function AgeNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition, getNodeHistoryInfo, navigateNodeHistory, getCurrentNodeImage }: any) {
   // Handle node dragging functionality
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
-  
+
   return (
-    <div className="nb-node absolute text-white w-[280px]" style={{ left: localPos.x, top: localPos.y }}>
-      <div 
+    <div className="nb-node absolute w-[280px]" style={{ left: localPos.x, top: localPos.y }}>
+      <div
         className="nb-header px-3 py-2 flex items-center justify-between rounded-t-[14px] cursor-grab active:cursor-grabbing"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -1097,7 +1096,7 @@ export function AgeNodeView({ node, onDelete, onUpdate, onStartConnection, onEnd
             onChange={(e) => onUpdate(node.id, { targetAge: parseInt((e.target as HTMLInputElement).value) })}
           />
         </div>
-        <Button 
+        <Button
           className="w-full"
           onClick={() => onProcess(node.id)}
           disabled={node.isRunning}
@@ -1156,31 +1155,31 @@ export function AgeNodeView({ node, onDelete, onUpdate, onStartConnection, onEnd
 export function CameraNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition, getNodeHistoryInfo, navigateNodeHistory, getCurrentNodeImage }: any) {
   // Handle node dragging functionality
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
-  
+
   // Camera lens focal length options (affects field of view and perspective)
   const focalLengths = ["None", "8mm", "12mm", "24mm", "35mm", "50mm", "85mm"];
-  
+
   // Aperture settings (affects depth of field and exposure)
-  const apertures = ["None", "f/0.95", "f/1.2", "f/1.4", "f/1.8", "f/2", "f/2.8", "f/4", "f/5.6","f/11"];
-  
+  const apertures = ["None", "f/0.95", "f/1.2", "f/1.4", "f/1.8", "f/2", "f/2.8", "f/4", "f/5.6", "f/11"];
+
   // Shutter speed options (affects motion blur and exposure)
-  const shutterSpeeds = ["None", "1/1000s", "1/250s","1/30s","1/15", "5s", ];
-  
+  const shutterSpeeds = ["None", "1/1000s", "1/250s", "1/30s", "1/15", "5s",];
+
   // White balance presets for different lighting conditions
   const whiteBalances = ["None", "2800K candlelight", "3200K tungsten", "4000K fluorescent", "5600K daylight", "6500K cloudy", "7000K shade", "8000K blue sky"];
-  
+
   // Camera angle and perspective options
   const angles = ["None", "eye level", "low angle", "high angle", "Dutch tilt", "bird's eye", "worm's eye", "over the shoulder", "POV"];
-  
+
   // ISO sensitivity values (affects image noise and exposure)
-  const isoValues = ["None",  "ISO 100", "ISO 400", "ISO 1600", "ISO 6400"];
-  
+  const isoValues = ["None", "ISO 100", "ISO 400", "ISO 1600", "ISO 6400"];
+
   // Film stock emulation for different photographic styles
-  const filmStyles = ["None","RAW","Kodak Portra", "Fuji Velvia", "Kodak Gold 200","Black & White", "Sepia", "Vintage", "Film Noir"];
-  
+  const filmStyles = ["None", "RAW", "Kodak Portra", "Fuji Velvia", "Kodak Gold 200", "Black & White", "Sepia", "Vintage", "Film Noir"];
+
   // Professional lighting setups and natural lighting conditions
   const lightingTypes = ["None", "Natural Light", "Golden Hour", "Blue Hour", "Studio Lighting", "Rembrandt", "Split Lighting", "Butterfly Lighting", "Loop Lighting", "Rim Lighting", "Silhouette", "High Key", "Low Key"];
-  
+
   // Bokeh (background blur) styles for different lens characteristics
   const bokehStyles = ["None", "Smooth Bokeh", "Swirly Bokeh", "Hexagonal Bokeh", "Cat Eye Bokeh", "Bubble Bokeh"];
 
@@ -1188,8 +1187,8 @@ export function CameraNodeView({ node, onDelete, onUpdate, onStartConnection, on
   const motionBlurOptions = ["None", "Light Motion Blur", "Medium Motion Blur", "Heavy Motion Blur", "Radial Blur", "Zoom Blur"];
 
   return (
-    <div className="nb-node absolute text-white w-[360px]" style={{ left: localPos.x, top: localPos.y }}>
-      <div 
+    <div className="nb-node absolute w-[360px]" style={{ left: localPos.x, top: localPos.y }}>
+      <div
         className="nb-header px-3 py-2 flex items-center justify-between rounded-t-[14px] cursor-grab active:cursor-grabbing"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -1232,12 +1231,12 @@ export function CameraNodeView({ node, onDelete, onUpdate, onStartConnection, on
           </div>
         )}
         {/* Basic Camera Settings Section */}
-        <div className="text-xs text-white/50 font-semibold mb-1">Basic Settings</div>
+        <div className="text-xs text-muted-foreground font-semibold mb-1">Basic Settings</div>
         <div className="grid grid-cols-2 gap-2">                     {/* 2-column grid for compact layout */}
           {/* Motion Blur Control - adds movement effects */}
           <div>
-            <label className="text-xs text-white/70">Motion Blur</label>
-            <Select 
+            <label className="text-xs text-muted-foreground">Motion Blur</label>
+            <Select
               className="w-full"
               value={node.motionBlur || "None"}                   // Default to "None" if not set
               onChange={(e) => onUpdate(node.id, { motionBlur: (e.target as HTMLSelectElement).value })}
@@ -1248,8 +1247,8 @@ export function CameraNodeView({ node, onDelete, onUpdate, onStartConnection, on
           </div>
           {/* Focal Length Control - affects field of view and perspective */}
           <div>
-            <label className="text-xs text-white/70">Focal Length</label>
-            <Select 
+            <label className="text-xs text-muted-foreground">Focal Length</label>
+            <Select
               className="w-full"
               value={node.focalLength || "None"}                   // Default to "None" if not set
               onChange={(e) => onUpdate(node.id, { focalLength: (e.target as HTMLSelectElement).value })}
@@ -1258,11 +1257,11 @@ export function CameraNodeView({ node, onDelete, onUpdate, onStartConnection, on
               {focalLengths.map(f => <option key={f} value={f}>{f}</option>)}
             </Select>
           </div>
-          
+
           {/* Aperture Control - affects depth of field and exposure */}
           <div>
-            <label className="text-xs text-white/70">Aperture</label>
-            <Select 
+            <label className="text-xs text-muted-foreground">Aperture</label>
+            <Select
               className="w-full"
               value={node.aperture || "None"}                     // Default to "None" if not set
               onChange={(e) => onUpdate(node.id, { aperture: (e.target as HTMLSelectElement).value })}
@@ -1271,11 +1270,11 @@ export function CameraNodeView({ node, onDelete, onUpdate, onStartConnection, on
               {apertures.map(a => <option key={a} value={a}>{a}</option>)}
             </Select>
           </div>
-          
+
           {/* Shutter Speed Control - affects motion blur and exposure */}
           <div>
-            <label className="text-xs text-white/70">Shutter Speed</label>
-            <Select 
+            <label className="text-xs text-muted-foreground">Shutter Speed</label>
+            <Select
               className="w-full"
               value={node.shutterSpeed || "None"}                 // Default to "None" if not set
               onChange={(e) => onUpdate(node.id, { shutterSpeed: (e.target as HTMLSelectElement).value })}
@@ -1284,11 +1283,11 @@ export function CameraNodeView({ node, onDelete, onUpdate, onStartConnection, on
               {shutterSpeeds.map(s => <option key={s} value={s}>{s}</option>)}
             </Select>
           </div>
-          
+
           {/* ISO Control - affects sensor sensitivity and image noise */}
           <div>
-            <label className="text-xs text-white/70">ISO</label>
-            <Select 
+            <label className="text-xs text-muted-foreground">ISO</label>
+            <Select
               className="w-full"
               value={node.iso || "None"}                          // Default to "None" if not set
               onChange={(e) => onUpdate(node.id, { iso: (e.target as HTMLSelectElement).value })}
@@ -1298,13 +1297,13 @@ export function CameraNodeView({ node, onDelete, onUpdate, onStartConnection, on
             </Select>
           </div>
         </div>
-        
+
         {/* Creative Settings */}
         <div className="text-xs text-white/50 font-semibold mb-1 mt-3">Creative Settings</div>
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <label className="text-xs text-white/70">White Balance</label>
-            <Select 
+            <label className="text-xs text-muted-foreground">White Balance</label>
+            <Select
               className="w-full"
               value={node.whiteBalance || "None"}
               onChange={(e) => onUpdate(node.id, { whiteBalance: (e.target as HTMLSelectElement).value })}
@@ -1313,8 +1312,8 @@ export function CameraNodeView({ node, onDelete, onUpdate, onStartConnection, on
             </Select>
           </div>
           <div>
-            <label className="text-xs text-white/70">Film Style</label>
-            <Select 
+            <label className="text-xs text-muted-foreground">Film Style</label>
+            <Select
               className="w-full"
               value={node.filmStyle || "None"}
               onChange={(e) => onUpdate(node.id, { filmStyle: (e.target as HTMLSelectElement).value })}
@@ -1323,8 +1322,8 @@ export function CameraNodeView({ node, onDelete, onUpdate, onStartConnection, on
             </Select>
           </div>
           <div>
-            <label className="text-xs text-white/70">Lighting</label>
-            <Select 
+            <label className="text-xs text-muted-foreground">Lighting</label>
+            <Select
               className="w-full"
               value={node.lighting || "None"}
               onChange={(e) => onUpdate(node.id, { lighting: (e.target as HTMLSelectElement).value })}
@@ -1333,8 +1332,8 @@ export function CameraNodeView({ node, onDelete, onUpdate, onStartConnection, on
             </Select>
           </div>
           <div>
-            <label className="text-xs text-white/70">Bokeh Style</label>
-            <Select 
+            <label className="text-xs text-muted-foreground">Bokeh Style</label>
+            <Select
               className="w-full"
               value={node.bokeh || "None"}
               onChange={(e) => onUpdate(node.id, { bokeh: (e.target as HTMLSelectElement).value })}
@@ -1343,13 +1342,13 @@ export function CameraNodeView({ node, onDelete, onUpdate, onStartConnection, on
             </Select>
           </div>
         </div>
-        
+
         {/* Composition Settings */}
-        <div className="text-xs text-white/50 font-semibold mb-1 mt-3">Composition</div>
+        <div className="text-xs text-muted-foreground font-semibold mb-1 mt-3">Composition</div>
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <label className="text-xs text-white/70">Camera Angle</label>
-            <Select 
+            <label className="text-xs text-muted-foreground">Camera Angle</label>
+            <Select
               className="w-full"
               value={node.angle || "None"}
               onChange={(e) => onUpdate(node.id, { angle: (e.target as HTMLSelectElement).value })}
@@ -1358,7 +1357,7 @@ export function CameraNodeView({ node, onDelete, onUpdate, onStartConnection, on
             </Select>
           </div>
         </div>
-        <Button 
+        <Button
           className="w-full"
           onClick={() => onProcess(node.id)}
           disabled={node.isRunning}
@@ -1417,19 +1416,19 @@ export function CameraNodeView({ node, onDelete, onUpdate, onStartConnection, on
 export function FaceNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition, getNodeHistoryInfo, navigateNodeHistory, getCurrentNodeImage }: any) {
   // Handle node dragging functionality
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
-  
+
   // Available hairstyle options for hair modification
   const hairstyles = ["None", "short", "long", "curly", "straight", "bald", "mohawk", "ponytail"];
-  
+
   // Facial expression options for emotion changes
   const expressions = ["None", "happy", "serious", "smiling", "laughing", "sad", "surprised", "angry"];
-  
+
   // Beard and facial hair styling options
   const beardStyles = ["None", "stubble", "goatee", "full beard", "mustache", "clean shaven"];
 
   return (
-    <div className="nb-node absolute text-white w-[340px]" style={{ left: localPos.x, top: localPos.y }}>
-      <div 
+    <div className="nb-node absolute w-[340px]" style={{ left: localPos.x, top: localPos.y }}>
+      <div
         className="nb-header px-3 py-2 flex items-center justify-between rounded-t-[14px] cursor-grab active:cursor-grabbing"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -1475,10 +1474,10 @@ export function FaceNodeView({ node, onDelete, onUpdate, onStartConnection, onEn
         <div className="space-y-2">
           {/* Pimple removal option for skin enhancement */}
           <label className="flex items-center gap-2 text-xs cursor-pointer">
-            <Checkbox 
+            <Checkbox
               checked={node.faceOptions?.removePimples || false}    // Default to false if not set
-              onChange={(e) => onUpdate(node.id, { 
-                faceOptions: { 
+              onChange={(e) => onUpdate(node.id, {
+                faceOptions: {
                   ...node.faceOptions,                             // Preserve existing options
                   removePimples: (e.target as HTMLInputElement).checked // Update pimple removal setting
                 }
@@ -1486,13 +1485,13 @@ export function FaceNodeView({ node, onDelete, onUpdate, onStartConnection, onEn
             />
             Remove pimples                                          {/* Clean up skin imperfections */}
           </label>
-          
+
           {/* Sunglasses addition option */}
           <label className="flex items-center gap-2 text-xs cursor-pointer">
-            <Checkbox 
+            <Checkbox
               checked={node.faceOptions?.addSunglasses || false}    // Default to false if not set
-              onChange={(e) => onUpdate(node.id, { 
-                faceOptions: { 
+              onChange={(e) => onUpdate(node.id, {
+                faceOptions: {
                   ...node.faceOptions,                             // Preserve existing options
                   addSunglasses: (e.target as HTMLInputElement).checked // Update sunglasses setting
                 }
@@ -1500,13 +1499,13 @@ export function FaceNodeView({ node, onDelete, onUpdate, onStartConnection, onEn
             />
             Add sunglasses                                          {/* Add stylish sunglasses accessory */}
           </label>
-          
+
           {/* Hat addition option */}
           <label className="flex items-center gap-2 text-xs cursor-pointer">
-            <Checkbox 
+            <Checkbox
               checked={node.faceOptions?.addHat || false}           // Default to false if not set
-              onChange={(e) => onUpdate(node.id, { 
-                faceOptions: { 
+              onChange={(e) => onUpdate(node.id, {
+                faceOptions: {
                   ...node.faceOptions,                             // Preserve existing options
                   addHat: (e.target as HTMLInputElement).checked   // Update hat setting
                 }
@@ -1515,39 +1514,39 @@ export function FaceNodeView({ node, onDelete, onUpdate, onStartConnection, onEn
             Add hat                                                 {/* Add hat accessory */}
           </label>
         </div>
-        
+
         <div>
           <label className="text-xs text-white/70">Hairstyle</label>
-          <Select 
+          <Select
             className="w-full"
             value={node.faceOptions?.changeHairstyle || "None"}
-            onChange={(e) => onUpdate(node.id, { 
+            onChange={(e) => onUpdate(node.id, {
               faceOptions: { ...node.faceOptions, changeHairstyle: (e.target as HTMLSelectElement).value }
             })}
           >
             {hairstyles.map(h => <option key={h} value={h}>{h}</option>)}
           </Select>
         </div>
-        
+
         <div>
           <label className="text-xs text-white/70">Expression</label>
-          <Select 
+          <Select
             className="w-full"
             value={node.faceOptions?.facialExpression || "None"}
-            onChange={(e) => onUpdate(node.id, { 
+            onChange={(e) => onUpdate(node.id, {
               faceOptions: { ...node.faceOptions, facialExpression: (e.target as HTMLSelectElement).value }
             })}
           >
             {expressions.map(e => <option key={e} value={e}>{e}</option>)}
           </Select>
         </div>
-        
+
         <div>
           <label className="text-xs text-white/70">Beard</label>
-          <Select 
+          <Select
             className="w-full"
             value={node.faceOptions?.beardStyle || "None"}
-            onChange={(e) => onUpdate(node.id, { 
+            onChange={(e) => onUpdate(node.id, {
               faceOptions: { ...node.faceOptions, beardStyle: (e.target as HTMLSelectElement).value }
             })}
           >
@@ -1557,18 +1556,17 @@ export function FaceNodeView({ node, onDelete, onUpdate, onStartConnection, onEn
 
         {/* Makeup Selection Section - allows users to choose makeup application */}
         <div>
-          <label className="text-xs text-white/70">Makeup</label>
+          <label className="text-xs text-muted-foreground">Makeup</label>
           <div className="grid grid-cols-2 gap-2 mt-2">              {/* 2-column grid for makeup options */}
-            
+
             {/* No Makeup Option - removes or prevents makeup application */}
             <button
-              className={`p-1 rounded border transition-colors ${
-                !node.faceOptions?.selectedMakeup || node.faceOptions?.selectedMakeup === "None"
-                  ? "border-indigo-400 bg-indigo-500/20"             // Highlighted when selected
-                  : "border-white/20 hover:border-white/40"           // Default and hover states
-              }`}
-              onClick={() => onUpdate(node.id, { 
-                faceOptions: { 
+              className={`p-1 rounded border transition-colors ${!node.faceOptions?.selectedMakeup || node.faceOptions?.selectedMakeup === "None"
+                ? "border-indigo-400 bg-indigo-500/20"             // Highlighted when selected
+                : "border-white/20 hover:border-white/40"           // Default and hover states
+                }`}
+              onClick={() => onUpdate(node.id, {
+                faceOptions: {
                   ...node.faceOptions,                               // Preserve other face options
                   selectedMakeup: "None",                            // Set makeup to none
                   makeupImage: null                                   // Clear makeup image reference
@@ -1577,21 +1575,20 @@ export function FaceNodeView({ node, onDelete, onUpdate, onStartConnection, onEn
               title="No makeup application - natural look"
             >
               {/* Visual placeholder for no makeup option */}
-              <div className="w-full h-24 flex items-center justify-center text-xs text-white/60 border border-dashed border-white/20 rounded mb-1">
+              <div className="w-full h-24 flex items-center justify-center text-xs text-muted-foreground/60 border border-dashed border-border rounded mb-1">
                 No Makeup                                             {/* Text indicator for no makeup */}
               </div>
               <div className="text-xs">None</div>                  {/* Option label */}
             </button>
-            
+
             {/* Makeup Application Option - applies preset makeup style */}
             <button
-              className={`p-1 rounded border transition-colors ${
-                node.faceOptions?.selectedMakeup === "Makeup"
-                  ? "border-indigo-400 bg-indigo-500/20"             // Highlighted when selected
-                  : "border-white/20 hover:border-white/40"           // Default and hover states
-              }`}
-              onClick={() => onUpdate(node.id, { 
-                faceOptions: { 
+              className={`p-1 rounded border transition-colors ${node.faceOptions?.selectedMakeup === "Makeup"
+                ? "border-primary bg-primary/20"             // Highlighted when selected
+                : "border-border hover:border-primary/50"           // Default and hover states
+                }`}
+              onClick={() => onUpdate(node.id, {
+                faceOptions: {
                   ...node.faceOptions,                               // Preserve other face options
                   selectedMakeup: "Makeup",                          // Set makeup type
                   makeupImage: "/makeup/makeup1.png"                 // Reference image for makeup style
@@ -1600,9 +1597,9 @@ export function FaceNodeView({ node, onDelete, onUpdate, onStartConnection, onEn
               title="Apply makeup style - enhances facial features"
             >
               {/* Makeup preview image */}
-              <img 
-                src="/makeup/makeup1.png" 
-                alt="Makeup Style Preview" 
+              <img
+                src="/makeup/makeup1.png"
+                alt="Makeup Style Preview"
                 className="w-full h-24 object-contain rounded mb-1"
                 title="Preview of makeup style that will be applied"
               />
@@ -1610,8 +1607,8 @@ export function FaceNodeView({ node, onDelete, onUpdate, onStartConnection, onEn
             </button>
           </div>
         </div>
-        
-        <Button 
+
+        <Button
           className="w-full"
           onClick={() => onProcess(node.id)}
           disabled={node.isRunning}
@@ -1673,7 +1670,7 @@ export function FaceNodeView({ node, onDelete, onUpdate, onStartConnection, onEn
 export function StyleNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition, getNodeHistoryInfo, navigateNodeHistory, getCurrentNodeImage }: any) {
   // Handle node dragging functionality
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
-  
+
   /**
    * Available artistic style options with descriptive labels
    * Each style represents a different artistic movement or pop culture aesthetic
@@ -1691,13 +1688,13 @@ export function StyleNodeView({ node, onDelete, onUpdate, onStartConnection, onE
     { value: "pixar", label: "Pixar Style" },
     { value: "manga", label: "Manga Style" },
   ];
-  
+
   return (
-    <div 
-      className="nb-node absolute text-white w-[320px]" 
+    <div
+      className="nb-node absolute w-[320px]"
       style={{ left: localPos.x, top: localPos.y }}
     >
-      <div 
+      <div
         className="nb-header px-3 py-2 flex items-center justify-between rounded-t-[14px] cursor-grab active:cursor-grabbing"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -1740,16 +1737,16 @@ export function StyleNodeView({ node, onDelete, onUpdate, onStartConnection, onE
             </Button>
           </div>
         )}
-        <div className="text-xs text-white/70">Art Style</div>
-        <div className="text-xs text-white/50 mb-2">Select an artistic style to apply to your image</div>
+        <div className="text-xs text-muted-foreground">Art Style</div>
+        <div className="text-xs text-muted-foreground/50 mb-2">Select an artistic style to apply to your image</div>
         <Select
-          className="w-full bg-black border-white/20 text-white focus:border-white/40 [&>option]:bg-black [&>option]:text-white"
+          className="w-full bg-background border-border text-foreground focus:border-ring [&>option]:bg-background [&>option]:text-foreground"
           value={node.stylePreset || ""}
           onChange={(e) => onUpdate(node.id, { stylePreset: (e.target as HTMLSelectElement).value })}
         >
-          <option value="" className="bg-black">Select a style...</option>
+          <option value="" className="bg-background">Select a style...</option>
           {styleOptions.map(opt => (
-            <option key={opt.value} value={opt.value} className="bg-black">
+            <option key={opt.value} value={opt.value} className="bg-background">
               {opt.label}
             </option>
           ))}
@@ -1762,21 +1759,21 @@ export function StyleNodeView({ node, onDelete, onUpdate, onStartConnection, onE
             min={0}                                                 // Minimum strength (subtle effect)
             max={100}                                               // Maximum strength (full style transfer)
             value={node.styleStrength || 50}                       // Current value (default 50%)
-            onChange={(e) => onUpdate(node.id, { 
+            onChange={(e) => onUpdate(node.id, {
               styleStrength: parseInt((e.target as HTMLInputElement).value) // Update strength value
             })}
             title="Adjust how strongly the artistic style is applied - lower values are more subtle"
           />
         </div>
         {/* Style Processing Button - triggers the style transfer operation */}
-        <Button 
+        <Button
           className="w-full"
           onClick={() => onProcess(node.id)}                        // Start style transfer processing
           disabled={node.isRunning || !node.stylePreset}           // Disable if processing or no style selected
           title={
             !node.input ? "Connect an input first" :               // No input connection
-            !node.stylePreset ? "Select a style first" :           // No style selected
-            "Apply the selected artistic style to your input image" // Ready to process
+              !node.stylePreset ? "Select a style first" :           // No style selected
+                "Apply the selected artistic style to your input image" // Ready to process
           }
         >
           {/* Dynamic button text based on processing state */}
@@ -1833,24 +1830,24 @@ export function StyleNodeView({ node, onDelete, onUpdate, onStartConnection, onE
 export function LightningNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition, getNodeHistoryInfo, navigateNodeHistory, getCurrentNodeImage }: any) {
   // Handle node dragging functionality
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
-  
+
   /**
    * Available lighting preset options with text descriptions
    * Each preset uses detailed lighting prompts instead of reference images
    */
   const presetLightings = [
-    { 
-      name: "Moody Cinematic", 
+    {
+      name: "Moody Cinematic",
       path: "/lighting/light1.png",
       prompt: "Moody cinematic portrait lighting with a sharp vertical beam of warm orange-red light cutting across the face and neck, contrasted with cool teal ambient fill on the surrounding areas. Strong chiaroscuro effect, deep shadows, high contrast between warm and cool tones, dramatic spotlight strip"
     },
-    { 
-      name: "Dual-Tone Neon", 
+    {
+      name: "Dual-Tone Neon",
       path: "/lighting/light2.png",
       prompt: "Cinematic portrait lighting with strong dual-tone rim lights: deep blue light illuminating the front-left side of the face, intense red light as a rim light from the back-right, dark black background, high contrast, minimal fill light, dramatic neon glow"
     },
-    { 
-      name: "Natural Shadow Play", 
+    {
+      name: "Natural Shadow Play",
       path: "/lighting/light3.png",
       prompt: "DRAMATIC natural shadow play with hard directional sunlight filtering through foliage, creating bold contrasting patterns of light and shadow across the subject. Strong chiaroscuro effect with deep blacks and bright highlights, dappled leaf shadows dancing across face and body, creating an artistic interplay of illumination and darkness. Emphasize the sculptural quality of light carving through shadow, with sharp shadow edges and brilliant sun-kissed highlights for maximum visual impact"
     },
@@ -1861,15 +1858,15 @@ export function LightningNodeView({ node, onDelete, onUpdate, onStartConnection,
    * Updates with the text prompt instead of reference image
    */
   const selectLighting = (lightingPath: string, lightingName: string, lightingPrompt: string) => {
-    onUpdate(node.id, { 
+    onUpdate(node.id, {
       lightingPrompt: lightingPrompt,                              // Text prompt for lighting effect
       selectedLighting: lightingName                               // Name of selected lighting preset
     });
   };
-  
+
   return (
     <div className="nb-node absolute text-white w-[320px]" style={{ left: localPos.x, top: localPos.y }}>
-      <div 
+      <div
         className="nb-header px-3 py-2 flex items-center justify-between rounded-t-[14px] cursor-grab active:cursor-grabbing"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -1912,22 +1909,21 @@ export function LightningNodeView({ node, onDelete, onUpdate, onStartConnection,
             </Button>
           </div>
         )}
-        <div className="text-xs text-white/70">Lighting Presets</div>
-        
+        <div className="text-xs text-muted-foreground">Lighting Presets</div>
+
         <div className="grid grid-cols-2 gap-2">
           {presetLightings.map((preset) => (
             <button
               key={preset.name}
-              className={`p-2 rounded border ${
-                node.selectedLighting === preset.name
-                  ? "border-indigo-400 bg-indigo-500/20"
-                  : "border-white/20 hover:border-white/40"
-              }`}
+              className={`p-2 rounded border ${node.selectedLighting === preset.name
+                ? "border-primary bg-primary/20"
+                : "border-border hover:border-primary/50"
+                }`}
               onClick={() => selectLighting(preset.path, preset.name, preset.prompt)}
             >
-              <img 
-                src={preset.path} 
-                alt={preset.name} 
+              <img
+                src={preset.path}
+                alt={preset.name}
                 className="w-full h-24 object-contain rounded mb-1"
                 title="Click to select lighting"
               />
@@ -1935,8 +1931,8 @@ export function LightningNodeView({ node, onDelete, onUpdate, onStartConnection,
             </button>
           ))}
         </div>
-        
-        <Button 
+
+        <Button
           className="w-full"
           onClick={() => onProcess(node.id)}
           disabled={node.isRunning || !node.selectedLighting}
@@ -1944,7 +1940,7 @@ export function LightningNodeView({ node, onDelete, onUpdate, onStartConnection,
         >
           {node.isRunning ? "Processing..." : "Apply Lighting"}
         </Button>
-        
+
         <NodeOutputSection
           nodeId={node.id}
           output={node.output}
@@ -1997,29 +1993,29 @@ export function LightningNodeView({ node, onDelete, onUpdate, onStartConnection,
 export function PosesNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition, getNodeHistoryInfo, navigateNodeHistory, getCurrentNodeImage }: any) {
   // Handle node dragging functionality
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
-  
+
   /**
    * Available pose preset options with text descriptions
    * Each preset uses detailed pose prompts instead of reference images
    */
   const presetPoses = [
-    { 
-      name: "Dynamic Standing", 
+    {
+      name: "Dynamic Standing",
       path: "/poses/stand1.png",
       prompt: "A dynamic standing pose with the figure's weight shifted to one side. The right arm extends forward in a pointing gesture while the left arm hangs naturally. The figure has a slight hip tilt and appears to be in mid-movement, creating an energetic, directional composition."
     },
-    { 
-      name: "Arms Crossed", 
+    {
+      name: "Arms Crossed",
       path: "/poses/stand2.png",
       prompt: "A relaxed standing pose with arms crossed over the torso. The weight is distributed fairly evenly, with one leg slightly forward. The figure's posture suggests a casual, confident stance with the head tilted slightly downward in a contemplative manner."
     },
-    { 
-      name: "Seated Composed", 
+    {
+      name: "Seated Composed",
       path: "/poses/sit1.png",
       prompt: "A seated pose on what appears to be a stool or high chair. The figure sits with legs crossed at the knee, creating an asymmetrical but balanced composition. The hands rest on the lap, and the overall posture is upright and composed."
     },
-    { 
-      name: "Relaxed Lean", 
+    {
+      name: "Relaxed Lean",
       path: "/poses/sit2.png",
       prompt: "A more relaxed seated pose with the figure leaning to one side. One leg is bent and raised while the other extends downward. The figure appears to be resting or in casual repose, with arms supporting the body and creating a diagonal flow through the composition."
     },
@@ -2030,15 +2026,15 @@ export function PosesNodeView({ node, onDelete, onUpdate, onStartConnection, onE
    * Updates with the text prompt instead of reference image
    */
   const selectPose = (posePath: string, poseName: string, posePrompt: string) => {
-    onUpdate(node.id, { 
+    onUpdate(node.id, {
       posePrompt: posePrompt,                                      // Text prompt for pose effect
       selectedPose: poseName                                       // Name of selected pose preset
     });
   };
-  
+
   return (
-    <div className="nb-node absolute text-white w-[320px]" style={{ left: localPos.x, top: localPos.y }}>
-      <div 
+    <div className="nb-node absolute w-[320px]" style={{ left: localPos.x, top: localPos.y }}>
+      <div
         className="nb-header px-3 py-2 flex items-center justify-between rounded-t-[14px] cursor-grab active:cursor-grabbing"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -2082,21 +2078,20 @@ export function PosesNodeView({ node, onDelete, onUpdate, onStartConnection, onE
           </div>
         )}
         <div className="text-xs text-white/70">Pose References</div>
-        
+
         <div className="grid grid-cols-2 gap-2">
           {presetPoses.map((preset) => (
             <button
               key={preset.name}
-              className={`p-2 rounded border ${
-                node.selectedPose === preset.name
-                  ? "border-indigo-400 bg-indigo-500/20"
-                  : "border-white/20 hover:border-white/40"
-              }`}
+              className={`p-2 rounded border ${node.selectedPose === preset.name
+                ? "border-indigo-400 bg-indigo-500/20"
+                : "border-white/20 hover:border-white/40"
+                }`}
               onClick={() => selectPose(preset.path, preset.name, preset.prompt)}
             >
-              <img 
-                src={preset.path} 
-                alt={preset.name} 
+              <img
+                src={preset.path}
+                alt={preset.name}
                 className="w-full h-24 object-contain rounded mb-1"
                 title="Click to select pose"
               />
@@ -2104,8 +2099,8 @@ export function PosesNodeView({ node, onDelete, onUpdate, onStartConnection, onE
             </button>
           ))}
         </div>
-        
-        <Button 
+
+        <Button
           className="w-full"
           onClick={() => onProcess(node.id)}
           disabled={node.isRunning || !node.selectedPose}
@@ -2113,7 +2108,7 @@ export function PosesNodeView({ node, onDelete, onUpdate, onStartConnection, onE
         >
           {node.isRunning ? "Processing..." : "Apply Pose"}
         </Button>
-        
+
         <NodeOutputSection
           nodeId={node.id}
           output={node.output}
@@ -2152,21 +2147,21 @@ export function PosesNodeView({ node, onDelete, onUpdate, onStartConnection, onE
  * @param navigateNodeHistory - Function to navigate through node history
  * @param getCurrentNodeImage - Function to get the current image for this node
  */
-export function EditNodeView({ 
-  node, 
-  onDelete, 
-  onUpdate, 
-  onStartConnection, 
-  onEndConnection, 
-  onProcess, 
-  onUpdatePosition, 
-  getNodeHistoryInfo, 
-  navigateNodeHistory, 
-  getCurrentNodeImage 
+export function EditNodeView({
+  node,
+  onDelete,
+  onUpdate,
+  onStartConnection,
+  onEndConnection,
+  onProcess,
+  onUpdatePosition,
+  getNodeHistoryInfo,
+  navigateNodeHistory,
+  getCurrentNodeImage
 }: any) {
   // Use custom hook for drag functionality - handles position updates during dragging
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
-  
+
   /**
    * Handle prompt improvement using Gemini API
    * Takes the user's basic edit description and enhances it for better AI processing
@@ -2177,18 +2172,18 @@ export function EditNodeView({
       alert('Please enter an edit description first');
       return;
     }
-    
+
     try {
       // Call the API to improve the prompt
       const response = await fetch('/api/improve-prompt', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           prompt: node.editPrompt.trim(),
           type: 'edit'
         })
       });
-      
+
       if (response.ok) {
         const { improvedPrompt } = await response.json();
         onUpdate(node.id, { editPrompt: improvedPrompt });
@@ -2207,7 +2202,7 @@ export function EditNodeView({
   const handleDeleteNode = (e: React.MouseEvent) => {
     e.stopPropagation();  // Prevent triggering drag
     e.preventDefault();
-    
+
     if (confirm('Delete this node?')) {
       onDelete(node.id);
     }
@@ -2228,9 +2223,9 @@ export function EditNodeView({
   };
 
   return (
-    <div className="nb-node absolute text-white w-[320px]" style={{ left: localPos.x, top: localPos.y }}>
+    <div className="nb-node absolute w-[320px]" style={{ left: localPos.x, top: localPos.y }}>
       {/* Node Header - Contains title, delete button, and connection ports */}
-      <div 
+      <div
         className="nb-header px-3 py-2 flex items-center justify-between rounded-t-[14px] cursor-grab active:cursor-grabbing"
         onPointerDown={onPointerDown}    // Start dragging
         onPointerMove={onPointerMove}    // Handle drag movement
@@ -2238,10 +2233,10 @@ export function EditNodeView({
       >
         {/* Input port (left side) - where connections come in */}
         <Port className="in" nodeId={node.id} isOutput={false} onEndConnection={onEndConnection} onDisconnect={(nodeId) => onUpdate(nodeId, { input: undefined })} />
-        
+
         {/* Node title */}
         <div className="font-semibold text-sm flex-1 text-center">EDIT</div>
-        
+
         <div className="flex items-center gap-1">
           {/* Delete button */}
           <Button
@@ -2255,12 +2250,12 @@ export function EditNodeView({
           >
             ×
           </Button>
-          
+
           {/* Output port (right side) - where connections go out */}
           <Port className="out" nodeId={node.id} isOutput={true} onStartConnection={onStartConnection} />
         </div>
       </div>
-      
+
       {/* Node Content - Contains all the controls and outputs */}
       {/* Node Content Area - Contains all controls, inputs, and outputs */}
       <div className="p-3 space-y-3">
@@ -2278,10 +2273,10 @@ export function EditNodeView({
             </Button>
           </div>
         )}
-        
+
         {/* Edit prompt input and improvement section */}
         <div className="space-y-2">
-          <div className="text-xs text-white/70 mb-1">Edit Instructions</div>
+          <div className="text-xs text-muted-foreground mb-1">Edit Instructions</div>
           <Textarea
             className="w-full"
             placeholder="Describe what to edit (e.g., 'make it brighter', 'add more contrast', 'make it look vintage')"
@@ -2289,7 +2284,7 @@ export function EditNodeView({
             onChange={handlePromptChange}
             rows={3}
           />
-          
+
           {/* AI-powered prompt improvement button */}
           <Button
             variant="outline"
@@ -2302,28 +2297,28 @@ export function EditNodeView({
             ✨ Improve with Gemini
           </Button>
         </div>
-        
+
         {/* Process button - starts the editing operation */}
-        <Button 
+        <Button
           className="w-full"
           onClick={() => onProcess(node.id)}
           disabled={node.isRunning || !node.editPrompt?.trim()}
           title={
-            !node.input ? "Connect an input first" : 
-            !node.editPrompt?.trim() ? "Enter edit instructions first" :
-            "Apply the edit to the input image"
+            !node.input ? "Connect an input first" :
+              !node.editPrompt?.trim() ? "Enter edit instructions first" :
+                "Apply the edit to the input image"
           }
         >
           {node.isRunning ? "Processing..." : "Apply Edit"}
         </Button>
-        
+
         {/* Output section with history navigation and download */}
         <NodeOutputSection
           nodeId={node.id}
           output={node.output}
           downloadFileName={`edit-${Date.now()}.png`}
         />
-        
+
         {/* Error display */}
         {node.error && (
           <div className="text-xs text-red-400 mt-2 p-2 bg-red-900/20 rounded">
