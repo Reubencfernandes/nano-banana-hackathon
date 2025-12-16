@@ -28,7 +28,7 @@ export const maxDuration = 60;
 /**
  * Available HuggingFace models with their capabilities
  */
-export const HF_MODELS = {
+const HF_MODELS = {
     "FLUX.1-Kontext-dev": {
         id: "black-forest-labs/FLUX.1-Kontext-dev",
         name: "FLUX.1 Kontext",
