@@ -28,7 +28,8 @@ import {
   AgeNodeView,         // Age transformation
   FaceNodeView,        // Face modifications
   LightningNodeView,   // Lighting effects
-  PosesNodeView        // Pose modifications
+  PosesNodeView,       // Pose modifications
+  NodeTimer            // Timer component
 } from "./nodes";
 // UI components from shadcn/ui library
 import { Button } from "../components/ui/button";
@@ -524,37 +525,7 @@ function Port({
   );
 }
 
-/**
- * Timer component that shows execution time
- * Uses a green checkmark when finished or a spinner when running
- */
-export function NodeTimer({ startTime, executionTime, isRunning }: { startTime?: number, executionTime?: number, isRunning?: boolean }) {
-  const [elapsed, setElapsed] = React.useState(0);
 
-  React.useEffect(() => {
-    if (!isRunning || !startTime) return;
-    const interval = setInterval(() => {
-      setElapsed(Date.now() - startTime);
-    }, 100);
-    return () => clearInterval(interval);
-  }, [isRunning, startTime]);
-
-  if (!startTime && !executionTime) return null;
-
-  const timeToShow = isRunning ? elapsed : (executionTime || 0);
-  const seconds = (timeToShow / 1000).toFixed(1);
-
-  return (
-    <div className="absolute top-2 right-2 flex items-center gap-1.5 bg-background/80 text-foreground text-[10px] px-2 py-1 rounded-md border shadow-sm z-50 backdrop-blur-sm">
-      {isRunning ? (
-        <Loader2 className="w-3 h-3 animate-spin text-banana-500" />
-      ) : (
-        <span className="text-green-500 font-bold">✓</span>
-      )}
-      <span className="font-mono">{seconds}s</span>
-    </div>
-  );
-}
 
 function CharacterNodeView({
   node,

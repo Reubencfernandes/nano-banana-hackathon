@@ -67,7 +67,7 @@ import { Loader2 } from "lucide-react";               // Loading spinner icon
  * Timer component that shows execution time
  * Uses a green checkmark when finished or a spinner when running
  */
-function NodeTimer({ startTime, executionTime, isRunning }: { startTime?: number, executionTime?: number, isRunning?: boolean }) {
+export function NodeTimer({ startTime, executionTime, isRunning }: { startTime?: number, executionTime?: number, isRunning?: boolean }) {
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
