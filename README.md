@@ -5,7 +5,7 @@ colorFrom: yellow
 colorTo: yellow
 sdk: docker
 pinned: false
-app_port: 3000
+app_port: 7860
 ---
 
 # Nano Banana Node Editor 🍌
