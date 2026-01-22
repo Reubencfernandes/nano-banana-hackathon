@@ -869,10 +869,57 @@ export function ClothesNodeView({ node, onDelete, onUpdate, onStartConnection, o
   // Handle node dragging functionality
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
 
+  // Handle image upload via file input
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        onUpdate(node.id, { clothesImage: reader.result });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Handle image paste from clipboard
+  const handleImagePaste = async (e: React.ClipboardEvent) => {
+    const items = e.clipboardData.items;
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = () => {
+            onUpdate(node.id, { clothesImage: reader.result });
+          };
+          reader.readAsDataURL(file);
+          return;
+        }
+      }
+    }
+  };
+
+  // Handle drag and drop
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const files = e.dataTransfer.files;
+    if (files && files.length) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        onUpdate(node.id, { clothesImage: reader.result });
+      };
+      reader.readAsDataURL(files[0]);
+    }
+  };
+
   return (
     <div
       className="nb-node absolute w-[320px]"
       style={{ left: localPos.x, top: localPos.y }}
+      onDrop={handleDrop}
+      onDragOver={(e) => e.preventDefault()}
+      onPaste={handleImagePaste}
     >
       <NodeTimer startTime={node.startTime} executionTime={node.executionTime} isRunning={node.isRunning} />
       <div
@@ -918,6 +965,38 @@ export function ClothesNodeView({ node, onDelete, onUpdate, onStartConnection, o
             </Button>
           </div>
         )}
+
+        {/* Clothing Reference Image Upload Section */}
+        <div className="text-xs text-muted-foreground">Reference Clothing Image (Optional)</div>
+        <div className="space-y-2">
+          {node.clothesImage ? (
+            <div className="relative">
+              <img src={node.clothesImage} className="w-full rounded max-h-40 object-contain bg-muted/30" alt="Clothing Reference" />
+              <Button
+                variant="destructive"
+                size="sm"
+                className="absolute top-2 right-2"
+                onClick={() => onUpdate(node.id, { clothesImage: null })}
+              >
+                Remove
+              </Button>
+            </div>
+          ) : (
+            <label className="block">
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleImageUpload}
+              />
+              <div className="border-2 border-dashed border-white/20 rounded-lg p-4 text-center cursor-pointer hover:border-white/40 transition-colors">
+                <p className="text-xs text-white/60">Drop, upload, or paste clothing image</p>
+                <p className="text-xs text-white/40 mt-1">JPG, PNG, WEBP</p>
+              </div>
+            </label>
+          )}
+        </div>
+
         <div className="text-xs text-muted-foreground">Clothing Description</div>
 
         <Textarea
@@ -931,8 +1010,8 @@ export function ClothesNodeView({ node, onDelete, onUpdate, onStartConnection, o
         <Button
           className="w-full"
           onClick={() => onProcess(node.id)}
-          disabled={node.isRunning || !node.clothesPrompt}
-          title={!node.input ? "Connect an input first" : !node.clothesPrompt ? "Enter a clothing description" : "Apply Clothing"}
+          disabled={node.isRunning || (!node.clothesPrompt && !node.clothesImage)}
+          title={!node.input ? "Connect an input first" : (!node.clothesPrompt && !node.clothesImage) ? "Enter a clothing description or upload an image" : "Apply Clothing"}
         >
           {node.isRunning ? "Processing..." : "Apply Clothes"}
         </Button>

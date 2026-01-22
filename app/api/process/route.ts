@@ -41,7 +41,7 @@ export const maxDuration = 60;
 function parseDataUrl(dataUrl: string): { mimeType: string; data: string } | null {
   const match = dataUrl.match(/^data:(.*?);base64,(.*)$/);  // Regex to capture MIME type and data
   if (!match) return null;                                   // Invalid format
-  return { 
+  return {
     mimeType: match[1] || "image/png",  // Default to PNG if no MIME type
     data: match[2]                      // Base64 image data
   };
@@ -59,7 +59,7 @@ function parseDataUrl(dataUrl: string): { mimeType: string; data: string } | nul
 export async function POST(req: NextRequest) {
   try {
     // Log incoming request size for debugging and monitoring
-    
+
     // Parse and validate the JSON request body
     let body: any;
     try {
@@ -100,7 +100,7 @@ export async function POST(req: NextRequest) {
 
     // Initialize Google AI client with the validated API key
     const ai = new GoogleGenAI({ apiKey });
-    
+
     /**
      * Universal image data converter
      * 
@@ -112,13 +112,13 @@ export async function POST(req: NextRequest) {
      */
     const toInlineDataFromAny = async (url: string): Promise<{ mimeType: string; data: string } | null> => {
       if (!url) return null;  // Handle empty/null input
-      
+
       try {
         // Case 1: Data URL (data:image/png;base64,...)
         if (url.startsWith('data:')) {
           return parseDataUrl(url);  // Use existing parser for data URLs
         }
-        
+
         // Case 2: HTTP/HTTPS URL (external image)
         if (url.startsWith('http')) {
           const res = await fetch(url);                                    // Fetch external image
@@ -127,7 +127,7 @@ export async function POST(req: NextRequest) {
           const mimeType = res.headers.get('content-type') || 'image/jpeg'; // Get MIME type from headers
           return { mimeType, data: base64 };
         }
-        
+
         // Case 3: Relative path (local image on server)
         if (url.startsWith('/')) {
           const host = req.headers.get('host') ?? 'localhost:3000';        // Get current host
@@ -139,7 +139,7 @@ export async function POST(req: NextRequest) {
           const mimeType = res.headers.get('content-type') || 'image/png'; // Get MIME type
           return { mimeType, data: base64 };
         }
-        
+
         return null;  // Unsupported URL format
       } catch {
         return null;  // Handle any conversion errors gracefully
@@ -149,7 +149,7 @@ export async function POST(req: NextRequest) {
     /* ========================================
        MERGE OPERATION - MULTI-IMAGE PROCESSING
        ======================================== */
-    
+
     /**
      * Handle MERGE node type separately from single-image operations
      * 
@@ -161,7 +161,7 @@ export async function POST(req: NextRequest) {
      */
     if (body.type === "MERGE") {
       const imgs = body.images?.filter(Boolean) ?? [];  // Remove any null/undefined images
-      
+
       // Validate minimum input requirement for merge operations
       if (imgs.length < 2) {
         return NextResponse.json(
@@ -172,7 +172,7 @@ export async function POST(req: NextRequest) {
 
       // Determine the AI prompt for merge operation
       let mergePrompt = body.prompt;  // Use custom prompt if provided
-      
+
       if (!mergePrompt) {
         mergePrompt = `MERGE TASK: Create a natural, cohesive group photo combining ALL subjects from ${imgs.length} provided images.
 
@@ -208,7 +208,7 @@ The result should look like all subjects were photographed together in the same 
       const mergeParts: any[] = [{ text: mergePrompt }];
       for (let i = 0; i < imgs.length; i++) {
         const url = imgs[i];
-        
+
         try {
           const parsed = await toInlineDataFromAny(url);
           if (!parsed) {
@@ -220,10 +220,10 @@ The result should look like all subjects were photographed together in the same 
           console.error(`[MERGE] Error processing image ${i + 1}:`, error);
         }
       }
-      
+
 
       const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash-image-preview",
+        model: "gemini-2.5-flash-image",
         contents: mergeParts,
       });
 
@@ -253,7 +253,7 @@ The result should look like all subjects were photographed together in the same 
     if (body.image) {
       parsed = await toInlineDataFromAny(body.image);
     }
-    
+
     if (!parsed) {
       return NextResponse.json({ error: "Invalid or missing image data. Please ensure an input is connected." }, { status: 400 });
     }
@@ -266,34 +266,34 @@ The result should look like all subjects were photographed together in the same 
 
     // We'll collect additional inline image parts (references)
     const referenceParts: { inlineData: { mimeType: string; data: string } }[] = [];
-    
+
     // Background modifications
     if (params.backgroundType) {
       const bgType = params.backgroundType;
-      
+
       if (bgType === "color") {
         prompts.push(`Change the background to a solid ${params.backgroundColor || "white"} background with smooth, even color coverage.`);
-        
+
       } else if (bgType === "gradient") {
         const direction = params.gradientDirection || "to right";
         const startColor = params.gradientStartColor || "#ff6b6b";
         const endColor = params.gradientEndColor || "#4ecdc4";
-        
+
         if (direction === "radial") {
           prompts.push(`Replace the background with a radial gradient that starts with ${startColor} in the center and transitions smoothly to ${endColor} at the edges, creating a circular gradient effect.`);
         } else {
           prompts.push(`Replace the background with a linear gradient flowing ${direction}, starting with ${startColor} and smoothly transitioning to ${endColor}.`);
         }
-        
+
       } else if (bgType === "image") {
         prompts.push(`Change the background to ${params.backgroundImage || "a beautiful beach scene"}.`);
-        
+
       } else if (bgType === "city") {
         const sceneType = params.citySceneType || "busy_street";
         const timeOfDay = params.cityTimeOfDay || "daytime";
-        
+
         let cityDescription = "";
-        
+
         switch (sceneType) {
           case "busy_street":
             cityDescription = "a realistic busy city street with people walking at various distances around the main character. Include pedestrians in business attire, casual clothing, carrying bags and phones - some walking close by (appearing similar size to main character), others further in the background (appearing smaller due to distance). Show urban storefronts, traffic lights, street signs, and parked cars with authentic city atmosphere and proper depth perception";
@@ -331,7 +331,7 @@ The result should look like all subjects were photographed together in the same 
           default:
             cityDescription = "a dynamic city environment with people walking naturally around the main character in an authentic urban setting";
         }
-        
+
         let timeDescription = "";
         switch (timeOfDay) {
           case "golden_hour":
@@ -355,14 +355,14 @@ The result should look like all subjects were photographed together in the same 
           default:
             timeDescription = "";
         }
-        
+
         prompts.push(`Replace the background with ${cityDescription}${timeDescription}. CRITICAL SCALE REQUIREMENTS: Keep the main character at their EXACT original size and position - do NOT make them smaller or change their scale. The background people should be appropriately sized relative to their distance from the camera, with people closer to the camera appearing larger and people further away appearing smaller, but the main character must maintain their original proportions. Ensure the main character appears naturally integrated into the scene with proper lighting, shadows, and perspective that matches the environment.`);
-        
+
       } else if (bgType === "photostudio") {
         const setup = params.studioSetup || "white_seamless";
         const lighting = params.studioLighting || "key_fill";
         const faceCamera = params.faceCamera || false;
-        
+
         let setupDescription = "";
         switch (setup) {
           case "white_seamless":
@@ -387,7 +387,7 @@ The result should look like all subjects were photographed together in the same 
           default:
             setupDescription = "a professional studio backdrop";
         }
-        
+
         let lightingDescription = "";
         switch (lighting) {
           case "key_fill":
@@ -411,44 +411,56 @@ The result should look like all subjects were photographed together in the same 
           default:
             lightingDescription = "professional studio lighting";
         }
-        
+
         const positioningInstruction = faceCamera ? " Position the person to face directly toward the camera with confident posture." : "";
-        
+
         prompts.push(`Crop the head and create a 2-inch ID photo. Place the person in a professional photo studio with ${setupDescription} and ${lightingDescription}. Create a clean, professional portrait setup with proper studio atmosphere.${positioningInstruction}`);
-        
+
       } else if (bgType === "upload" && params.customBackgroundImage) {
         prompts.push(`Replace the background using the provided custom background reference image (attached below). Ensure perspective and lighting match.`);
         const bgRef = await toInlineDataFromAny(params.customBackgroundImage);
         if (bgRef) referenceParts.push({ inlineData: bgRef });
-        
+
       } else if (bgType === "custom" && params.customPrompt) {
         prompts.push(`${params.customPrompt}. CRITICAL SCALE REQUIREMENTS: Keep the main character at their EXACT original size and position - do NOT make them smaller or change their scale. Ensure the main character appears naturally integrated into the scene with proper lighting, shadows, and perspective that matches the environment.`);
       }
     }
-    
+
     // Clothes modifications
-    if (params.clothesImage) {
-      
-      if (params.selectedPreset === "Sukajan") {
-        prompts.push("Replace the person's clothing with a Japanese sukajan jacket (embroidered designs). Use the clothes reference image if provided.");
-      } else if (params.selectedPreset === "Blazer") {
-        prompts.push("Replace the person's clothing with a professional blazer. Use the clothes reference image if provided.");
-      } else {
-        prompts.push(`Take the person shown in the first image and replace their entire outfit with the clothing items shown in the second reference image. The person's face, hair, body pose, and background should remain exactly the same. Only the clothing should change to match the reference clothing image. Ensure the new clothes fit naturally on the person's body with realistic proportions, proper fabric draping, and lighting that matches the original photo environment.`);
-      }
-      
-      try {
-        const clothesRef = await toInlineDataFromAny(params.clothesImage);
-        if (clothesRef) {
-          referenceParts.push({ inlineData: clothesRef });
+    if (params.clothesImage || params.clothesPrompt) {
+      // Build the prompt based on what's provided
+      if (params.clothesImage && params.clothesPrompt) {
+        // Both image and text description provided
+        prompts.push(`Take the person shown in the first image and replace their entire outfit with clothing matching this description: "${params.clothesPrompt}". Use the second reference image as a visual guide for the clothing style. The person's face, hair, body pose, and background should remain exactly the same. Only the clothing should change. Ensure the new clothes fit naturally on the person's body with realistic proportions, proper fabric draping, and lighting that matches the original photo environment.`);
+      } else if (params.clothesImage) {
+        // Only image provided
+        if (params.selectedPreset === "Sukajan") {
+          prompts.push("Replace the person's clothing with a Japanese sukajan jacket (embroidered designs). Use the clothes reference image if provided.");
+        } else if (params.selectedPreset === "Blazer") {
+          prompts.push("Replace the person's clothing with a professional blazer. Use the clothes reference image if provided.");
         } else {
-          console.error('[API] Failed to process clothes image - toInlineDataFromAny returned null');
+          prompts.push(`Take the person shown in the first image and replace their entire outfit with the clothing items shown in the second reference image. The person's face, hair, body pose, and background should remain exactly the same. Only the clothing should change to match the reference clothing image. Ensure the new clothes fit naturally on the person's body with realistic proportions, proper fabric draping, and lighting that matches the original photo environment.`);
         }
-      } catch (error) {
-        console.error('[API] Error processing clothes image:', error);
+      } else if (params.clothesPrompt) {
+        // Only text description provided
+        prompts.push(`Change the person's clothing to: ${params.clothesPrompt}. The person's face, hair, body pose, and background should remain exactly the same. Only the clothing should change. Ensure the new clothes fit naturally on the person's body with realistic proportions, proper fabric draping, and lighting that matches the original photo environment.`);
+      }
+
+      // Add the reference image if provided
+      if (params.clothesImage) {
+        try {
+          const clothesRef = await toInlineDataFromAny(params.clothesImage);
+          if (clothesRef) {
+            referenceParts.push({ inlineData: clothesRef });
+          } else {
+            console.error('[API] Failed to process clothes image - toInlineDataFromAny returned null');
+          }
+        } catch (error) {
+          console.error('[API] Error processing clothes image:', error);
+        }
       }
     }
-    
+
     // Style application
     if (params.stylePreset) {
       const strength = params.styleStrength || 50;
@@ -464,10 +476,10 @@ The result should look like all subjects were photographed together in the same 
         "family-guy": "Convert into Family Guy animation style",
         "pixar": "Convert into Pixar animation style",
         "manga": "Convert into Manga style",
-       
-       
+
+
       };
-      
+
       const styleDescription = styleMap[params.stylePreset];
       if (styleDescription) {
         prompts.push(`${styleDescription}. Apply this style transformation at ${strength}% intensity while preserving the core subject matter.`);
@@ -475,18 +487,18 @@ The result should look like all subjects were photographed together in the same 
         console.error(`[API] Style not found in styleMap: ${params.stylePreset}`);
       }
     }
-    
+
     // Edit prompt
     if (params.editPrompt) {
       prompts.push(params.editPrompt);
     }
-    
+
     // Camera settings - Enhanced for Gemini 2.5 Flash Image
-    if (params.focalLength || params.aperture || params.shutterSpeed || params.whiteBalance || params.angle || 
-        params.iso || params.filmStyle || params.lighting || params.bokeh || params.composition || params.motionBlur) {
+    if (params.focalLength || params.aperture || params.shutterSpeed || params.whiteBalance || params.angle ||
+      params.iso || params.filmStyle || params.lighting || params.bokeh || params.composition || params.motionBlur) {
       // Build cinematic camera prompt for professional, movie-like results
       let cameraPrompt = "CINEMATIC CAMERA TRANSFORMATION: Transform this image into a professional, cinematic photograph with movie-quality production values";
-      
+
       if (params.focalLength) {
         if (params.focalLength === "8mm") {
           cameraPrompt += " shot with an ultra-wide 8mm fisheye lens creating dramatic barrel distortion, immersive perspective, and cinematic edge curvature typical of action sequences";
@@ -508,7 +520,7 @@ The result should look like all subjects were photographed together in the same 
           cameraPrompt += ` shot with professional ${params.focalLength} cinema glass`;
         }
       }
-      
+
       if (params.aperture) {
         if (params.aperture === "f/1.2") {
           cameraPrompt += `, shot wide open at f/1.2 for extreme shallow depth of field, ethereal bokeh, and cinematic subject isolation with dreamy background blur`;
@@ -526,7 +538,7 @@ The result should look like all subjects were photographed together in the same 
           cameraPrompt += `, professionally exposed at ${params.aperture}`;
         }
       }
-      
+
       if (params.iso) {
         if (params.iso === "ISO 100") {
           cameraPrompt += ", shot at ISO 100 for pristine image quality, zero noise, and maximum dynamic range typical of high-end cinema cameras";
@@ -544,7 +556,7 @@ The result should look like all subjects were photographed together in the same 
           cameraPrompt += `, shot at ${params.iso} with appropriate noise characteristics`;
         }
       }
-      
+
       if (params.lighting) {
         if (params.lighting === "Golden Hour") {
           cameraPrompt += ", cinematically lit during golden hour with warm, directional sunlight creating magical rim lighting, long shadows, and that coveted cinematic glow";
@@ -560,7 +572,7 @@ The result should look like all subjects were photographed together in the same 
           cameraPrompt += `, professionally lit with ${params.lighting} lighting setup`;
         }
       }
-      
+
       if (params.bokeh) {
         if (params.bokeh === "Smooth Bokeh") {
           cameraPrompt += ", featuring silky smooth bokeh with perfectly circular out-of-focus highlights and creamy background transitions";
@@ -572,7 +584,7 @@ The result should look like all subjects were photographed together in the same 
           cameraPrompt += `, featuring ${params.bokeh} quality bokeh rendering in out-of-focus areas`;
         }
       }
-      
+
       if (params.motionBlur) {
         if (params.motionBlur === "Light Motion Blur") {
           cameraPrompt += ", with subtle motion blur suggesting gentle movement and adding cinematic flow to the image";
@@ -588,7 +600,7 @@ The result should look like all subjects were photographed together in the same 
           cameraPrompt += `, with ${params.motionBlur} motion effect`;
         }
       }
-      
+
       if (params.angle) {
         if (params.angle === "Low Angle") {
           cameraPrompt += ", shot from a low-angle perspective looking upward for dramatic impact";
@@ -598,33 +610,33 @@ The result should look like all subjects were photographed together in the same 
           cameraPrompt += `, ${params.angle} camera angle`;
         }
       }
-      
+
       if (params.filmStyle && params.filmStyle !== "RAW") {
         cameraPrompt += `, processed with ${params.filmStyle} film aesthetic and color grading`;
       } else if (params.filmStyle === "RAW") {
         cameraPrompt += ", with natural RAW processing maintaining realistic colors and contrast";
       }
-      
+
       cameraPrompt += ". Maintain photorealistic quality with authentic camera characteristics, natural lighting, and professional composition.";
-      
+
       prompts.push(cameraPrompt);
     }
-    
+
     // Age transformation
     if (params.targetAge) {
       prompts.push(`Transform the person to look exactly ${params.targetAge} years old with age-appropriate features.`);
     }
-    
+
     // Lighting effects
     if (params.lightingPrompt && params.selectedLighting) {
       prompts.push(`IMPORTANT: Completely transform the lighting on this person to match this exact description: ${params.lightingPrompt}. The lighting change should be dramatic and clearly visible. Keep their face, clothes, pose, and background exactly the same, but make the lighting transformation very obvious.`);
     }
-    
+
     // Pose modifications
     if (params.posePrompt && params.selectedPose) {
       prompts.push(`IMPORTANT: Completely change the person's body pose to match this exact description: ${params.posePrompt}. The pose change should be dramatic and clearly visible. Keep their face, clothes, and background exactly the same, but make the pose transformation very obvious.`);
     }
-    
+
     // Face modifications
     if (params.faceOptions) {
       const face = params.faceOptions;
@@ -636,14 +648,14 @@ The result should look like all subjects were photographed together in the same 
       if (face.facialExpression) modifications.push(`change facial expression to ${face.facialExpression}`);
       if (face.beardStyle) modifications.push(`add/change beard to ${face.beardStyle}`);
       if (face.selectedMakeup) modifications.push(`add a face makeup with red colors on cheeks and and some yellow blue colors around the eye area`);
-      
+
       if (modifications.length > 0) {
         prompts.push(`Face modifications: ${modifications.join(", ")}`);
       }
     }
-    
+
     // Combine all prompts
-    let prompt = prompts.length > 0 
+    let prompt = prompts.length > 0
       ? prompts.join("\n\n") + "\nApply all these modifications while maintaining the person's identity and keeping unspecified aspects unchanged."
       : "Process this image with high quality output.";
 
@@ -663,11 +675,11 @@ The result should look like all subjects were photographed together in the same 
       ...referenceParts,
     ];
 
-    
+
     let response;
     try {
       response = await ai.models.generateContent({
-        model: "gemini-2.5-flash-image-preview",
+        model: "gemini-2.5-flash-image",
         contents: parts,
       });
     } catch (geminiError: any) {
@@ -677,40 +689,73 @@ The result should look like all subjects were photographed together in the same 
         status: geminiError.status,
         code: geminiError.code
       });
-      
-      if (geminiError.message?.includes('safety')) {
+
+      // Try to extract a clean error message from the error
+      let errorMessage = 'Unknown error occurred';
+
+      // Check if the error message contains JSON
+      if (geminiError.message) {
+        try {
+          // Try to parse JSON from the error message
+          const jsonMatch = geminiError.message.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            const errorJson = JSON.parse(jsonMatch[0]);
+            // Extract the message from the parsed JSON
+            if (errorJson.error?.message) {
+              errorMessage = errorJson.error.message;
+            } else if (errorJson.message) {
+              errorMessage = errorJson.message;
+            }
+          } else {
+            errorMessage = geminiError.message;
+          }
+        } catch {
+          // If JSON parsing fails, use the original message
+          errorMessage = geminiError.message;
+        }
+      }
+
+      // Check for specific error types and provide user-friendly messages
+      if (errorMessage.includes('API key not valid') || errorMessage.includes('API_KEY_INVALID')) {
+        return NextResponse.json(
+          { error: "Invalid API key. Please check your Google Gemini API key and try again." },
+          { status: 401 }
+        );
+      }
+
+      if (geminiError.message?.includes('safety') || errorMessage.includes('safety')) {
         return NextResponse.json(
           { error: "Content was blocked by safety filters. Try using different images or prompts." },
           { status: 400 }
         );
       }
-      
-      if (geminiError.message?.includes('quota') || geminiError.message?.includes('limit')) {
+
+      if (geminiError.message?.includes('quota') || geminiError.message?.includes('limit') || errorMessage.includes('quota') || errorMessage.includes('limit')) {
         return NextResponse.json(
           { error: "API quota exceeded. Please check your Gemini API usage limits." },
           { status: 429 }
         );
       }
-      
+
       return NextResponse.json(
-        { error: `Gemini API error: ${geminiError.message || 'Unknown error'}` },
+        { error: errorMessage },
         { status: 500 }
       );
     }
 
-    
+
     const outParts = (response as any)?.candidates?.[0]?.content?.parts ?? [];
     const images: string[] = [];
     const texts: string[] = [];
-    
-    
+
+
     for (let i = 0; i < outParts.length; i++) {
       const p = outParts[i];
-      
+
       if (p?.inlineData?.data) {
         images.push(`data:image/png;base64,${p.inlineData.data}`);
       }
-      
+
       if (p?.text) {
         texts.push(p.text);
       }
@@ -719,8 +764,8 @@ The result should look like all subjects were photographed together in the same 
     if (!images.length) {
       console.error('[API] No images generated by Gemini. Text responses:', texts);
       return NextResponse.json(
-        { 
-          error: "No image generated. Try adjusting your parameters.", 
+        {
+          error: "No image generated. Try adjusting your parameters.",
           textResponse: texts.join('\n'),
           debugInfo: {
             partsCount: outParts.length,
@@ -743,7 +788,7 @@ The result should look like all subjects were photographed together in the same 
       status: err?.status,
       details: err?.details
     });
-    
+
     // Provide more specific error messages
     if (err?.message?.includes('payload size') || err?.code === 413) {
       return NextResponse.json(
@@ -751,28 +796,28 @@ The result should look like all subjects were photographed together in the same 
         { status: 413 }
       );
     }
-    
+
     if (err?.message?.includes('API key') || err?.message?.includes('authentication')) {
       return NextResponse.json(
         { error: "Invalid API key. Please check your Google Gemini API token." },
         { status: 401 }
       );
     }
-    
+
     if (err?.message?.includes('quota') || err?.message?.includes('limit')) {
       return NextResponse.json(
         { error: "API quota exceeded. Please check your Google Gemini API usage limits." },
         { status: 429 }
       );
     }
-    
+
     if (err?.message?.includes('JSON')) {
       return NextResponse.json(
         { error: "Invalid data format. Please ensure images are properly encoded." },
         { status: 400 }
       );
     }
-    
+
     return NextResponse.json(
       { error: `Failed to process image: ${err?.message || 'Unknown error'}` },
       { status: 500 }

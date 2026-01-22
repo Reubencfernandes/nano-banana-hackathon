@@ -1270,6 +1270,9 @@ export default function EditorPage() {
         if ((node as ClothesNode).clothesPrompt) {
           config.clothesPrompt = (node as ClothesNode).clothesPrompt;
         }
+        if ((node as ClothesNode).clothesImage) {
+          config.clothesImage = (node as ClothesNode).clothesImage;
+        }
         break;
       case "STYLE":
         if ((node as StyleNode).stylePreset) {
@@ -1590,7 +1593,7 @@ export default function EditorPage() {
           }),
         });
       } else {
-        // Use Nano Banana Pro (Gemini API)
+        // Use Nano Banana (Gemini API)
         res = await fetch("/api/process", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1812,7 +1815,7 @@ export default function EditorPage() {
     if (processingMode === 'huggingface') {
       setNodes((prev) => prev.map((n) => (n.id === mergeId && n.type === "MERGE" ? {
         ...n,
-        error: "MERGE requires Nano Banana Pro mode. HuggingFace models only accept single images. Please switch to '🍌 Nano Banana Pro' in the header and enter your Gemini API key."
+        error: "MERGE requires Nano Banana mode. HuggingFace models only accept single images. Please switch to '🍌 Nano Banana' in the header and enter your Gemini API key."
       } : n)));
       return;
     }
@@ -2163,7 +2166,7 @@ export default function EditorPage() {
               onClick={() => setProcessingMode('nanobananapro')}
               title="Use Google Gemini API - supports all features including MERGE"
             >
-              🍌 Nano Banana Pro
+              🍌 Nano Banana
             </button>
             <button
               className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${processingMode === 'huggingface'
@@ -2293,7 +2296,7 @@ export default function EditorPage() {
                   <h3 className="font-semibold mb-3 text-foreground">⚙️ Processing Modes</h3>
                   <div className="text-sm text-muted-foreground space-y-3">
                     <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg">
-                      <p className="font-medium text-primary mb-2">🍌 Nano Banana Pro (Gemini API)</p>
+                      <p className="font-medium text-primary mb-2">🍌 Nano Banana (Gemini API)</p>
                       <p>Uses Google's Gemini API. <strong>Supports ALL nodes</strong> including MERGE for combining multiple images into group photos.</p>
                       <p className="mt-1 text-xs">Requires a Google Gemini API key from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">AI Studio</a>.</p>
                     </div>
@@ -2309,7 +2312,7 @@ export default function EditorPage() {
                 <div className="p-4 bg-destructive/10 border border-destructive/30 rounded-lg">
                   <h4 className="font-semibold text-destructive mb-2">⚠️ MERGE Node Limitation</h4>
                   <p className="text-sm text-muted-foreground">
-                    The <strong>MERGE</strong> node requires <strong>Nano Banana Pro</strong> because it combines multiple images into one cohesive group photo. HuggingFace models only accept single images, so MERGE won't work in HuggingFace mode.
+                    The <strong>MERGE</strong> node requires <strong>Nano Banana</strong> because it combines multiple images into one cohesive group photo. HuggingFace models only accept single images, so MERGE won't work in HuggingFace mode.
                   </p>
                 </div>
 
@@ -2338,7 +2341,7 @@ export default function EditorPage() {
                   <div className="text-sm text-muted-foreground space-y-2">
                     <p>• <strong>Adding Nodes:</strong> Right-click on the canvas to add nodes</p>
                     <p>• <strong>Character Nodes:</strong> Upload or drag images as starting points</p>
-                    <p>• <strong>Merge Nodes:</strong> Connect multiple characters (Nano Banana Pro only)</p>
+                    <p>• <strong>Merge Nodes:</strong> Connect multiple characters (Nano Banana only)</p>
                     <p>• <strong>Editing Nodes:</strong> Background, Style, Face, Age, Camera, etc.</p>
                     <p>• <strong>Connecting:</strong> Drag from output port to input port</p>
                   </div>

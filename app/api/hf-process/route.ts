@@ -11,7 +11,7 @@
  * 
  * IMPORTANT LIMITATIONS:
  * - These models only accept SINGLE images for editing
- * - MERGE operations require Nano Banana Pro (Gemini API) which accepts multiple images
+ * - MERGE operations require Nano Banana (Gemini API) which accepts multiple images
  * - Text-to-image (FLUX.1-dev) doesn't require input images
  */
 
@@ -42,13 +42,6 @@ const HF_MODELS = {
         type: "image-to-image",
         description: "Powerful image editing and manipulation",
         supportsNodes: ["BACKGROUND", "CLOTHES", "STYLE", "EDIT", "CAMERA", "AGE", "FACE", "LIGHTNING", "POSES"],
-    },
-    "FLUX.1-dev": {
-        id: "black-forest-labs/FLUX.1-dev",
-        name: "FLUX.1 Dev",
-        type: "text-to-image",
-        description: "High-quality text-to-image generation",
-        supportsNodes: ["CHARACTER"], // Only for generating new images
     },
 };
 
@@ -133,7 +126,7 @@ export async function POST(req: NextRequest) {
         if (body.type === "MERGE") {
             return NextResponse.json(
                 {
-                    error: "MERGE operations require Nano Banana Pro (Gemini API). HuggingFace models only accept single images. Please switch to 'Nano Banana Pro' mode and enter your Google Gemini API key to use MERGE functionality.",
+                    error: "MERGE operations require Nano Banana (Gemini API). HuggingFace models only accept single images. Please switch to 'Nano Banana' mode and enter your Google Gemini API key to use MERGE functionality.",
                     requiresNanoBananaPro: true
                 },
                 { status: 400 }
@@ -369,6 +362,6 @@ export async function POST(req: NextRequest) {
 export async function GET() {
     return NextResponse.json({
         models: HF_MODELS,
-        note: "MERGE operations require Nano Banana Pro (Gemini API) as it needs multi-image input which HuggingFace models don't support."
+        note: "MERGE operations require Nano Banana (Gemini API) as it needs multi-image input which HuggingFace models don't support."
     });
 }
