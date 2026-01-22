@@ -65,8 +65,3 @@ export async function GET(req: NextRequest) {
             : `Daily limit reached. Add your own API key to continue or wait until tomorrow.`
     });
 }
-
-/**
- * Utility function to export for use in other routes
- */
-export { getClientIP };
