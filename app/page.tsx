@@ -1066,9 +1066,12 @@ export default function EditorPage() {
   const [apiToken, setApiToken] = useState("");
   const [showHelpSidebar, setShowHelpSidebar] = useState(false);
 
+  // Usage tracking state
+  const [usage, setUsage] = useState<{ used: number; remaining: number; limit: number } | null>(null);
+
   // Processing Mode: 'nanobananapro' uses Gemini API, 'huggingface' uses HF models
   type ProcessingMode = 'nanobananapro' | 'huggingface';
-  const [processingMode, setProcessingMode] = useState<ProcessingMode>('huggingface');
+  const [processingMode, setProcessingMode] = useState<ProcessingMode>('nanobananapro');
 
   // Available HF models
   const HF_MODELS = {
@@ -1093,6 +1096,28 @@ export default function EditorPage() {
   const [isHfProLoggedIn, setIsHfProLoggedIn] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [hfUser, setHfUser] = useState<{ name?: string; username?: string; avatarUrl?: string } | null>(null);
+
+  // Fetch usage on mount and when apiToken changes
+  useEffect(() => {
+    const fetchUsage = async () => {
+      try {
+        const res = await fetch('/api/usage');
+        if (res.ok) {
+          const data = await res.json();
+          setUsage({ used: data.used, remaining: data.remaining, limit: data.limit });
+        }
+      } catch (error) {
+        console.error('Failed to fetch usage:', error);
+      }
+    };
+
+    // Only fetch if not using own API key
+    if (!apiToken) {
+      fetchUsage();
+    } else {
+      setUsage(null); // Clear usage when using own key
+    }
+  }, [apiToken]);
 
 
   const characters = nodes.filter((n) => n.type === "CHARACTER") as CharacterNode[];
@@ -1640,6 +1665,11 @@ export default function EditorPage() {
         return n;
       }));
 
+      // Update usage from API response
+      if (data.usage) {
+        setUsage(data.usage);
+      }
+
       // Add to node's history
       const description = unprocessedNodeCount > 1
         ? `Combined ${unprocessedNodeCount} transformations`
@@ -1911,6 +1941,11 @@ export default function EditorPage() {
       }
       const out = js.image || (js.images?.[0] as string) || null;
       setNodes((prev) => prev.map((n) => (n.id === mergeId && n.type === "MERGE" ? { ...n, output: out, isRunning: false } : n)));
+
+      // Update usage from API response
+      if (js.usage) {
+        setUsage(js.usage);
+      }
 
       // Add merge result to node's history
       if (out) {
@@ -2184,16 +2219,32 @@ export default function EditorPage() {
           {processingMode === 'nanobananapro' ? (
             <>
               <div className="h-6 w-px bg-border" />
+              {/* Usage info when not using own API key */}
+              {!apiToken && usage && (
+                <div className={`text-xs px-2 py-1 rounded-md ${usage.remaining > 5
+                  ? 'bg-green-500/20 text-green-400'
+                  : usage.remaining > 0
+                    ? 'bg-yellow-500/20 text-yellow-400'
+                    : 'bg-red-500/20 text-red-400'
+                  }`}>
+                  {usage.remaining}/{usage.limit} free requests
+                </div>
+              )}
+              {apiToken && (
+                <div className="text-xs px-2 py-1 rounded-md bg-blue-500/20 text-blue-400">
+                  Using your API key ✓
+                </div>
+              )}
               <label htmlFor="api-token" className="text-sm font-medium text-muted-foreground">
-                Gemini API Key:
+                API Key:
               </label>
               <Input
                 id="api-token"
                 type="password"
-                placeholder="Enter your Google Gemini API key"
+                placeholder={apiToken ? "Your key is set" : "Optional - using free tier"}
                 value={apiToken}
                 onChange={(e) => setApiToken(e.target.value)}
-                className="w-56"
+                className="w-48"
               />
             </>
           ) : (
