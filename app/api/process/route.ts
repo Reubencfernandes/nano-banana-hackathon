@@ -22,7 +22,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/genai";
 import { cookies } from "next/headers";
-import { getUsage, canMakeRequest, recordRequest } from "@/lib/usage-store";
 
 // Configure Next.js runtime for Node.js (required for Google AI SDK)
 export const runtime = "nodejs";
@@ -90,51 +89,16 @@ export async function POST(req: NextRequest) {
       console.error('Error reading HF token from cookies:', error);
     }
 
-    // Validate and retrieve Google API key from user input or environment
-    const userProvidedKey = !!body.apiToken; // Track if user provided their own key
-    const apiKey = body.apiToken || process.env.GOOGLE_API_KEY;
-    if (!apiKey || apiKey === 'your_actual_api_key_here') {
+    // Require user to provide their own Google API key - no free tier
+    const apiKey = body.apiToken;
+    if (!apiKey) {
       return NextResponse.json(
-        { error: `API key not provided. Please ${isHfProUser ? 'enter your Google Gemini API token in the top right' : 'login with HF Pro or enter your Google Gemini API token'}.` },
-        { status: 500 }
+        { error: "Google API key required. Please enter your Gemini API key in the top right to use this service. Free requests have been discontinued due to high costs." },
+        { status: 401 }
       );
     }
 
-    // Get client IP for usage tracking
-    const getClientIP = (req: NextRequest): string => {
-      const forwardedFor = req.headers.get('x-forwarded-for');
-      if (forwardedFor) return forwardedFor.split(',')[0].trim();
-      const realIP = req.headers.get('x-real-ip');
-      if (realIP) return realIP;
-      const vercelForwardedFor = req.headers.get('x-vercel-forwarded-for');
-      if (vercelForwardedFor) return vercelForwardedFor.split(',')[0].trim();
-      const cfConnectingIP = req.headers.get('cf-connecting-ip');
-      if (cfConnectingIP) return cfConnectingIP;
-      return 'unknown';
-    };
-
-    const clientIP = getClientIP(req);
-
-    // If using default API key, check usage limits
-    if (!userProvidedKey) {
-      const usage = await getUsage(clientIP);
-
-      if (!(await canMakeRequest(clientIP))) {
-        return NextResponse.json(
-          {
-            error: `Daily limit reached (${usage.limit} requests/day). Please add your own Gemini API key to continue, or wait until tomorrow.`,
-            usage: {
-              used: usage.used,
-              remaining: 0,
-              limit: usage.limit
-            }
-          },
-          { status: 429 }
-        );
-      }
-    }
-
-    // Initialize Google AI client with the validated API key
+    // Initialize Google AI client with the user's API key
     const ai = new GoogleGenAI({ apiKey });
 
     /**
@@ -280,21 +244,11 @@ The result should look like all subjects were photographed together in the same 
           { status: 500 }
         );
       }
-      // Record usage if using default API key (only on success)
-      let mergeUsageInfo = null;
-      if (!userProvidedKey) {
-        mergeUsageInfo = await recordRequest(clientIP);
-      }
 
       return NextResponse.json({
         image: images[0],
         images,
-        text: texts.join("\n"),
-        usage: mergeUsageInfo ? {
-          used: mergeUsageInfo.used,
-          remaining: mergeUsageInfo.remaining,
-          limit: mergeUsageInfo.limit
-        } : null
+        text: texts.join("\n")
       });
     }
 
@@ -826,19 +780,9 @@ The result should look like all subjects were photographed together in the same 
         { status: 500 }
       );
     }
-    // Record usage if using default API key (only on success)
-    let usageInfo = null;
-    if (!userProvidedKey) {
-      usageInfo = await recordRequest(clientIP);
-    }
 
     return NextResponse.json({
-      image: images[0],
-      usage: usageInfo ? {
-        used: usageInfo.used,
-        remaining: usageInfo.remaining,
-        limit: usageInfo.limit
-      } : null
+      image: images[0]
     });
   } catch (err: any) {
     console.error("/api/process error:", err);
