@@ -4,7 +4,7 @@ emoji: 🍌
 colorFrom: yellow
 colorTo: yellow
 sdk: docker
-pinned: false
+pinned: true
 app_port: 7860
 ---
 
