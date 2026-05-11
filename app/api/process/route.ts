@@ -48,11 +48,65 @@ function parseDataUrl(dataUrl: string): { mimeType: string; data: string } | nul
 }
 
 /**
+ * Run an OpenAI image generation/edit via the Responses API + image_generation tool.
+ * Returns the same { images, texts } shape used by the Gemini code paths so callers
+ * don't need to branch on provider when reading results.
+ */
+async function runOpenAIImageGen(opts: {
+  apiKey: string;
+  prompt: string;
+  imageDataUrls?: string[]; // optional input images as data URLs
+}): Promise<{ images: string[]; texts: string[] }> {
+  const inputContent: any[] = [{ type: "input_text", text: opts.prompt }];
+  for (const url of opts.imageDataUrls || []) {
+    if (url) inputContent.push({ type: "input_image", image_url: url });
+  }
+
+  const res = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${opts.apiKey}`,
+    },
+    body: JSON.stringify({
+      // Per OpenAI vision/images guide: pair a chat-capable model with the
+      // image_generation tool. The tool itself uses GPT Image under the hood.
+      model: "gpt-4.1-mini",
+      input: [{ role: "user", content: inputContent }],
+      tools: [{ type: "image_generation" }],
+    }),
+  });
+
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`OpenAI API error (${res.status}): ${txt}`);
+  }
+
+  const json: any = await res.json();
+  const output: any[] = json?.output || [];
+  const images: string[] = [];
+  const texts: string[] = [];
+
+  for (const item of output) {
+    if (item?.type === "image_generation_call" && item?.result) {
+      images.push(`data:image/png;base64,${item.result}`);
+    } else if (item?.type === "message") {
+      const parts = item?.content || [];
+      for (const p of parts) {
+        if (p?.text) texts.push(p.text);
+        if (typeof p === "string") texts.push(p);
+      }
+    }
+  }
+  return { images, texts };
+}
+
+/**
  * Main POST handler for image processing requests
- * 
+ *
  * Processes incoming image transformation requests through Google's Gemini AI.
  * Handles both single-image operations and multi-image merging.
- * 
+ *
  * @param req NextJS request object containing JSON body with image data and parameters
  * @returns JSON response with processed image(s) or error message
  */
@@ -64,12 +118,14 @@ export async function POST(req: NextRequest) {
     let body: any;
     try {
       body = await req.json() as {
-        type: string;        // Operation type: "MERGE", "COMBINED", etc.
-        image?: string;      // Single image for processing (base64 data URL)
-        images?: string[];   // Multiple images for merge operations
-        prompt?: string;     // Custom text prompt for AI
-        params?: any;        // Node-specific parameters (background, clothes, etc.)
-        apiToken?: string;   // User's Google AI API token
+        type: string;            // Operation type: "MERGE", "COMBINED", etc.
+        image?: string;          // Single image for processing (base64 data URL)
+        images?: string[];       // Multiple images for merge operations
+        prompt?: string;         // Custom text prompt for AI
+        params?: any;            // Node-specific parameters (background, clothes, etc.)
+        apiToken?: string;       // User's Google AI API token (Gemini)
+        openaiApiToken?: string; // User's OpenAI API token
+        model?: string;          // Selected image model id
       };
     } catch (jsonError) {
       console.error('[API] Failed to parse JSON:', jsonError);
@@ -89,17 +145,26 @@ export async function POST(req: NextRequest) {
       console.error('Error reading HF token from cookies:', error);
     }
 
-    // Require user to provide their own Google API key - no free tier
-    const apiKey = body.apiToken;
-    if (!apiKey) {
+    // Resolve which model + provider to use
+    const requestedModel = body.model || "gemini-2.5-flash-image";
+    const provider: "gemini" | "openai" = requestedModel.startsWith("gpt-") ? "openai" : "gemini";
+
+    // Validate the API key for the selected provider
+    if (provider === "gemini" && !body.apiToken) {
       return NextResponse.json(
-        { error: "Google API key required. Please enter your Gemini API key in the top right to use this service. Free requests have been discontinued due to high costs." },
+        { error: "Google API key required. Please enter your Gemini API key in the top right to use this service." },
+        { status: 401 }
+      );
+    }
+    if (provider === "openai" && !body.openaiApiToken) {
+      return NextResponse.json(
+        { error: "OpenAI API key required. Please enter your OpenAI API key in the top right to use GPT image models." },
         { status: 401 }
       );
     }
 
-    // Initialize Google AI client with the user's API key
-    const ai = new GoogleGenAI({ apiKey });
+    // Initialize Google AI client (only used for Gemini provider)
+    const ai = provider === "gemini" ? new GoogleGenAI({ apiKey: body.apiToken! }) : null;
 
     /**
      * Universal image data converter
@@ -222,19 +287,36 @@ The result should look like all subjects were photographed together in the same 
       }
 
 
-      const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash-image",
-        contents: mergeParts,
-      });
+      let images: string[] = [];
+      let texts: string[] = [];
 
-      const outParts = (response as any)?.candidates?.[0]?.content?.parts ?? [];
-      const images: string[] = [];
-      const texts: string[] = [];
-      for (const p of outParts) {
-        if (p?.inlineData?.data) {
-          images.push(`data:image/png;base64,${p.inlineData.data}`);
-        } else if (p?.text) {
-          texts.push(p.text);
+      if (provider === "openai") {
+        try {
+          const result = await runOpenAIImageGen({
+            apiKey: body.openaiApiToken!,
+            prompt: mergePrompt,
+            imageDataUrls: imgs,
+          });
+          images = result.images;
+          texts = result.texts;
+        } catch (e: any) {
+          return NextResponse.json(
+            { error: e?.message || "OpenAI image generation failed" },
+            { status: 500 }
+          );
+        }
+      } else {
+        const response = await ai!.models.generateContent({
+          model: requestedModel,
+          contents: mergeParts,
+        });
+        const outParts = (response as any)?.candidates?.[0]?.content?.parts ?? [];
+        for (const p of outParts) {
+          if (p?.inlineData?.data) {
+            images.push(`data:image/png;base64,${p.inlineData.data}`);
+          } else if (p?.text) {
+            texts.push(p.text);
+          }
         }
       }
 
@@ -626,6 +708,54 @@ The result should look like all subjects were photographed together in the same 
       prompts.push(cameraPrompt);
     }
 
+    // Angle modifications (from AngleNode) — 3D orbit: yaw (X), pitch (Y), distance (Z)
+    if (params.cameraX !== undefined && params.cameraY !== undefined) {
+      const x = params.cameraX; // -1 to 1, 0 = front, ±1 = back
+      const y = params.cameraY; // -1 to 1, 0 = eye level, +1 = overhead, -1 = worm's eye
+      const z = typeof params.cameraZ === "number" ? params.cameraZ : 0.5; // 0..1 (close to far)
+
+      // Horizontal direction — x=0 is front, x=±1 is back
+      let horizontalDesc: string;
+      const xAbs = Math.abs(x);
+      if (xAbs < 0.1) {
+        horizontalDesc = "directly in front, subject fully facing the camera";
+      } else if (xAbs < 0.3) {
+        const side = x > 0 ? "right" : "left";
+        horizontalDesc = `slight ${side} angle, subject mostly facing the camera`;
+      } else if (xAbs < 0.6) {
+        const side = x > 0 ? "right" : "left";
+        horizontalDesc = `three-quarter view from the subject's ${side} side`;
+      } else if (xAbs < 0.85) {
+        const side = x > 0 ? "right" : "left";
+        horizontalDesc = `profile / side view from the subject's ${side}`;
+      } else if (xAbs < 0.97) {
+        const side = x > 0 ? "right" : "left";
+        horizontalDesc = `three-quarter rear view from the subject's ${side}`;
+      } else {
+        horizontalDesc = "directly behind the subject, rear view";
+      }
+
+      // Vertical direction
+      let verticalDesc: string;
+      if (y > 0.75) verticalDesc = "extreme high angle — nearly overhead, bird's-eye view";
+      else if (y > 0.4) verticalDesc = "high angle — camera above the subject looking down";
+      else if (y > 0.1) verticalDesc = "slightly elevated, camera just above eye level";
+      else if (y > -0.1) verticalDesc = "eye level";
+      else if (y > -0.4) verticalDesc = "slightly low angle, camera just below eye level";
+      else if (y > -0.75) verticalDesc = "low angle — camera below the subject looking up";
+      else verticalDesc = "extreme low angle — worm's-eye view, camera pointing sharply upward";
+
+      // Shot distance
+      let shotDesc: string;
+      if (z < 0.15) shotDesc = "extreme close-up (face fills the frame)";
+      else if (z < 0.35) shotDesc = "close-up shot (head and shoulders)";
+      else if (z < 0.55) shotDesc = "medium shot (waist up)";
+      else if (z < 0.75) shotDesc = "medium-wide shot (full body with some space)";
+      else shotDesc = "wide shot (full body, subject smaller in frame)";
+
+      prompts.push(`Photograph this scene from a new camera angle: ${horizontalDesc}, ${verticalDesc}, ${shotDesc}. Adjust the perspective, foreshortening, horizon line, background, and shadows to match this new viewpoint. Keep the subject's appearance, clothing, and identity identical.`);
+    }
+
     // Age transformation
     if (params.targetAge) {
       prompts.push(`Transform the person to look exactly ${params.targetAge} years old with age-appropriate features.`);
@@ -670,6 +800,33 @@ The result should look like all subjects were photographed together in the same 
 
     // Debug: Log the final combined prompt and parts structure
 
+    // OpenAI branch: short-circuit and return early
+    if (provider === "openai") {
+      try {
+        const inputDataUrls = [
+          `data:${parsed.mimeType};base64,${parsed.data}`,
+          ...referenceParts.map(r => `data:${r.inlineData.mimeType};base64,${r.inlineData.data}`),
+        ];
+        const result = await runOpenAIImageGen({
+          apiKey: body.openaiApiToken!,
+          prompt,
+          imageDataUrls: inputDataUrls,
+        });
+        if (!result.images.length) {
+          return NextResponse.json(
+            { error: "No image generated.", textResponse: result.texts.join("\n") },
+            { status: 500 }
+          );
+        }
+        return NextResponse.json({ image: result.images[0] });
+      } catch (e: any) {
+        return NextResponse.json(
+          { error: e?.message || "OpenAI image generation failed" },
+          { status: 500 }
+        );
+      }
+    }
+
     // Generate with Gemini
     const parts = [
       { text: prompt },
@@ -682,8 +839,8 @@ The result should look like all subjects were photographed together in the same 
 
     let response;
     try {
-      response = await ai.models.generateContent({
-        model: "gemini-2.5-flash-image",
+      response = await ai!.models.generateContent({
+        model: requestedModel,
         contents: parts,
       });
     } catch (geminiError: any) {

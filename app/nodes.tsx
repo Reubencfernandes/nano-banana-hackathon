@@ -52,7 +52,8 @@
 "use client";
 
 // Import React core functionality for state management and lifecycle hooks
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
+import * as THREE from "three";
 
 // Import reusable UI components from the shadcn/ui component library
 import { Button } from "../components/ui/button";       // Standard button component
@@ -61,7 +62,154 @@ import { Textarea } from "../components/ui/textarea";   // Multi-line text input
 import { Slider } from "../components/ui/slider";       // Range slider input component
 import { ColorPicker } from "../components/ui/color-picker"; // Color selection component
 import { Checkbox } from "../components/ui/checkbox";   // Checkbox input component
-import { Loader2 } from "lucide-react";               // Loading spinner icon
+import { Camera, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Loader2 } from "lucide-react";               // Icons for UI elements
+import { motion } from "framer-motion";               // Animations for UI elements
+
+/* ============================================================
+   Styled delete-confirmation dialog
+   - `confirmDelete(onConfirm)` opens the modal; if user confirms,
+     `onConfirm()` is called.
+   - `<DeleteConfirmModal />` must be mounted once in the app tree.
+   ============================================================ */
+type _DeleteRequest = { message: string; onConfirm: () => void };
+let _deleteRequestSubscriber: ((req: _DeleteRequest | null) => void) | null = null;
+
+export function confirmDelete(onConfirm: () => void, message = "Delete this node? This cannot be undone.") {
+  if (_deleteRequestSubscriber) {
+    _deleteRequestSubscriber({ message, onConfirm });
+  } else {
+    // Fallback if the modal isn't mounted yet
+    if (window.confirm(message)) onConfirm();
+  }
+}
+
+export function DeleteConfirmModal() {
+  const [req, setReq] = useState<_DeleteRequest | null>(null);
+
+  useEffect(() => {
+    _deleteRequestSubscriber = setReq;
+    return () => { _deleteRequestSubscriber = null; };
+  }, []);
+
+  useEffect(() => {
+    if (!req) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setReq(null);
+      else if (e.key === "Enter") { req.onConfirm(); setReq(null); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [req]);
+
+  if (!req) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in"
+      onPointerDown={(e) => { if (e.target === e.currentTarget) setReq(null); }}
+    >
+      <div className="w-[360px] rounded-xl bg-card border border-border shadow-2xl p-5 animate-in zoom-in-95 fade-in">
+        <div className="flex items-start gap-3">
+          <div className="shrink-0 w-10 h-10 rounded-full bg-destructive/15 border border-destructive/30 flex items-center justify-center text-destructive">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 6h18" />
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+              <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+              <line x1="10" y1="11" x2="10" y2="17" />
+              <line x1="14" y1="11" x2="14" y2="17" />
+            </svg>
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-semibold text-foreground">Delete node?</div>
+            <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{req.message}</p>
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2 mt-5">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-9 px-4"
+            onClick={() => setReq(null)}
+          >
+            Cancel
+          </Button>
+          <Button
+            size="sm"
+            className="h-9 px-4 bg-destructive text-destructive-foreground hover:bg-destructive/90 border-0"
+            onClick={() => { req.onConfirm(); setReq(null); }}
+          >
+            Delete
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Discrete-step slider — picks one value from a preset list.
+ * Renders as an iPhone-style horizontal track with the active value displayed
+ * above. Tick marks visualise the available stops.
+ */
+function PresetSlider({
+  label,
+  values,
+  current,
+  onChange,
+  format,
+  title,
+}: {
+  label: string;
+  values: string[];
+  current: string | undefined;
+  onChange: (v: string) => void;
+  format?: (v: string) => string;
+  title?: string;
+}) {
+  const idx = Math.max(0, values.indexOf(current ?? values[0]));
+  const display = format ? format(values[idx]) : values[idx];
+  const maxIdx = Math.max(1, values.length - 1);
+  const pct = `${(idx / maxIdx) * 100}%`;
+
+  return (
+    <div title={title}>
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-xs text-muted-foreground">{label}</span>
+        <span className={`text-xs font-medium tabular-nums ${idx === 0 ? "text-muted-foreground/60" : "text-foreground"}`}>
+          {display}
+        </span>
+      </div>
+      <div
+        className="nb-preset-slider-wrap"
+        style={{ "--pct": pct } as React.CSSProperties}
+      >
+        <div className="nb-preset-slider-track" aria-hidden="true">
+          <div className="nb-preset-slider-fill" />
+        </div>
+        <div className="nb-preset-slider-ticks" aria-hidden="true">
+          {values.map((_, i) => (
+            <span
+              key={i}
+              className={i <= idx ? "is-active" : undefined}
+            />
+          ))}
+        </div>
+        <input
+          type="range"
+          min={0}
+          max={values.length - 1}
+          step={1}
+          value={idx}
+          onChange={(e) => onChange(values[parseInt(e.target.value, 10)])}
+          onPointerDown={(e) => e.stopPropagation()}
+          className="nb-preset-slider w-full"
+          aria-label={label}
+        />
+      </div>
+    </div>
+  );
+}
 
 /**
  * Timer component that shows execution time
@@ -84,14 +232,14 @@ export function NodeTimer({ startTime, executionTime, isRunning }: { startTime?:
   const seconds = (timeToShow / 1000).toFixed(1);
 
   return (
-    <div className="absolute -top-9 right-2 flex items-center gap-1.5 bg-background/80 text-foreground text-[10px] px-2 py-1 rounded-md border shadow-sm z-50 backdrop-blur-sm">
+    <span className="flex items-center gap-1 text-[10px] font-mono font-normal opacity-70">
       {isRunning ? (
         <Loader2 className="w-3 h-3 animate-spin text-banana-500" />
       ) : (
         <span className="text-green-500 font-bold">✓</span>
       )}
-      <span className="font-mono">{seconds}s</span>
-    </div>
+      {seconds}s
+    </span>
   );
 }
 
@@ -237,16 +385,16 @@ function NodeOutputSection({
               img.style.transform = ""; // Reset scale transform
             }, 300);
           }}
-          title="💾 Click or right-click to copy image to clipboard" // Tooltip instruction
+          title="Click or right-click to copy image to clipboard" // Tooltip instruction
         />
       </div>
       {/* Download button for saving the current image */}
       <Button
-        className="w-full"                                              // Full width button
-        variant="secondary"                                              // Secondary button styling
+        className="w-full hover:bg-primary hover:text-primary-foreground transition-colors"
+        variant="secondary"
         onClick={() => downloadImage(output, downloadFileName)}         // Trigger download when clicked
       >
-        📥 Download Output
+        Download Output
       </Button>
       {/* End of main output section container */}
     </div>
@@ -368,6 +516,7 @@ function Port({
   className,
   nodeId,
   isOutput,
+  connected,
   onStartConnection,
   onEndConnection,
   onDisconnect
@@ -375,52 +524,40 @@ function Port({
   className?: string;
   nodeId?: string;
   isOutput?: boolean;
+  connected?: boolean;
   onStartConnection?: (nodeId: string) => void;
   onEndConnection?: (nodeId: string) => void;
   onDisconnect?: (nodeId: string) => void;
 }) {
-  /**
-   * Handle starting a connection (pointer down on output port)
-   */
   const handlePointerDown = (e: React.PointerEvent) => {
-    e.stopPropagation();  // Prevent triggering node drag
+    e.stopPropagation();
     if (isOutput && nodeId && onStartConnection) {
-      onStartConnection(nodeId);  // Start connection from this output port
+      onStartConnection(nodeId);
+    } else if (!isOutput && connected && nodeId && onDisconnect) {
+      // Pull the connector off — disconnect on grab
+      onDisconnect(nodeId);
     }
   };
 
-  /**
-   * Handle ending a connection (pointer up on input port)
-   */
   const handlePointerUp = (e: React.PointerEvent) => {
-    e.stopPropagation();  // Prevent bubbling
+    e.stopPropagation();
     if (!isOutput && nodeId && onEndConnection) {
-      onEndConnection(nodeId);  // End connection at this input port
-    }
-  };
-
-  /**
-   * Handle clicking on input port to disconnect
-   * Allows users to remove connections by clicking on input ports
-   */
-  const handleClick = (e: React.MouseEvent) => {
-    e.stopPropagation();                    // Prevent event from bubbling to parent elements
-    if (!isOutput && nodeId && onDisconnect) {
-      onDisconnect(nodeId);                 // Disconnect from this input port
+      onEndConnection(nodeId);
     }
   };
 
   return (
     <div
-      className={cx("nb-port", className)}              // Combine base port classes with custom ones
-      onPointerDown={handlePointerDown}                 // Start connection drag from output ports
-      onPointerUp={handlePointerUp}                     // End connection drag at input ports
-      onPointerEnter={handlePointerUp}                  // Also accept connections on hover (better UX)
-      onClick={handleClick}                             // Allow clicking input ports to disconnect
+      className={cx("nb-port", className, connected && "nb-port--connected")}
+      onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerUp}
+      onPointerEnter={handlePointerUp}
       title={
         isOutput
           ? "Drag from here to connect to another node's input"
-          : "Drop connections here or click to disconnect"
+          : connected
+            ? "Pull to disconnect"
+            : "Drop a connection here"
       }
     />
   );
@@ -462,6 +599,7 @@ export function BackgroundNodeView({
   onEndConnection,
   onProcess,
   onUpdatePosition,
+  outputConnected,
 }: any) {
   // Use custom drag hook to handle node positioning in the editor
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
@@ -529,51 +667,21 @@ export function BackgroundNodeView({
       onDragOver={(e) => e.preventDefault()}
       onPaste={handleImagePaste}
     >
-      <NodeTimer startTime={node.startTime} executionTime={node.executionTime} isRunning={node.isRunning} />
       <div
         className="nb-header px-3 py-2 flex items-center justify-between rounded-t-[14px] cursor-grab active:cursor-grabbing"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
       >
-        <Port className="in" nodeId={node.id} isOutput={false} onEndConnection={onEndConnection} onDisconnect={(nodeId) => onUpdate(nodeId, { input: undefined })} />
-        <div className="font-semibold text-sm flex-1 text-center">BACKGROUND</div>
+        <Port className="in" nodeId={node.id} isOutput={false} connected={!!node.input} onEndConnection={onEndConnection} onDisconnect={(nodeId) => onUpdate(nodeId, { input: undefined })} />
+        <div className="font-semibold text-sm flex-1 text-center flex items-center justify-center gap-1.5">BACKGROUND<NodeTimer startTime={node.startTime} executionTime={node.executionTime} isRunning={node.isRunning} /></div>
         <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-destructive hover:bg-destructive/20 h-6 w-6"
-            onClick={(e) => {
-              e.stopPropagation();
-              e.preventDefault();
-              if (confirm('Delete this node?')) {
-                onDelete(node.id);
-              }
-            }}
-            onPointerDown={(e) => e.stopPropagation()}
-            title="Delete node"
-            aria-label="Delete node"
-          >
-            ×
-          </Button>
-          <Port className="out" nodeId={node.id} isOutput={true} onStartConnection={onStartConnection} />
+          <Port className="out" nodeId={node.id} isOutput={true} connected={outputConnected} onStartConnection={onStartConnection} />
         </div>
       </div>
       {/* Node Content Area - Contains all controls, inputs, and outputs */}
       <div className="p-3 space-y-3">
-        {node.input && (
-          <div className="flex justify-end mb-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onUpdate(node.id, { input: undefined })}
-              className="text-xs"
-            >
-              Clear Connection                                    {/* Remove input connection to this node */}
-            </Button>
-          </div>
-        )}
-        <Select
+<Select
           className="w-full"
           value={node.backgroundType || "color"}
           onChange={(e) => onUpdate(node.id, { backgroundType: (e.target as HTMLSelectElement).value })}
@@ -855,7 +963,6 @@ export function BackgroundNodeView({
  * AI models that understand garment fitting and realistic clothing application.
  * 
  * @param node - Clothes node data containing clothesImage, selectedPreset, etc.
- * @param onDelete - Callback to delete this node
  * @param onUpdate - Callback to update node properties
  * @param onStartConnection - Callback when starting connection from output
  * @param onEndConnection - Callback when ending connection at input
@@ -865,7 +972,7 @@ export function BackgroundNodeView({
  * @param navigateNodeHistory - Function to navigate history
  * @param getCurrentNodeImage - Function to get current image
  */
-export function ClothesNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition, getNodeHistoryInfo, navigateNodeHistory, getCurrentNodeImage }: any) {
+export function ClothesNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition, getNodeHistoryInfo, navigateNodeHistory, getCurrentNodeImage, outputConnected }: any) {
   // Handle node dragging functionality
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
 
@@ -921,52 +1028,21 @@ export function ClothesNodeView({ node, onDelete, onUpdate, onStartConnection, o
       onDragOver={(e) => e.preventDefault()}
       onPaste={handleImagePaste}
     >
-      <NodeTimer startTime={node.startTime} executionTime={node.executionTime} isRunning={node.isRunning} />
       <div
         className="nb-header px-3 py-2 flex items-center justify-between rounded-t-[14px] cursor-grab active:cursor-grabbing"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
       >
-        <Port className="in" nodeId={node.id} isOutput={false} onEndConnection={onEndConnection} onDisconnect={(nodeId) => onUpdate(nodeId, { input: undefined })} />
-        <div className="font-semibold text-sm flex-1 text-center">CLOTHES</div>
+        <Port className="in" nodeId={node.id} isOutput={false} connected={!!node.input} onEndConnection={onEndConnection} onDisconnect={(nodeId) => onUpdate(nodeId, { input: undefined })} />
+        <div className="font-semibold text-sm flex-1 text-center flex items-center justify-center gap-1.5">CLOTHES<NodeTimer startTime={node.startTime} executionTime={node.executionTime} isRunning={node.isRunning} /></div>
         <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-destructive hover:bg-destructive/20 h-6 w-6"
-            onClick={(e) => {
-              e.stopPropagation();
-              e.preventDefault();
-              if (confirm('Delete this node?')) {
-                onDelete(node.id);
-              }
-            }}
-            onPointerDown={(e) => e.stopPropagation()}
-            title="Delete node"
-            aria-label="Delete node"
-          >
-            ×
-          </Button>
-          <Port className="out" nodeId={node.id} isOutput={true} onStartConnection={onStartConnection} />
+          <Port className="out" nodeId={node.id} isOutput={true} connected={outputConnected} onStartConnection={onStartConnection} />
         </div>
       </div>
       {/* Node Content Area - Contains all controls, inputs, and outputs */}
       <div className="p-3 space-y-3">
-        {node.input && (
-          <div className="flex justify-end mb-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onUpdate(node.id, { input: undefined })}
-              className="text-xs"
-            >
-              Clear Connection                                    {/* Remove input connection to this node */}
-            </Button>
-          </div>
-        )}
-
-        {/* Clothing Reference Image Upload Section */}
+{/* Clothing Reference Image Upload Section */}
         <div className="text-xs text-muted-foreground">Reference Clothing Image (Optional)</div>
         <div className="space-y-2">
           {node.clothesImage ? (
@@ -1058,57 +1134,27 @@ export function ClothesNodeView({ node, onDelete, onUpdate, onStartConnection, o
  * @param navigateNodeHistory - Function to navigate history
  * @param getCurrentNodeImage - Function to get current image
  */
-export function AgeNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition, getNodeHistoryInfo, navigateNodeHistory, getCurrentNodeImage }: any) {
+export function AgeNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition, getNodeHistoryInfo, navigateNodeHistory, getCurrentNodeImage, outputConnected }: any) {
   // Handle node dragging functionality
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
 
   return (
     <div className="nb-node absolute w-[280px]" style={{ left: localPos.x, top: localPos.y }}>
-      <NodeTimer startTime={node.startTime} executionTime={node.executionTime} isRunning={node.isRunning} />
       <div
         className="nb-header px-3 py-2 flex items-center justify-between rounded-t-[14px] cursor-grab active:cursor-grabbing"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
       >
-        <Port className="in" nodeId={node.id} isOutput={false} onEndConnection={onEndConnection} onDisconnect={(nodeId) => onUpdate(nodeId, { input: undefined })} />
-        <div className="font-semibold text-sm flex-1 text-center">AGE</div>
+        <Port className="in" nodeId={node.id} isOutput={false} connected={!!node.input} onEndConnection={onEndConnection} onDisconnect={(nodeId) => onUpdate(nodeId, { input: undefined })} />
+        <div className="font-semibold text-sm flex-1 text-center flex items-center justify-center gap-1.5">AGE<NodeTimer startTime={node.startTime} executionTime={node.executionTime} isRunning={node.isRunning} /></div>
         <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-destructive hover:bg-destructive/20 h-6 w-6"
-            onClick={(e) => {
-              e.stopPropagation();
-              e.preventDefault();
-              if (confirm('Delete this node?')) {
-                onDelete(node.id);
-              }
-            }}
-            onPointerDown={(e) => e.stopPropagation()}
-            title="Delete node"
-            aria-label="Delete node"
-          >
-            ×
-          </Button>
-          <Port className="out" nodeId={node.id} isOutput={true} onStartConnection={onStartConnection} />
+          <Port className="out" nodeId={node.id} isOutput={true} connected={outputConnected} onStartConnection={onStartConnection} />
         </div>
       </div>
       {/* Node Content Area - Contains all controls, inputs, and outputs */}
       <div className="p-3 space-y-3">
-        {node.input && (
-          <div className="flex justify-end mb-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onUpdate(node.id, { input: undefined })}
-              className="text-xs"
-            >
-              Clear Connection                                    {/* Remove input connection to this node */}
-            </Button>
-          </div>
-        )}
-        <div>
+<div>
           <Slider
             label="Target Age"
             valueLabel={`${node.targetAge || 30} years`}
@@ -1174,155 +1220,111 @@ export function AgeNodeView({ node, onDelete, onUpdate, onStartConnection, onEnd
  * @param navigateNodeHistory - Function to navigate history
  * @param getCurrentNodeImage - Function to get current image
  */
-export function CameraNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition, getNodeHistoryInfo, navigateNodeHistory, getCurrentNodeImage }: any) {
+export function CameraNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition, getNodeHistoryInfo, navigateNodeHistory, getCurrentNodeImage, outputConnected }: any) {
   // Handle node dragging functionality
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
 
-  // Camera lens focal length options (affects field of view and perspective)
-  const focalLengths = ["None", "8mm", "12mm", "24mm", "35mm", "50mm", "85mm"];
+  // Focal length: wide → standard → telephoto, the range a working pro actually shoots
+  const focalLengths = ["None", "14mm", "24mm", "28mm", "35mm", "50mm", "70mm", "85mm", "135mm", "200mm", "400mm"];
 
-  // Aperture settings (affects depth of field and exposure)
-  const apertures = ["None", "f/0.95", "f/1.2", "f/1.4", "f/1.8", "f/2", "f/2.8", "f/4", "f/5.6", "f/11"];
+  // Aperture: full-stop progression including f/8 and f/16 (landscape / hyperfocal)
+  const apertures = ["None", "f/1.2", "f/1.4", "f/1.8", "f/2.8", "f/4", "f/5.6", "f/8", "f/11", "f/16", "f/22"];
 
-  // Shutter speed options (affects motion blur and exposure)
-  const shutterSpeeds = ["None", "1/1000s", "1/250s", "1/30s", "1/15", "5s",];
-
-  // White balance presets for different lighting conditions
+  // White balance presets
   const whiteBalances = ["None", "2800K candlelight", "3200K tungsten", "4000K fluorescent", "5600K daylight", "6500K cloudy", "7000K shade", "8000K blue sky"];
 
-  // Camera angle and perspective options
+  // Camera angle / perspective
   const angles = ["None", "eye level", "low angle", "high angle", "Dutch tilt", "bird's eye", "worm's eye", "over the shoulder", "POV"];
 
-  // ISO sensitivity values (affects image noise and exposure)
-  const isoValues = ["None", "ISO 100", "ISO 400", "ISO 1600", "ISO 6400"];
+  // Film stocks photographers actually request today
+  const filmStyles = ["None", "Kodak Portra 400", "Kodak Ektar", "Kodak Tri-X (B&W)", "Fuji 400H", "Fuji Velvia", "CineStill 800T", "Polaroid SX-70", "Black & White", "Sepia"];
 
-  // Film stock emulation for different photographic styles
-  const filmStyles = ["None", "RAW", "Kodak Portra", "Fuji Velvia", "Kodak Gold 200", "Black & White", "Sepia", "Vintage", "Film Noir"];
+  // Lighting setup — the geometry of the light
+  const lightingSetups = ["None", "Rembrandt", "Split", "Butterfly (Paramount)", "Loop", "Rim / Backlit", "Silhouette", "Three-point studio", "Natural daylight"];
 
-  // Professional lighting setups and natural lighting conditions
-  const lightingTypes = ["None", "Natural Light", "Golden Hour", "Blue Hour", "Studio Lighting", "Rembrandt", "Split Lighting", "Butterfly Lighting", "Loop Lighting", "Rim Lighting", "Silhouette", "High Key", "Low Key"];
+  // Lighting quality / mood — the character of the light
+  const lightingQualities = ["None", "Soft / Diffused", "Hard / Direct", "Golden Hour", "Blue Hour", "High Key", "Low Key", "Overcast"];
 
-  // Bokeh (background blur) styles for different lens characteristics
-  const bokehStyles = ["None", "Smooth Bokeh", "Swirly Bokeh", "Hexagonal Bokeh", "Cat Eye Bokeh", "Bubble Bokeh"];
+  // Lens character — what shaped bokeh actually points to
+  const bokehStyles = ["None", "Anamorphic (oval)", "Petzval (swirly)", "Mirror lens (donut)", "Hexagonal", "Cat Eye"];
 
-  // Motion blur options
-  const motionBlurOptions = ["None", "Light Motion Blur", "Medium Motion Blur", "Heavy Motion Blur", "Radial Blur", "Zoom Blur"];
+  // Motion blur intensity (technique-specific blurs were dropped — see ANGLE / EDIT for those)
+  const motionBlurOptions = ["None", "Light Motion Blur", "Medium Motion Blur", "Heavy Motion Blur"];
 
   return (
     <div className="nb-node absolute w-[360px]" style={{ left: localPos.x, top: localPos.y }}>
-      <NodeTimer startTime={node.startTime} executionTime={node.executionTime} isRunning={node.isRunning} />
       <div
         className="nb-header px-3 py-2 flex items-center justify-between rounded-t-[14px] cursor-grab active:cursor-grabbing"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
       >
-        <Port className="in" nodeId={node.id} isOutput={false} onEndConnection={onEndConnection} onDisconnect={(nodeId) => onUpdate(nodeId, { input: undefined })} />
-        <div className="font-semibold text-sm flex-1 text-center">CAMERA</div>
+        <Port className="in" nodeId={node.id} isOutput={false} connected={!!node.input} onEndConnection={onEndConnection} onDisconnect={(nodeId) => onUpdate(nodeId, { input: undefined })} />
+        <div className="font-semibold text-sm flex-1 text-center flex items-center justify-center gap-1.5">CAMERA<NodeTimer startTime={node.startTime} executionTime={node.executionTime} isRunning={node.isRunning} /></div>
         <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-destructive hover:bg-destructive/20 h-6 w-6"
-            onClick={(e) => {
-              e.stopPropagation();
-              e.preventDefault();
-              if (confirm('Delete this node?')) {
-                onDelete(node.id);
-              }
-            }}
-            onPointerDown={(e) => e.stopPropagation()}
-            title="Delete node"
-            aria-label="Delete node"
-          >
-            ×
-          </Button>
-          <Port className="out" nodeId={node.id} isOutput={true} onStartConnection={onStartConnection} />
+          <Port className="out" nodeId={node.id} isOutput={true} connected={outputConnected} onStartConnection={onStartConnection} />
         </div>
       </div>
       <div className="p-3 space-y-2 max-h-[500px] overflow-y-auto scrollbar-thin">
-        {node.input && (
-          <div className="flex justify-end mb-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onUpdate(node.id, { input: undefined })}
-              className="text-xs"
-            >
-              Clear Connection                                    {/* Remove input connection to this node */}
-            </Button>
-          </div>
-        )}
-        {/* Basic Camera Settings Section */}
+{/* Basic Camera Settings — iPhone-style continuous sliders */}
         <div className="text-xs text-muted-foreground font-semibold mb-1">Basic Settings</div>
-        <div className="grid grid-cols-2 gap-2">                     {/* 2-column grid for compact layout */}
-          {/* Motion Blur Control - adds movement effects */}
+        <div className="space-y-3">
+          <PresetSlider
+            label="Focal Length"
+            values={focalLengths}
+            current={node.focalLength}
+            onChange={(v) => onUpdate(node.id, { focalLength: v })}
+            title="Drag to set focal length — wider on the left, telephoto on the right"
+          />
+          <PresetSlider
+            label="Aperture"
+            values={apertures}
+            current={node.aperture}
+            onChange={(v) => onUpdate(node.id, { aperture: v })}
+            title="Drag to set aperture — wide open (shallow depth) on the left"
+          />
           <div>
             <label className="text-xs text-muted-foreground">Motion Blur</label>
             <Select
               className="w-full"
-              value={node.motionBlur || "None"}                   // Default to "None" if not set
+              value={node.motionBlur || "None"}
               onChange={(e) => onUpdate(node.id, { motionBlur: (e.target as HTMLSelectElement).value })}
               title="Select Motion Blur Effect"
             >
               {motionBlurOptions.map(f => <option key={f} value={f}>{f}</option>)}
             </Select>
           </div>
-          {/* Focal Length Control - affects field of view and perspective */}
+        </div>
+
+        {/* Lighting */}
+        <div className="text-xs text-muted-foreground font-semibold mb-1 mt-3">Lighting</div>
+        <div className="grid grid-cols-2 gap-2">
           <div>
-            <label className="text-xs text-muted-foreground">Focal Length</label>
+            <label className="text-xs text-muted-foreground">Setup</label>
             <Select
               className="w-full"
-              value={node.focalLength || "None"}                   // Default to "None" if not set
-              onChange={(e) => onUpdate(node.id, { focalLength: (e.target as HTMLSelectElement).value })}
-              title="Select lens focal length - affects field of view and perspective distortion"
+              value={node.lightingSetup || "None"}
+              onChange={(e) => onUpdate(node.id, { lightingSetup: (e.target as HTMLSelectElement).value })}
+              title="Geometry of the light source(s)"
             >
-              {focalLengths.map(f => <option key={f} value={f}>{f}</option>)}
+              {lightingSetups.map(l => <option key={l} value={l}>{l}</option>)}
             </Select>
           </div>
-
-          {/* Aperture Control - affects depth of field and exposure */}
           <div>
-            <label className="text-xs text-muted-foreground">Aperture</label>
+            <label className="text-xs text-muted-foreground">Quality</label>
             <Select
               className="w-full"
-              value={node.aperture || "None"}                     // Default to "None" if not set
-              onChange={(e) => onUpdate(node.id, { aperture: (e.target as HTMLSelectElement).value })}
-              title="Select aperture value - lower f-numbers create shallower depth of field"
+              value={node.lightingQuality || "None"}
+              onChange={(e) => onUpdate(node.id, { lightingQuality: (e.target as HTMLSelectElement).value })}
+              title="Character of the light — soft vs hard, time of day, mood"
             >
-              {apertures.map(a => <option key={a} value={a}>{a}</option>)}
-            </Select>
-          </div>
-
-          {/* Shutter Speed Control - affects motion blur and exposure */}
-          <div>
-            <label className="text-xs text-muted-foreground">Shutter Speed</label>
-            <Select
-              className="w-full"
-              value={node.shutterSpeed || "None"}                 // Default to "None" if not set
-              onChange={(e) => onUpdate(node.id, { shutterSpeed: (e.target as HTMLSelectElement).value })}
-              title="Select shutter speed - faster speeds freeze motion, slower speeds create blur"
-            >
-              {shutterSpeeds.map(s => <option key={s} value={s}>{s}</option>)}
-            </Select>
-          </div>
-
-          {/* ISO Control - affects sensor sensitivity and image noise */}
-          <div>
-            <label className="text-xs text-muted-foreground">ISO</label>
-            <Select
-              className="w-full"
-              value={node.iso || "None"}                          // Default to "None" if not set
-              onChange={(e) => onUpdate(node.id, { iso: (e.target as HTMLSelectElement).value })}
-              title="Select ISO value - higher values increase sensitivity but add noise"
-            >
-              {isoValues.map(i => <option key={i} value={i}>{i}</option>)}
+              {lightingQualities.map(l => <option key={l} value={l}>{l}</option>)}
             </Select>
           </div>
         </div>
 
-        {/* Creative Settings */}
-        <div className="text-xs text-white/50 font-semibold mb-1 mt-3">Creative Settings</div>
+        {/* Look & Feel */}
+        <div className="text-xs text-muted-foreground font-semibold mb-1 mt-3">Look & Feel</div>
         <div className="grid grid-cols-2 gap-2">
           <div>
             <label className="text-xs text-muted-foreground">White Balance</label>
@@ -1335,7 +1337,7 @@ export function CameraNodeView({ node, onDelete, onUpdate, onStartConnection, on
             </Select>
           </div>
           <div>
-            <label className="text-xs text-muted-foreground">Film Style</label>
+            <label className="text-xs text-muted-foreground">Film Stock</label>
             <Select
               className="w-full"
               value={node.filmStyle || "None"}
@@ -1344,22 +1346,13 @@ export function CameraNodeView({ node, onDelete, onUpdate, onStartConnection, on
               {filmStyles.map(f => <option key={f} value={f}>{f}</option>)}
             </Select>
           </div>
-          <div>
-            <label className="text-xs text-muted-foreground">Lighting</label>
-            <Select
-              className="w-full"
-              value={node.lighting || "None"}
-              onChange={(e) => onUpdate(node.id, { lighting: (e.target as HTMLSelectElement).value })}
-            >
-              {lightingTypes.map(l => <option key={l} value={l}>{l}</option>)}
-            </Select>
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground">Bokeh Style</label>
+          <div className="col-span-2">
+            <label className="text-xs text-muted-foreground">Lens Character</label>
             <Select
               className="w-full"
               value={node.bokeh || "None"}
               onChange={(e) => onUpdate(node.id, { bokeh: (e.target as HTMLSelectElement).value })}
+              title="Optical signature of the lens — anamorphic ovals, swirly Petzval, mirror-lens donuts"
             >
               {bokehStyles.map(b => <option key={b} value={b}>{b}</option>)}
             </Select>
@@ -1436,7 +1429,7 @@ export function CameraNodeView({ node, onDelete, onUpdate, onStartConnection, on
  * @param navigateNodeHistory - Function to navigate history
  * @param getCurrentNodeImage - Function to get current image
  */
-export function FaceNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition, getNodeHistoryInfo, navigateNodeHistory, getCurrentNodeImage }: any) {
+export function FaceNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition, getNodeHistoryInfo, navigateNodeHistory, getCurrentNodeImage, outputConnected }: any) {
   // Handle node dragging functionality
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
 
@@ -1451,50 +1444,20 @@ export function FaceNodeView({ node, onDelete, onUpdate, onStartConnection, onEn
 
   return (
     <div className="nb-node absolute w-[340px]" style={{ left: localPos.x, top: localPos.y }}>
-      <NodeTimer startTime={node.startTime} executionTime={node.executionTime} isRunning={node.isRunning} />
       <div
         className="nb-header px-3 py-2 flex items-center justify-between rounded-t-[14px] cursor-grab active:cursor-grabbing"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
       >
-        <Port className="in" nodeId={node.id} isOutput={false} onEndConnection={onEndConnection} onDisconnect={(nodeId) => onUpdate(nodeId, { input: undefined })} />
-        <div className="font-semibold text-sm flex-1 text-center">FACE</div>
+        <Port className="in" nodeId={node.id} isOutput={false} connected={!!node.input} onEndConnection={onEndConnection} onDisconnect={(nodeId) => onUpdate(nodeId, { input: undefined })} />
+        <div className="font-semibold text-sm flex-1 text-center flex items-center justify-center gap-1.5">FACE<NodeTimer startTime={node.startTime} executionTime={node.executionTime} isRunning={node.isRunning} /></div>
         <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-destructive hover:bg-destructive/20 h-6 w-6"
-            onClick={(e) => {
-              e.stopPropagation();
-              e.preventDefault();
-              if (confirm('Delete this node?')) {
-                onDelete(node.id);
-              }
-            }}
-            onPointerDown={(e) => e.stopPropagation()}
-            title="Delete node"
-            aria-label="Delete node"
-          >
-            ×
-          </Button>
-          <Port className="out" nodeId={node.id} isOutput={true} onStartConnection={onStartConnection} />
+          <Port className="out" nodeId={node.id} isOutput={true} connected={outputConnected} onStartConnection={onStartConnection} />
         </div>
       </div>
       <div className="p-3 space-y-2 max-h-[500px] overflow-y-auto scrollbar-thin">
-        {node.input && (
-          <div className="flex justify-end mb-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onUpdate(node.id, { input: undefined })}
-              className="text-xs"
-            >
-              Clear Connection                                    {/* Remove input connection to this node */}
-            </Button>
-          </div>
-        )}
-        {/* Face Enhancement Checkboxes - toggleable options for face improvements and accessories */}
+{/* Face Enhancement Checkboxes - toggleable options for face improvements and accessories */}
         <div className="space-y-2">
           {/* Pimple removal option for skin enhancement */}
           <label className="flex items-center gap-2 text-xs cursor-pointer">
@@ -1691,7 +1654,7 @@ export function FaceNodeView({ node, onDelete, onUpdate, onStartConnection, onEn
  * @param navigateNodeHistory - Function to navigate history
  * @param getCurrentNodeImage - Function to get current image
  */
-export function StyleNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition, getNodeHistoryInfo, navigateNodeHistory, getCurrentNodeImage }: any) {
+export function StyleNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition, getNodeHistoryInfo, navigateNodeHistory, getCurrentNodeImage, outputConnected }: any) {
   // Handle node dragging functionality
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
 
@@ -1718,51 +1681,21 @@ export function StyleNodeView({ node, onDelete, onUpdate, onStartConnection, onE
       className="nb-node absolute w-[320px]"
       style={{ left: localPos.x, top: localPos.y }}
     >
-      <NodeTimer startTime={node.startTime} executionTime={node.executionTime} isRunning={node.isRunning} />
       <div
         className="nb-header px-3 py-2 flex items-center justify-between rounded-t-[14px] cursor-grab active:cursor-grabbing"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
       >
-        <Port className="in" nodeId={node.id} isOutput={false} onEndConnection={onEndConnection} onDisconnect={(nodeId) => onUpdate(nodeId, { input: undefined })} />
-        <div className="font-semibold text-sm flex-1 text-center">STYLE</div>
+        <Port className="in" nodeId={node.id} isOutput={false} connected={!!node.input} onEndConnection={onEndConnection} onDisconnect={(nodeId) => onUpdate(nodeId, { input: undefined })} />
+        <div className="font-semibold text-sm flex-1 text-center flex items-center justify-center gap-1.5">STYLE<NodeTimer startTime={node.startTime} executionTime={node.executionTime} isRunning={node.isRunning} /></div>
         <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-destructive hover:bg-destructive/20 h-6 w-6"
-            onClick={(e) => {
-              e.stopPropagation();
-              e.preventDefault();
-              if (confirm('Delete this node?')) {
-                onDelete(node.id);
-              }
-            }}
-            onPointerDown={(e) => e.stopPropagation()}
-            title="Delete node"
-            aria-label="Delete node"
-          >
-            ×
-          </Button>
-          <Port className="out" nodeId={node.id} isOutput={true} onStartConnection={onStartConnection} />
+          <Port className="out" nodeId={node.id} isOutput={true} connected={outputConnected} onStartConnection={onStartConnection} />
         </div>
       </div>
       {/* Node Content Area - Contains all controls, inputs, and outputs */}
       <div className="p-3 space-y-3">
-        {node.input && (
-          <div className="flex justify-end mb-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onUpdate(node.id, { input: undefined })}
-              className="text-xs"
-            >
-              Clear Connection                                    {/* Remove input connection to this node */}
-            </Button>
-          </div>
-        )}
-        <div className="text-xs text-muted-foreground">Art Style</div>
+<div className="text-xs text-muted-foreground">Art Style</div>
         <div className="text-xs text-muted-foreground/50 mb-2">Select an artistic style to apply to your image</div>
         <Select
           className="w-full bg-background border-border text-foreground focus:border-ring [&>option]:bg-background [&>option]:text-foreground"
@@ -1852,7 +1785,7 @@ export function StyleNodeView({ node, onDelete, onUpdate, onStartConnection, onE
  * @param navigateNodeHistory - Function to navigate history
  * @param getCurrentNodeImage - Function to get current image
  */
-export function LightningNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition, getNodeHistoryInfo, navigateNodeHistory, getCurrentNodeImage }: any) {
+export function LightningNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition, getNodeHistoryInfo, navigateNodeHistory, getCurrentNodeImage, outputConnected }: any) {
   // Handle node dragging functionality
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
 
@@ -1891,51 +1824,21 @@ export function LightningNodeView({ node, onDelete, onUpdate, onStartConnection,
 
   return (
     <div className="nb-node absolute text-white w-[320px]" style={{ left: localPos.x, top: localPos.y }}>
-      <NodeTimer startTime={node.startTime} executionTime={node.executionTime} isRunning={node.isRunning} />
       <div
         className="nb-header px-3 py-2 flex items-center justify-between rounded-t-[14px] cursor-grab active:cursor-grabbing"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
       >
-        <Port className="in" nodeId={node.id} isOutput={false} onEndConnection={onEndConnection} onDisconnect={(nodeId) => onUpdate(nodeId, { input: undefined })} />
-        <div className="font-semibold text-sm flex-1 text-center">LIGHTNING</div>
+        <Port className="in" nodeId={node.id} isOutput={false} connected={!!node.input} onEndConnection={onEndConnection} onDisconnect={(nodeId) => onUpdate(nodeId, { input: undefined })} />
+        <div className="font-semibold text-sm flex-1 text-center flex items-center justify-center gap-1.5">LIGHTNING<NodeTimer startTime={node.startTime} executionTime={node.executionTime} isRunning={node.isRunning} /></div>
         <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-destructive hover:bg-destructive/20 h-6 w-6"
-            onClick={(e) => {
-              e.stopPropagation();
-              e.preventDefault();
-              if (confirm('Delete this node?')) {
-                onDelete(node.id);
-              }
-            }}
-            onPointerDown={(e) => e.stopPropagation()}
-            title="Delete node"
-            aria-label="Delete node"
-          >
-            ×
-          </Button>
-          <Port className="out" nodeId={node.id} isOutput={true} onStartConnection={onStartConnection} />
+          <Port className="out" nodeId={node.id} isOutput={true} connected={outputConnected} onStartConnection={onStartConnection} />
         </div>
       </div>
       {/* Node Content Area - Contains all controls, inputs, and outputs */}
       <div className="p-3 space-y-3">
-        {node.input && (
-          <div className="flex justify-end mb-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onUpdate(node.id, { input: undefined })}
-              className="text-xs"
-            >
-              Clear Connection                                    {/* Remove input connection to this node */}
-            </Button>
-          </div>
-        )}
-        <div className="text-xs text-muted-foreground">Lighting Presets</div>
+<div className="text-xs text-muted-foreground">Lighting Presets</div>
 
         <div className="grid grid-cols-2 gap-2">
           {presetLightings.map((preset) => (
@@ -2016,7 +1919,7 @@ export function LightningNodeView({ node, onDelete, onUpdate, onStartConnection,
  * @param navigateNodeHistory - Function to navigate history
  * @param getCurrentNodeImage - Function to get current image
  */
-export function PosesNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition, getNodeHistoryInfo, navigateNodeHistory, getCurrentNodeImage }: any) {
+export function PosesNodeView({ node, onDelete, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition, getNodeHistoryInfo, navigateNodeHistory, getCurrentNodeImage, outputConnected }: any) {
   // Handle node dragging functionality
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
 
@@ -2060,51 +1963,21 @@ export function PosesNodeView({ node, onDelete, onUpdate, onStartConnection, onE
 
   return (
     <div className="nb-node absolute w-[320px]" style={{ left: localPos.x, top: localPos.y }}>
-      <NodeTimer startTime={node.startTime} executionTime={node.executionTime} isRunning={node.isRunning} />
       <div
         className="nb-header px-3 py-2 flex items-center justify-between rounded-t-[14px] cursor-grab active:cursor-grabbing"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
       >
-        <Port className="in" nodeId={node.id} isOutput={false} onEndConnection={onEndConnection} onDisconnect={(nodeId) => onUpdate(nodeId, { input: undefined })} />
-        <div className="font-semibold text-sm flex-1 text-center">POSES</div>
+        <Port className="in" nodeId={node.id} isOutput={false} connected={!!node.input} onEndConnection={onEndConnection} onDisconnect={(nodeId) => onUpdate(nodeId, { input: undefined })} />
+        <div className="font-semibold text-sm flex-1 text-center flex items-center justify-center gap-1.5">POSES<NodeTimer startTime={node.startTime} executionTime={node.executionTime} isRunning={node.isRunning} /></div>
         <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-destructive hover:bg-destructive/20 h-6 w-6"
-            onClick={(e) => {
-              e.stopPropagation();
-              e.preventDefault();
-              if (confirm('Delete this node?')) {
-                onDelete(node.id);
-              }
-            }}
-            onPointerDown={(e) => e.stopPropagation()}
-            title="Delete node"
-            aria-label="Delete node"
-          >
-            ×
-          </Button>
-          <Port className="out" nodeId={node.id} isOutput={true} onStartConnection={onStartConnection} />
+          <Port className="out" nodeId={node.id} isOutput={true} connected={outputConnected} onStartConnection={onStartConnection} />
         </div>
       </div>
       {/* Node Content Area - Contains all controls, inputs, and outputs */}
       <div className="p-3 space-y-3">
-        {node.input && (
-          <div className="flex justify-end mb-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onUpdate(node.id, { input: undefined })}
-              className="text-xs"
-            >
-              Clear Connection                                    {/* Remove input connection to this node */}
-            </Button>
-          </div>
-        )}
-        <div className="text-xs text-white/70">Pose References</div>
+<div className="text-xs text-white/70">Pose References</div>
 
         <div className="grid grid-cols-2 gap-2">
           {presetPoses.map((preset) => (
@@ -2158,13 +2031,11 @@ export function PosesNodeView({ node, onDelete, onUpdate, onStartConnection, onE
  * 
  * Features:
  * - Natural language editing prompts (e.g., "make it brighter", "add vintage effect")
- * - AI-powered prompt improvement using Gemini
  * - Real-time editing processing
  * - Output history with navigation
  * - Connection management for input/output workflow
  * 
  * @param node - The edit node data containing editPrompt, input, output, etc.
- * @param onDelete - Callback to delete this node
  * @param onUpdate - Callback to update node properties
  * @param onStartConnection - Callback when starting a connection from output port
  * @param onEndConnection - Callback when ending a connection at input port
@@ -2176,7 +2047,6 @@ export function PosesNodeView({ node, onDelete, onUpdate, onStartConnection, onE
  */
 export function EditNodeView({
   node,
-  onDelete,
   onUpdate,
   onStartConnection,
   onEndConnection,
@@ -2184,63 +2054,11 @@ export function EditNodeView({
   onUpdatePosition,
   getNodeHistoryInfo,
   navigateNodeHistory,
-  getCurrentNodeImage
+  getCurrentNodeImage,
+  outputConnected,
 }: any) {
   // Use custom hook for drag functionality - handles position updates during dragging
   const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
-
-  /**
-   * Handle prompt improvement using Gemini API
-   * Takes the user's basic edit description and enhances it for better AI processing
-   */
-  const handlePromptImprovement = async () => {
-    // Validate that user has entered a prompt
-    if (!node.editPrompt?.trim()) {
-      alert('Please enter an edit description first');
-      return;
-    }
-
-    try {
-      // Call the API to improve the prompt
-      const response = await fetch('/api/improve-prompt', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: node.editPrompt.trim(),
-          type: 'edit'
-        })
-      });
-
-      if (response.ok) {
-        const { improvedPrompt } = await response.json();
-        onUpdate(node.id, { editPrompt: improvedPrompt });
-      } else {
-        alert('Failed to improve prompt. Please try again.');
-      }
-    } catch (error) {
-      console.error('Error improving prompt:', error);
-      alert('Failed to improve prompt. Please try again.');
-    }
-  };
-
-  /**
-   * Handle delete node action with confirmation
-   */
-  const handleDeleteNode = (e: React.MouseEvent) => {
-    e.stopPropagation();  // Prevent triggering drag
-    e.preventDefault();
-
-    if (confirm('Delete this node?')) {
-      onDelete(node.id);
-    }
-  };
-
-  /**
-   * Handle clearing the input connection
-   */
-  const handleClearConnection = () => {
-    onUpdate(node.id, { input: undefined });
-  };
 
   /**
    * Handle edit prompt changes
@@ -2251,8 +2069,7 @@ export function EditNodeView({
 
   return (
     <div className="nb-node absolute w-[320px]" style={{ left: localPos.x, top: localPos.y }}>
-      <NodeTimer startTime={node.startTime} executionTime={node.executionTime} isRunning={node.isRunning} />
-      {/* Node Header - Contains title, delete button, and connection ports */}
+      {/* Node Header - Contains title and connection ports */}
       <div
         className="nb-header px-3 py-2 flex items-center justify-between rounded-t-[14px] cursor-grab active:cursor-grabbing"
         onPointerDown={onPointerDown}    // Start dragging
@@ -2260,49 +2077,22 @@ export function EditNodeView({
         onPointerUp={onPointerUp}        // End dragging
       >
         {/* Input port (left side) - where connections come in */}
-        <Port className="in" nodeId={node.id} isOutput={false} onEndConnection={onEndConnection} onDisconnect={(nodeId) => onUpdate(nodeId, { input: undefined })} />
+        <Port className="in" nodeId={node.id} isOutput={false} connected={!!node.input} onEndConnection={onEndConnection} onDisconnect={(nodeId) => onUpdate(nodeId, { input: undefined })} />
 
         {/* Node title */}
-        <div className="font-semibold text-sm flex-1 text-center">EDIT</div>
+        <div className="font-semibold text-sm flex-1 text-center flex items-center justify-center gap-1.5">EDIT<NodeTimer startTime={node.startTime} executionTime={node.executionTime} isRunning={node.isRunning} /></div>
 
         <div className="flex items-center gap-1">
-          {/* Delete button */}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-destructive hover:bg-destructive/20 h-6 w-6"
-            onClick={handleDeleteNode}
-            onPointerDown={(e) => e.stopPropagation()}  // Prevent drag when clicking delete
-            title="Delete node"
-            aria-label="Delete node"
-          >
-            ×
-          </Button>
 
           {/* Output port (right side) - where connections go out */}
-          <Port className="out" nodeId={node.id} isOutput={true} onStartConnection={onStartConnection} />
+          <Port className="out" nodeId={node.id} isOutput={true} connected={outputConnected} onStartConnection={onStartConnection} />
         </div>
       </div>
 
       {/* Node Content - Contains all the controls and outputs */}
       {/* Node Content Area - Contains all controls, inputs, and outputs */}
       <div className="p-3 space-y-3">
-        {/* Show clear connection button if node has input */}
-        {node.input && (
-          <div className="flex justify-end mb-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleClearConnection}
-              className="text-xs"
-              title="Remove input connection"
-            >
-              Clear Connection                                    {/* Remove input connection to this node */}
-            </Button>
-          </div>
-        )}
-
-        {/* Edit prompt input and improvement section */}
+        {/* Edit prompt input */}
         <div className="space-y-2">
           <div className="text-xs text-muted-foreground mb-1">Edit Instructions</div>
           <Textarea
@@ -2313,17 +2103,6 @@ export function EditNodeView({
             rows={3}
           />
 
-          {/* AI-powered prompt improvement button */}
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full text-xs"
-            onClick={handlePromptImprovement}
-            title="Use Gemini 2.5 Flash to improve your edit prompt"
-            disabled={!node.editPrompt?.trim()}
-          >
-            ✨ Improve with Gemini
-          </Button>
         </div>
 
         {/* Process button - starts the editing operation */}
@@ -2350,6 +2129,732 @@ export function EditNodeView({
         {/* Error display */}
         {node.error && (
           <div className="text-xs text-red-400 mt-2 p-2 bg-red-900/20 rounded">
+            {node.error}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * ANGLE NODE VIEW COMPONENT
+ * 
+ * Provides a visual interface for adjusting camera position and perspective.
+ * Users can drag a camera icon on a 2D plane to specify the camera's location
+ * relative to the subject, allowing for precise control over the generated
+ * image's viewpoint.
+ * 
+ * @param node - Angle node data with cameraX and cameraY positions
+ * @param onUpdate - Callback to update camera position
+ * @param onStartConnection - Callback for starting connection
+ * @param onEndConnection - Callback for ending connection
+ * @param onProcess - Callback to trigger image generation
+ * @param onUpdatePosition - Callback to update node's UI position
+ */
+/**
+ * Reusable horizontal "drag-row" control — a full-width row with a label on the
+ * left and the current value on the right. Drag horizontally on the row to
+ * change the value. The row fills with the brand colour to indicate progress.
+ */
+function clampNumber(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function wrapOrbit(value: number) {
+  if (!Number.isFinite(value)) return 0;
+  let next = value;
+  while (next > 1) next -= 2;
+  while (next < -1) next += 2;
+  return next;
+}
+
+function orbitVector(cameraX: number, cameraY: number, radius: number) {
+  const yaw = cameraX * Math.PI;
+  const pitch = clampNumber(cameraY, -0.98, 0.98) * (Math.PI / 2);
+
+  return new THREE.Vector3(
+    Math.sin(yaw) * Math.cos(pitch) * radius,
+    Math.sin(pitch) * radius,
+    Math.cos(yaw) * Math.cos(pitch) * radius
+  );
+}
+
+function createEarthTexture() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 1024;
+  canvas.height = 512;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+
+  const w = canvas.width;
+  const h = canvas.height;
+  const ocean = ctx.createLinearGradient(0, 0, w, h);
+  ocean.addColorStop(0, "#0f766e");
+  ocean.addColorStop(0.38, "#0ea5e9");
+  ocean.addColorStop(0.72, "#1d4ed8");
+  ocean.addColorStop(1, "#075985");
+  ctx.fillStyle = ocean;
+  ctx.fillRect(0, 0, w, h);
+
+  ctx.globalAlpha = 0.22;
+  ctx.strokeStyle = "#d9f99d";
+  ctx.lineWidth = 1;
+  for (let y = 64; y < h; y += 64) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(w, y + Math.sin(y * 0.04) * 8);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+
+  const project = (lon: number, lat: number): [number, number] => [
+    ((lon + 180) / 360) * w,
+    ((90 - lat) / 180) * h,
+  ];
+
+  const drawLand = (points: Array<[number, number]>, fill = "#66a65f") => {
+    ctx.beginPath();
+    points.forEach(([lon, lat], idx) => {
+      const [x, y] = project(lon, lat);
+      if (idx === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.closePath();
+    ctx.fillStyle = fill;
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.32)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  };
+
+  drawLand([[-168, 70], [-132, 72], [-104, 58], [-82, 46], [-62, 48], [-52, 28], [-76, 8], [-104, 20], [-118, 34], [-144, 44]], "#75a85b");
+  drawLand([[-84, 13], [-56, 10], [-38, -8], [-48, -34], [-64, -56], [-78, -38], [-72, -12]], "#579b5d");
+  drawLand([[-12, 72], [22, 70], [56, 61], [84, 58], [132, 46], [154, 28], [124, 10], [82, 18], [46, 9], [14, 30], [-8, 36], [-26, 54]], "#84b661");
+  drawLand([[-18, 34], [34, 31], [48, 9], [42, -20], [22, -35], [2, -30], [-14, -4]], "#6fa65b");
+  drawLand([[66, 28], [94, 26], [104, 10], [86, -6], [68, 6]], "#78ad5c");
+  drawLand([[112, -12], [154, -16], [150, -42], [116, -38], [104, -26]], "#9aa85d");
+  drawLand([[-52, 78], [-24, 72], [-38, 60], [-58, 62]], "#b4c78b");
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 4;
+  return texture;
+}
+
+function createCloudTexture() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 1024;
+  canvas.height = 512;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "rgba(255, 255, 255, 0.38)";
+  for (let i = 0; i < 85; i++) {
+    const x = Math.random() * canvas.width;
+    const y = Math.random() * canvas.height;
+    const rx = 18 + Math.random() * 80;
+    const ry = 5 + Math.random() * 20;
+    ctx.beginPath();
+    ctx.ellipse(x, y, rx, ry, Math.random() * Math.PI, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+function disposeThreeObject(object: THREE.Object3D) {
+  object.traverse((child) => {
+    const mesh = child as THREE.Mesh;
+    if (mesh.geometry) mesh.geometry.dispose();
+    const material = mesh.material as THREE.Material | THREE.Material[] | undefined;
+    const materials = Array.isArray(material) ? material : material ? [material] : [];
+    materials.forEach((mat) => {
+      const map = (mat as THREE.MeshStandardMaterial).map;
+      if (map) map.dispose();
+      mat.dispose();
+    });
+  });
+}
+
+function AngleControlRow({
+  label,
+  value,
+  fillFraction,
+  onDelta,
+  onSetFraction,
+}: {
+  label: string;
+  value: string;
+  fillFraction: number; // 0..1 for the visual fill
+  onDelta: (deltaPx: number, totalWidth: number) => void;
+  onSetFraction?: (f: number) => void;
+}) {
+  const onPointerDownRow = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    let lastX = e.clientX;
+    if (onSetFraction) onSetFraction(Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)));
+    const move = (ev: PointerEvent) => {
+      const dx = ev.clientX - lastX;
+      lastX = ev.clientX;
+      onDelta(dx, rect.width);
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+
+  const pct = Math.max(0, Math.min(1, fillFraction)) * 100;
+  return (
+    <div
+      className="relative h-10 rounded-md bg-muted/40 border border-border/70 cursor-ew-resize overflow-hidden select-none"
+      onPointerDown={onPointerDownRow}
+    >
+      <div
+        className="absolute inset-y-0 left-0 bg-primary/20 pointer-events-none transition-[width] duration-75"
+        style={{ width: `${pct}%` }}
+      />
+      <div className="absolute inset-0 px-3 flex items-center justify-between text-sm">
+        <span className="text-foreground/85">{label}</span>
+        <span className="text-foreground tabular-nums font-medium">{value}</span>
+      </div>
+    </div>
+  );
+}
+
+function AngleGlobe3D({
+  cameraX,
+  cameraY,
+  cameraZ,
+  onChange,
+}: {
+  cameraX: number;
+  cameraY: number;
+  cameraZ: number;
+  onChange: (next: Partial<{ cameraX: number; cameraY: number; cameraZ: number }>) => void;
+}) {
+  const mountRef = useRef<HTMLDivElement>(null);
+  const initialCameraRef = useRef({ cameraX, cameraY, cameraZ });
+  const sceneRef = useRef<{
+    renderer: THREE.WebGLRenderer;
+    scene: THREE.Scene;
+    viewCamera: THREE.PerspectiveCamera;
+    earth: THREE.Mesh;
+    clouds: THREE.Mesh;
+    marker: THREE.Group;
+    ray: THREE.Line;
+    frameId: number;
+    resizeObserver: ResizeObserver;
+  } | null>(null);
+  const dragRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    cameraX: number;
+    cameraY: number;
+  } | null>(null);
+
+  const applyCameraState = useCallback((x: number, y: number, z: number) => {
+    const sceneState = sceneRef.current;
+    if (!sceneState) return;
+
+    const surface = orbitVector(x, y, 1.12);
+    const markerPosition = orbitVector(x, y, 1.62 + z * 0.75);
+    sceneState.marker.position.copy(markerPosition);
+    sceneState.marker.lookAt(0, 0, 0);
+    sceneState.marker.scale.setScalar(0.9 + z * 0.22);
+
+    sceneState.ray.geometry.dispose();
+    sceneState.ray.geometry = new THREE.BufferGeometry().setFromPoints([surface, markerPosition]);
+  }, []);
+
+  useEffect(() => {
+    const mount = mountRef.current;
+    if (!mount) return;
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.domElement.style.display = "block";
+    renderer.domElement.style.width = "100%";
+    renderer.domElement.style.height = "100%";
+    renderer.domElement.style.touchAction = "none";
+    mount.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    const viewCamera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
+    viewCamera.position.set(0, 0.15, 5.2);
+    viewCamera.lookAt(0, 0, 0);
+
+    scene.add(new THREE.AmbientLight(0xffffff, 1.5));
+    const keyLight = new THREE.DirectionalLight(0xffffff, 2.2);
+    keyLight.position.set(3, 2.8, 4.5);
+    scene.add(keyLight);
+    const rimLight = new THREE.DirectionalLight(0x7dd3fc, 1.15);
+    rimLight.position.set(-3.5, 1.2, -2.5);
+    scene.add(rimLight);
+
+    const earthTexture = createEarthTexture();
+    const earth = new THREE.Mesh(
+      new THREE.SphereGeometry(1.1, 96, 64),
+      new THREE.MeshStandardMaterial({
+        map: earthTexture ?? undefined,
+        roughness: 0.82,
+        metalness: 0.04,
+      })
+    );
+    scene.add(earth);
+
+    const cloudTexture = createCloudTexture();
+    const clouds = new THREE.Mesh(
+      new THREE.SphereGeometry(1.125, 96, 64),
+      new THREE.MeshBasicMaterial({
+        map: cloudTexture ?? undefined,
+        transparent: true,
+        opacity: 0.2,
+        depthWrite: false,
+      })
+    );
+    scene.add(clouds);
+
+    const atmosphere = new THREE.Mesh(
+      new THREE.SphereGeometry(1.22, 96, 64),
+      new THREE.MeshBasicMaterial({
+        color: 0x38bdf8,
+        transparent: true,
+        opacity: 0.08,
+        side: THREE.BackSide,
+        depthWrite: false,
+      })
+    );
+    scene.add(atmosphere);
+
+    const gridMaterial = new THREE.LineBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.14,
+      depthTest: true,
+    });
+    for (let lat = -60; lat <= 60; lat += 30) {
+      const points: THREE.Vector3[] = [];
+      for (let lon = -180; lon <= 180; lon += 4) {
+        const yaw = (lon * Math.PI) / 180;
+        const pitch = (lat * Math.PI) / 180;
+        points.push(new THREE.Vector3(
+          Math.sin(yaw) * Math.cos(pitch) * 1.115,
+          Math.sin(pitch) * 1.115,
+          Math.cos(yaw) * Math.cos(pitch) * 1.115
+        ));
+      }
+      scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), gridMaterial.clone()));
+    }
+    for (let lon = 0; lon < 180; lon += 30) {
+      const points: THREE.Vector3[] = [];
+      for (let lat = -88; lat <= 88; lat += 4) {
+        const yaw = (lon * Math.PI) / 180;
+        const pitch = (lat * Math.PI) / 180;
+        points.push(new THREE.Vector3(
+          Math.sin(yaw) * Math.cos(pitch) * 1.116,
+          Math.sin(pitch) * 1.116,
+          Math.cos(yaw) * Math.cos(pitch) * 1.116
+        ));
+      }
+      scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), gridMaterial.clone()));
+    }
+
+    const ray = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]),
+      new THREE.LineBasicMaterial({
+        color: 0xff4d18,
+        transparent: true,
+        opacity: 0.82,
+        depthTest: true,
+      })
+    );
+    scene.add(ray);
+
+    const marker = new THREE.Group();
+    const markerBody = new THREE.Mesh(
+      new THREE.BoxGeometry(0.22, 0.14, 0.14),
+      new THREE.MeshStandardMaterial({ color: 0xff5a1f, roughness: 0.45, metalness: 0.12 })
+    );
+    const markerLens = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.045, 0.065, 0.08, 24),
+      new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.35, metalness: 0.2 })
+    );
+    markerLens.rotation.x = Math.PI / 2;
+    markerLens.position.z = -0.1;
+    const markerRing = new THREE.Mesh(
+      new THREE.TorusGeometry(0.085, 0.008, 12, 28),
+      new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.25, metalness: 0.4 })
+    );
+    markerRing.rotation.x = Math.PI / 2;
+    markerRing.position.z = -0.143;
+    marker.add(markerBody, markerLens, markerRing);
+    scene.add(marker);
+
+    const resize = () => {
+      const width = Math.max(1, mount.clientWidth);
+      const height = Math.max(1, mount.clientHeight);
+      renderer.setSize(width, height, false);
+      viewCamera.aspect = width / height;
+      viewCamera.updateProjectionMatrix();
+    };
+    const resizeObserver = new ResizeObserver(resize);
+    resizeObserver.observe(mount);
+    resize();
+
+    const sceneState = {
+      renderer,
+      scene,
+      viewCamera,
+      earth,
+      clouds,
+      marker,
+      ray,
+      frameId: 0,
+      resizeObserver,
+    };
+    sceneRef.current = sceneState;
+    const initial = initialCameraRef.current;
+    applyCameraState(initial.cameraX, initial.cameraY, initial.cameraZ);
+
+    const render = () => {
+      earth.rotation.y += 0.0015;
+      clouds.rotation.y += 0.0022;
+      renderer.render(scene, viewCamera);
+      sceneState.frameId = window.requestAnimationFrame(render);
+    };
+    render();
+
+    return () => {
+      window.cancelAnimationFrame(sceneState.frameId);
+      resizeObserver.disconnect();
+      disposeThreeObject(scene);
+      renderer.dispose();
+      renderer.domElement.remove();
+      sceneRef.current = null;
+    };
+  }, [applyCameraState]);
+
+  useEffect(() => {
+    applyCameraState(cameraX, cameraY, cameraZ);
+  }, [applyCameraState, cameraX, cameraY, cameraZ]);
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    dragRef.current = {
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      cameraX,
+      cameraY,
+    };
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    e.stopPropagation();
+    onChange({
+      cameraX: wrapOrbit(drag.cameraX + (e.clientX - drag.startX) / 150),
+      cameraY: clampNumber(drag.cameraY + (drag.startY - e.clientY) / 120, -1, 1),
+    });
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (dragRef.current?.pointerId === e.pointerId) {
+      e.stopPropagation();
+      dragRef.current = null;
+    }
+  };
+
+  const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    e.preventDefault();
+    onChange({ cameraZ: clampNumber(cameraZ + e.deltaY * 0.001, 0, 1) });
+  };
+
+  return (
+    <div
+      ref={mountRef}
+      className="absolute inset-0 cursor-grab touch-none active:cursor-grabbing"
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      onWheel={handleWheel}
+      title="Drag to orbit the camera; scroll to adjust distance"
+    />
+  );
+}
+
+export function AngleNodeView({ node, onUpdate, onStartConnection, onEndConnection, onProcess, onUpdatePosition, outputConnected }: any) {
+  // Use custom hook for node dragging and positioning
+  const { localPos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(node, onUpdatePosition);
+
+  const cameraX: number = typeof node.cameraX === "number" ? node.cameraX : 0;
+  const cameraY: number = typeof node.cameraY === "number" ? node.cameraY : 0;
+  const cameraZ: number = typeof node.cameraZ === "number" ? node.cameraZ : 0.5;
+
+  // Display in degrees / integer zoom
+  const rotationDeg = Math.round(((cameraX + 1) / 2) * 360); // 0..360
+  const tiltDeg = Math.round(cameraY * 90);                   // -90..90
+  const zoomVal = Math.round(cameraZ * 10);                   // 0..10
+
+  const sphereR = 0.74;
+  const yaw = cameraX * Math.PI;
+  const pitch = -cameraY * (Math.PI / 2);
+  const camSurfaceX = Math.sin(yaw) * Math.cos(pitch) * sphereR;
+  const camSurfaceY = -Math.sin(pitch) * sphereR;
+  const camOrbitX = Math.sin(yaw) * Math.cos(pitch) * (sphereR * 1.02);
+  const camOrbitY = -Math.sin(pitch) * (sphereR * 1.02);
+  const camFront = Math.cos(yaw) * Math.cos(pitch) >= -0.001;
+  const latitudes = [-60, -30, 0, 30, 60];
+  const longitudes = [0, 30, 60, 90, 120, 150];
+
+  const handlePointerDownSphere = (e: React.PointerEvent<SVGSVGElement>) => {
+    e.stopPropagation();
+  };
+
+  const handleWheelSphere = (e: React.WheelEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+  };
+
+  // Latitudes (parallels) and longitudes (meridians) — fixed wireframe.
+  // The longitudes change rx with global yaw to suggest 3D rotation.
+  // Step controls
+  const stepYaw = (dir: -1 | 1) => onUpdate(node.id, { cameraX: wrapOrbit(cameraX + dir * (15 / 180)) });
+  const stepPitch = (dir: -1 | 1) => onUpdate(node.id, { cameraY: clampNumber(cameraY + dir * (15 / 90), -1, 1) });
+
+  return (
+    <div className="nb-node absolute w-[320px]" style={{ left: localPos.x, top: localPos.y }}>
+      {/* Node Header with Input/Output Ports */}
+      <div
+        className="nb-header px-3 py-2 flex items-center justify-between rounded-t-[14px] cursor-grab active:cursor-grabbing"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+      >
+        <Port className="in" nodeId={node.id} isOutput={false} connected={!!node.input} onEndConnection={onEndConnection} onDisconnect={(nodeId) => onUpdate(nodeId, { input: undefined })} />
+        <div className="font-semibold text-sm flex-1 text-center flex items-center justify-center gap-1.5">Angles<NodeTimer startTime={node.startTime} executionTime={node.executionTime} isRunning={node.isRunning} /></div>
+        <div className="flex items-center gap-1">
+          <Port className="out" nodeId={node.id} isOutput={true} connected={outputConnected} onStartConnection={onStartConnection} />
+        </div>
+      </div>
+
+      {/* Main content */}
+      <div className="p-4 flex flex-col gap-3">
+        {/* Sphere area */}
+        <div className="nb-angle-panel rounded-xl p-3">
+          <div className="sr-only">
+            Hold and drag to change<br />camera angle
+          </div>
+
+          <div className="nb-angle-globe relative h-56 select-none overflow-hidden rounded-lg">
+            <AngleGlobe3D
+              cameraX={cameraX}
+              cameraY={cameraY}
+              cameraZ={cameraZ}
+              onChange={(next) => onUpdate(node.id, next)}
+            />
+            {/* Wireframe sphere SVG */}
+            <svg
+              viewBox="-1 -1 2 2"
+              className="hidden"
+              onPointerDown={handlePointerDownSphere}
+              onWheel={handleWheelSphere}
+            >
+              {/* Outer disc — sphere outline */}
+              <circle cx="0" cy="0" r={sphereR} fill="none" stroke="hsl(0 0% 100% / 0.18)" strokeWidth="0.005" />
+
+              {/* Latitude (parallel) ellipses */}
+              {latitudes.map((lat) => {
+                const rad = (lat * Math.PI) / 180;
+                const cy = sphereR * Math.sin(rad);
+                const rx = sphereR * Math.cos(rad);
+                // Pitch tilts the latitude bands — apparent ry = |cos(pitch + lat)|*0.06
+                const ry = Math.abs(Math.sin(pitch + rad)) * sphereR * 0.4 + 0.005;
+                return (
+                  <ellipse
+                    key={`lat-${lat}`}
+                    cx="0"
+                    cy={cy * Math.cos(pitch) + Math.sin(pitch) * Math.cos(rad) * 0}
+                    rx={rx}
+                    ry={ry}
+                    fill="none"
+                    stroke="hsl(0 0% 100% / 0.12)"
+                    strokeWidth="0.005"
+                  />
+                );
+              })}
+
+              {/* Longitude (meridian) ellipses */}
+              {longitudes.map((lon) => {
+                const phi = (lon * Math.PI) / 180 + yaw;
+                const rx = Math.abs(Math.cos(phi)) * sphereR;
+                return (
+                  <ellipse
+                    key={`lon-${lon}`}
+                    cx="0"
+                    cy="0"
+                    rx={rx}
+                    ry={sphereR}
+                    fill="none"
+                    stroke="hsl(0 0% 100% / 0.10)"
+                    strokeWidth="0.005"
+                  />
+                );
+              })}
+
+              {/* Connection line from sphere center to camera */}
+              <line
+                x1="0"
+                y1="0"
+                x2={camSurfaceX}
+                y2={camSurfaceY}
+                stroke="hsl(0 0% 100% / 0.55)"
+                strokeWidth="0.012"
+                strokeLinecap="round"
+              />
+
+              {/* Subject preview tile in the centre */}
+              <rect
+                x={-0.13}
+                y={-0.13}
+                width="0.26"
+                height="0.26"
+                rx="0.025"
+                fill="hsl(var(--primary) / 0.18)"
+                stroke="hsl(var(--primary) / 0.6)"
+                strokeWidth="0.008"
+              />
+            </svg>
+
+            {/* Camera marker — orbits the sphere; faded when behind */}
+            <motion.div
+              className="hidden"
+              animate={{
+                left: `${50 + camOrbitX * 50}%`,
+                top: `${50 + camOrbitY * 50}%`,
+                opacity: camFront ? 1 : 0.35,
+              }}
+              transition={{ type: "spring", stiffness: 360, damping: 32 }}
+              style={{ x: "-50%", y: "-50%" }}
+            >
+              <div className="w-7 h-7 rounded-md bg-card border border-white/30 shadow-[0_4px_12px_rgba(0,0,0,0.6)] flex items-center justify-center text-base">
+                <Camera className="h-4 w-4 text-primary" aria-hidden />
+              </div>
+            </motion.div>
+
+            {/* Side stepper arrows */}
+            <button
+              type="button"
+              onClick={() => stepYaw(-1)}
+              onPointerDown={(e) => e.stopPropagation()}
+              className="nb-angle-stepper absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center transition-colors"
+              aria-label="Rotate left"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => stepYaw(1)}
+              onPointerDown={(e) => e.stopPropagation()}
+              className="nb-angle-stepper absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center transition-colors"
+              aria-label="Rotate right"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => stepPitch(1)}
+              onPointerDown={(e) => e.stopPropagation()}
+              className="nb-angle-stepper absolute left-1/2 -translate-x-1/2 bottom-2 w-8 h-8 rounded-full flex items-center justify-center transition-colors"
+              aria-label="Tilt down"
+            >
+              <ChevronDown className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => stepPitch(-1)}
+              onPointerDown={(e) => e.stopPropagation()}
+              className="nb-angle-stepper absolute left-1/2 -translate-x-1/2 top-2 w-8 h-8 rounded-full flex items-center justify-center transition-colors"
+              aria-label="Tilt up"
+            >
+              <ChevronUp className="h-4 w-4" />
+            </button>
+          </div>
+
+        </div>
+
+        {/* Drag-rows: Rotation / Tilt / Zoom */}
+        <div className="space-y-1.5">
+          <AngleControlRow
+            label="Rotation"
+            value={`${rotationDeg}°`}
+            fillFraction={(cameraX + 1) / 2}
+            onDelta={(dx, w) => {
+              const next = wrapOrbit(cameraX + (dx / w) * 2);
+              onUpdate(node.id, { cameraX: next });
+            }}
+            onSetFraction={(f) => onUpdate(node.id, { cameraX: f * 2 - 1 })}
+          />
+          <AngleControlRow
+            label="Tilt"
+            value={`${tiltDeg}°`}
+            fillFraction={(cameraY + 1) / 2}
+            onDelta={(dx, w) => {
+              const next = clampNumber(cameraY + (dx / w) * 2, -1, 1);
+              onUpdate(node.id, { cameraY: next });
+            }}
+            onSetFraction={(f) => onUpdate(node.id, { cameraY: f * 2 - 1 })}
+          />
+          <AngleControlRow
+            label="Zoom"
+            value={`${zoomVal}`}
+            fillFraction={cameraZ}
+            onDelta={(dx, w) => {
+              const next = clampNumber(cameraZ + dx / w, 0, 1);
+              onUpdate(node.id, { cameraZ: next });
+            }}
+            onSetFraction={(f) => onUpdate(node.id, { cameraZ: f })}
+          />
+        </div>
+
+        {/* Process */}
+        <Button
+          className="w-full nb-btn-primary"
+          onClick={() => onProcess(node.id)}
+          disabled={node.isRunning || !node.input}
+          title={!node.input ? "Connect an input first" : "Generate image with this camera angle"}
+        >
+          {node.isRunning ? (
+            <div className="flex items-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span>Adjusting Perspective...</span>
+            </div>
+          ) : "Apply Camera Angle"}
+        </Button>
+
+        {/* Output */}
+        <NodeOutputSection
+          nodeId={node.id}
+          output={node.output}
+          downloadFileName={`camera-angle-${Date.now()}.png`}
+        />
+
+        {node.error && (
+          <div className="text-xs text-red-400 bg-red-400/10 p-2 rounded border border-red-400/20 w-full animate-in fade-in slide-in-from-top-1">
             {node.error}
           </div>
         )}

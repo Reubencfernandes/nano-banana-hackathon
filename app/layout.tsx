@@ -5,7 +5,7 @@
  * Defines the basic HTML structure, fonts, and global styling for the entire app.
  * 
  * Key Features:
- * - Google Fonts integration (Geist Sans and Geist Mono)
+ * - Google Fonts integration (Inter and Geist Mono)
  * - CSS custom properties for font family variables
  * - Global CSS imports (Tailwind CSS and custom styles)
  * - SEO metadata configuration
@@ -13,19 +13,19 @@
  */
 
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ModeToggle } from "@/components/mode-toggle";
 
 /**
- * Configure Geist Sans font
+ * Configure Inter font
  * Modern, clean sans-serif font optimized for UI text
- * Creates CSS variable --font-geist-sans for use in Tailwind classes
+ * Creates CSS variable --font-inter for use in Tailwind classes
  */
-const geistSans = Geist({
-  variable: "--font-geist-sans",  // CSS custom property name
-  subsets: ["latin"],             // Character subset to load (reduces bundle size)
+const inter = Inter({
+  variable: "--font-inter",  // CSS custom property name
+  subsets: ["latin"],        // Character subset to load (reduces bundle size)
 });
 
 /**
@@ -64,11 +64,11 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground font-sans`}
+        className={`${inter.variable} ${geistMono.variable} antialiased bg-background text-foreground font-sans`}
       >
         <ThemeProvider
           attribute="class"
-          defaultTheme="system"
+          defaultTheme="dark"
           enableSystem
           disableTransitionOnChange
         >

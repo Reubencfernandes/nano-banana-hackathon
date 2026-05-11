@@ -16,6 +16,12 @@
 
 // React imports for hooks and core functionality
 import React, { useEffect, useMemo, useRef, useState } from "react";
+// Framer Motion for smooth animations
+import { motion } from "framer-motion";
+// Provider icons (lobehub)
+import Gemini from '@lobehub/icons/es/Gemini';
+import OpenAI from '@lobehub/icons/es/OpenAI';
+import HuggingFace from '@lobehub/icons/es/HuggingFace';
 // Custom CSS for animations and styling
 import "./editor.css";
 // Import all the different node view components
@@ -29,11 +35,13 @@ import {
   FaceNodeView,        // Face modifications
   LightningNodeView,   // Lighting effects
   PosesNodeView,       // Pose modifications
-  NodeTimer            // Timer component
+  AngleNodeView,       // Camera angle modifications
+  NodeTimer,           // Timer component
 } from "./nodes";
 // UI components from shadcn/ui library
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
+import { Select } from "../components/ui/select";
 // Hugging Face OAuth functionality
 import { oauthLoginUrl, oauthHandleRedirectIfPresent } from '@huggingface/hub';
 
@@ -152,7 +160,7 @@ async function copyImageToClipboard(dataUrl: string) {
  * All possible node types in the editor
  * Each type represents a different kind of image processing operation
  */
-type NodeType = "CHARACTER" | "MERGE" | "BACKGROUND" | "CLOTHES" | "STYLE" | "EDIT" | "CAMERA" | "AGE" | "FACE" | "BLEND" | "LIGHTNING" | "POSES";
+type NodeType = "CHARACTER" | "MERGE" | "BACKGROUND" | "CLOTHES" | "STYLE" | "EDIT" | "CAMERA" | "AGE" | "FACE" | "BLEND" | "LIGHTNING" | "POSES" | "ANGLE";
 
 /**
  * Base properties that all nodes share
@@ -281,21 +289,35 @@ type EditNode = NodeBase & {
  */
 type CameraNode = NodeBase & {
   type: "CAMERA";
-  input?: string;              // Source image node ID
-  output?: string;             // Image with camera effects applied
-  focalLength?: string;        // Lens focal length (e.g., "50mm", "85mm")
-  aperture?: string;           // Aperture setting (e.g., "f/1.4", "f/2.8")
-  shutterSpeed?: string;       // Shutter speed (e.g., "1/60", "1/125")
-  whiteBalance?: string;       // Color temperature setting
-  angle?: string;              // Camera angle/perspective
-  iso?: string;                // ISO sensitivity setting
-  filmStyle?: string;          // Film simulation (e.g., "Kodak", "Fuji")
-  lighting?: string;           // Lighting setup description
-  bokeh?: string;              // Background blur style
-  composition?: string;        // Composition technique
-  aspectRatio?: string;        // Image aspect ratio
-  motionBlur?: string;         // Motion blur effect
-  isRunning?: boolean;         // Processing status
+  input?: string;
+  output?: string;
+  focalLength?: string;
+  aperture?: string;
+  whiteBalance?: string;
+  angle?: string;
+  filmStyle?: string;
+  lightingSetup?: string;      // Geometry: Rembrandt, Split, Butterfly, etc.
+  lightingQuality?: string;    // Character: soft/hard, golden hour, high/low key
+  bokeh?: string;              // Lens character (anamorphic, petzval, mirror)
+  composition?: string;
+  aspectRatio?: string;
+  motionBlur?: string;
+  isRunning?: boolean;
+  error?: string | null;
+};
+
+/**
+ * ANGLE node - Adjusts camera angle/position visually
+ * Allows users to specify the camera position by moving a camera icon on a 2D plane
+ */
+type AngleNode = NodeBase & {
+  type: "ANGLE";
+  input?: string;              // Source node ID
+  output?: string;             // Image with angle applied
+  cameraX?: number;            // Yaw — horizontal orbit around subject (-1 to 1)
+  cameraY?: number;            // Pitch — vertical orbit around subject (-1 to 1)
+  cameraZ?: number;            // Distance — closer (0) to farther (1)
+  isRunning?: boolean;         // Processing state
   error?: string | null;       // Error message
 };
 
@@ -382,7 +404,7 @@ type PosesNode = NodeBase & {
  * Union type of all possible node types
  * Used for type-safe handling of nodes throughout the application
  */
-type AnyNode = CharacterNode | MergeNode | BackgroundNode | ClothesNode | StyleNode | EditNode | CameraNode | AgeNode | FaceNode | BlendNode | LightningNode | PosesNode;
+type AnyNode = CharacterNode | MergeNode | BackgroundNode | ClothesNode | StyleNode | EditNode | CameraNode | AgeNode | FaceNode | BlendNode | LightningNode | PosesNode | AngleNode;
 
 /* ========================================
    CONSTANTS AND UTILITY FUNCTIONS
@@ -393,6 +415,7 @@ type AnyNode = CharacterNode | MergeNode | BackgroundNode | ClothesNode | StyleN
  * Uses Unsplash image as a starting point before users upload their own images
  */
 const DEFAULT_PERSON = "/reo.png";
+const CHARACTER_GLASS_VIDEO_SRC = "https://d8j0ntlcm91z4.cloudfront.net/user_34DpnLwtmxkLgtVe8psPn1j2G8i/hf_20260510_115212_9d7d0835-d6dd-4287-823d-9c5313f88aba.mp4";
 
 /**
  * Convert File objects to data URLs for image processing
@@ -492,19 +515,25 @@ function Port({
   className,
   nodeId,
   isOutput,
+  connected,
   onStartConnection,
-  onEndConnection
+  onEndConnection,
+  onDisconnect,
 }: {
   className?: string;
   nodeId?: string;
   isOutput?: boolean;
+  connected?: boolean;
   onStartConnection?: (nodeId: string) => void;
   onEndConnection?: (nodeId: string) => void;
+  onDisconnect?: (nodeId: string) => void;
 }) {
   const handlePointerDown = (e: React.PointerEvent) => {
     e.stopPropagation();
     if (isOutput && nodeId && onStartConnection) {
       onStartConnection(nodeId);
+    } else if (!isOutput && connected && nodeId && onDisconnect) {
+      onDisconnect(nodeId);
     }
   };
 
@@ -517,10 +546,17 @@ function Port({
 
   return (
     <div
-      className={cx("nb-port", className)}
+      className={cx("nb-port", className, connected && "nb-port--connected")}
       onPointerDown={handlePointerDown}
       onPointerUp={handlePointerUp}
       onPointerEnter={handlePointerUp}
+      title={
+        isOutput
+          ? "Drag from here to connect to another node's input"
+          : connected
+            ? "Pull to disconnect"
+            : "Drop a connection here"
+      }
     />
   );
 }
@@ -530,6 +566,7 @@ function Port({
 function CharacterNodeView({
   node,
   scaleRef,
+  outputConnected,
   onChangeImage,
   onChangeLabel,
   onStartConnection,
@@ -538,6 +575,7 @@ function CharacterNodeView({
 }: {
   node: CharacterNode;
   scaleRef: React.MutableRefObject<number>;
+  outputConnected?: boolean;
   onChangeImage: (id: string, url: string) => void;
   onChangeLabel: (id: string, label: string) => void;
   onStartConnection: (nodeId: string) => void;
@@ -550,6 +588,8 @@ function CharacterNodeView({
     { x: node.x, y: node.y },
     onUpdatePosition
   );
+
+  const [editingLabel, setEditingLabel] = useState(false);
 
   const onDrop = async (e: React.DragEvent) => {
     e.preventDefault();
@@ -583,65 +623,91 @@ function CharacterNodeView({
 
   return (
     <div
-      className="nb-node absolute w-[340px] select-none"
+      className="nb-node nb-character-node absolute w-[340px] select-none overflow-hidden"
       style={{ left: pos.x, top: pos.y }}
       onDrop={onDrop}
       onDragOver={(e) => e.preventDefault()}
       onPaste={onPaste}
     >
+      <video
+        className="nb-character-video"
+        src={CHARACTER_GLASS_VIDEO_SRC}
+        autoPlay
+        muted
+        loop
+        playsInline
+        aria-hidden="true"
+      />
+      <div className="nb-character-glass" aria-hidden="true" />
       <div
-        className="nb-header cursor-grab active:cursor-grabbing rounded-t-[14px] px-3 py-2 flex items-center justify-between"
+        className="nb-header relative z-10 cursor-grab active:cursor-grabbing rounded-t-[14px] px-3 py-2 flex items-center justify-between"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
       >
-        <input
-          className="bg-transparent outline-none text-sm font-semibold tracking-wide flex-1"
-          value={node.label || "CHARACTER"}
-          onChange={(e) => onChangeLabel(node.id, e.target.value)}
-        />
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost" size="icon" className="text-destructive hover:bg-destructive/20 h-6 w-6"
-            onClick={(e) => {
-              e.stopPropagation();
-              e.preventDefault();
-              if (confirm('Delete this character node?')) {
-                onDelete(node.id);
+        {editingLabel ? (
+          <input
+            autoFocus
+            className="bg-transparent outline-none text-sm font-semibold tracking-wide flex-1 border-b border-white/20 focus:border-white/50 text-white/90 placeholder:text-white/50"
+            value={node.label || ""}
+            placeholder="CHARACTER"
+            onChange={(e) => onChangeLabel(node.id, e.target.value)}
+            onBlur={() => setEditingLabel(false)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === "Escape") {
+                e.currentTarget.blur();
               }
             }}
             onPointerDown={(e) => e.stopPropagation()}
-            title="Delete node"
-            aria-label="Delete node"
+          />
+        ) : (
+          <span
+            className="text-sm font-semibold tracking-wide flex-1 cursor-text truncate"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              setEditingLabel(true);
+            }}
+            title="Click to rename"
           >
-            ×
-          </Button>
+            {node.label || "CHARACTER"}
+          </span>
+        )}
+        <div className="flex items-center gap-2">
           <Port
             className="out"
             nodeId={node.id}
             isOutput={true}
+            connected={outputConnected}
             onStartConnection={onStartConnection}
           />
         </div>
       </div>
-      <div className="p-3 space-y-3">
-        <div className="aspect-[4/5] w-full rounded-xl bg-muted/30 grid place-items-center overflow-hidden border border-border/10">
+      <div className="relative z-10 p-3 space-y-3">
+        <label
+          className="aspect-[4/5] w-full rounded-xl bg-black/20 grid place-items-center overflow-hidden border border-white/15 cursor-pointer group relative shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]"
+          title="Click to upload, drag an image here, or right-click to copy"
+        >
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={async (e) => {
+              const files = e.currentTarget.files;
+              if (files && files.length > 0) {
+                const [first] = await toDataUrls(files);
+                if (first) onChangeImage(node.id, first);
+                try {
+                  e.currentTarget.value = "";
+                } catch { }
+              }
+            }}
+          />
           <img
             src={node.image}
             alt="character"
-            className="h-full w-full object-contain cursor-pointer hover:opacity-80 transition-opacity"
+            className="h-full w-full object-contain group-hover:opacity-80 transition-opacity"
             draggable={false}
-            onClick={async () => {
-              try {
-                const response = await fetch(node.image);
-                const blob = await response.blob();
-                await navigator.clipboard.write([
-                  new ClipboardItem({ [blob.type]: blob })
-                ]);
-              } catch (error) {
-                console.error('Failed to copy image:', error);
-              }
-            }}
             onContextMenu={async (e) => {
               e.preventDefault();
               try {
@@ -651,7 +717,6 @@ function CharacterNodeView({
                   new ClipboardItem({ [blob.type]: blob })
                 ]);
 
-                // Show visual feedback
                 const img = e.currentTarget;
                 const originalFilter = img.style.filter;
                 img.style.filter = "brightness(1.2)";
@@ -663,43 +728,11 @@ function CharacterNodeView({
                 console.error('Failed to copy image:', error);
               }
             }}
-            title="Click or right-click to copy image to clipboard"
           />
-        </div>
-        <div className="flex gap-2">
-          <label className="text-xs bg-secondary hover:bg-secondary/80 text-secondary-foreground transition-colors rounded px-3 py-1 cursor-pointer">
-            Upload
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={async (e) => {
-                const files = e.currentTarget.files;
-                if (files && files.length > 0) {
-                  const [first] = await toDataUrls(files);
-                  if (first) onChangeImage(node.id, first);
-                  // Reset input safely
-                  try {
-                    e.currentTarget.value = "";
-                  } catch { }
-                }
-              }}
-            />
-          </label>
-          <button
-            className="text-xs bg-secondary hover:bg-secondary/80 text-secondary-foreground transition-colors rounded px-3 py-1"
-            onClick={async () => {
-              try {
-                const text = await navigator.clipboard.readText();
-                if (text && (text.startsWith("http") || text.startsWith("data:image"))) {
-                  onChangeImage(node.id, text);
-                }
-              } catch { }
-            }}
-          >
-            Paste URL
-          </button>
-        </div>
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 px-2 py-1 text-[10px] text-white/80 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity text-center">
+            Click or drop image to replace
+          </div>
+        </label>
       </div>
     </div>
   );
@@ -709,7 +742,7 @@ function MergeNodeView({
   node,
   scaleRef,
   allNodes,
-  onDisconnect,
+  outputConnected,
   onRun,
   onEndConnection,
   onStartConnection,
@@ -720,13 +753,13 @@ function MergeNodeView({
   node: MergeNode;
   scaleRef: React.MutableRefObject<number>;
   allNodes: AnyNode[];
-  onDisconnect: (mergeId: string, nodeId: string) => void;
   onRun: (mergeId: string) => void;
   onEndConnection: (mergeId: string) => void;
   onStartConnection: (nodeId: string) => void;
   onUpdatePosition: (id: string, x: number, y: number) => void;
   onDelete: (id: string) => void;
   onClearConnections: (mergeId: string) => void;
+  outputConnected?: boolean;
 }) {
   const { pos, onPointerDown, onPointerMove, onPointerUp } = useNodeDrag(
     node.id,
@@ -749,31 +782,17 @@ function MergeNodeView({
           className="in"
           nodeId={node.id}
           isOutput={false}
+          connected={node.inputs.length > 0}
           onEndConnection={onEndConnection}
+          onDisconnect={() => onClearConnections(node.id)}
         />
         <div className="font-semibold tracking-wide text-sm flex-1 text-center">MERGE</div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-destructive hover:bg-destructive/20 h-6 w-6"
-            onClick={(e) => {
-              e.stopPropagation();
-              e.preventDefault();
-              if (confirm('Delete this merge node?')) {
-                onDelete(node.id);
-              }
-            }}
-            onPointerDown={(e) => e.stopPropagation()}
-            title="Delete node"
-            aria-label="Delete node"
-          >
-            ×
-          </Button>
           <Port
             className="out"
             nodeId={node.id}
             isOutput={true}
+            connected={outputConnected}
             onStartConnection={onStartConnection}
           />
         </div>
@@ -849,30 +868,14 @@ function MergeNodeView({
                   </div>
                 )}
                 <span className="text-xs">{label}</span>
-                <button
-                  className="text-[10px] text-red-300 hover:text-red-200"
-                  onClick={() => onDisconnect(node.id, id)}
-                >
-                  remove
-                </button>
               </div>
             );
           })}
         </div>
         {node.inputs.length === 0 && (
-          <p className="text-xs text-white/40">Drag from any node's output port to connect</p>
+          <p className="text-xs text-muted-foreground/70">Drag from any node's output port to connect</p>
         )}
         <div className="flex items-center gap-2">
-          {node.inputs.length > 0 && (
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => onClearConnections(node.id)}
-              title="Clear all connections"
-            >
-              Clear
-            </Button>
-          )}
           <Button
             size="sm"
             onClick={() => onRun(node.id)}
@@ -884,9 +887,9 @@ function MergeNodeView({
 
         <div className="mt-2">
           <div className="flex items-center justify-between mb-1">
-            <div className="text-xs text-white/70">Output</div>
+            <div className="text-xs text-muted-foreground">Output</div>
           </div>
-          <div className="w-full min-h-[200px] max-h-[400px] rounded-xl bg-black/40 grid place-items-center">
+          <div className="w-full min-h-[200px] max-h-[400px] rounded-xl bg-muted/40 dark:bg-black/40 grid place-items-center">
             {node.output ? (
               <img
                 src={node.output}
@@ -931,7 +934,7 @@ function MergeNodeView({
                 title="Click or right-click to copy image to clipboard"
               />
             ) : (
-              <span className="text-white/40 text-xs py-16">Run merge to see result</span>
+              <span className="text-muted-foreground/70 text-xs py-16">Run merge to see result</span>
             )}
           </div>
           {node.output && (
@@ -956,7 +959,7 @@ function MergeNodeView({
             <div className="mt-2">
               <div className="text-xs text-red-400">{node.error}</div>
               {node.error.includes("API key") && (
-                <div className="text-xs text-white/50 mt-2 space-y-1">
+                <div className="text-xs text-muted-foreground mt-2 space-y-1">
                   <p>To fix this:</p>
                   <ol className="list-decimal list-inside space-y-1">
                     <li>Get key from: <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-blue-400 hover:underline">Google AI Studio</a></li>
@@ -1064,11 +1067,53 @@ export default function EditorPage() {
 
   // API Token state - REQUIRED for all users (no free tier)
   const [apiToken, setApiToken] = useState("");
+  const [openaiApiToken, setOpenaiApiToken] = useState("");
   const [showHelpSidebar, setShowHelpSidebar] = useState(false);
 
-  // Processing Mode: 'nanobananapro' uses Gemini API, 'huggingface' uses HF models
-  type ProcessingMode = 'nanobananapro' | 'huggingface';
-  const [processingMode, setProcessingMode] = useState<ProcessingMode>('nanobananapro');
+  // Accent colour — persisted to localStorage, applied via CSS variable override
+  const ACCENT_COLORS = [
+    { name: "Red",    hsl: "0 75% 55%" },
+    { name: "Orange", hsl: "24 88% 52%" },
+    { name: "Amber",  hsl: "43 96% 48%" },
+    { name: "Lime",   hsl: "84 60% 42%" },
+    { name: "Teal",   hsl: "172 58% 40%" },
+    { name: "Sky",    hsl: "200 80% 50%" },
+    { name: "Blue",   hsl: "217 80% 58%" },
+    { name: "Violet", hsl: "263 68% 60%" },
+    { name: "Pink",   hsl: "328 68% 57%" },
+    { name: "Rose",   hsl: "350 72% 54%" },
+  ] as const;
+  const [accentColor, setAccentColor] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("nb-accent") || "0 75% 55%";
+    }
+    return "0 75% 55%";
+  });
+  useEffect(() => {
+    document.documentElement.style.setProperty("--primary", accentColor);
+    localStorage.setItem("nb-accent", accentColor);
+  }, [accentColor]);
+
+  // Processing Mode: 'gpt' uses OpenAI, 'gemini' uses Gemini, 'huggingface' uses HF models
+  type ProcessingMode = 'gpt' | 'gemini' | 'huggingface';
+  const [processingMode, setProcessingMode] = useState<ProcessingMode>('gemini');
+
+  // Image generation models (Gemini + OpenAI)
+  const IMAGE_MODELS = {
+    "gemini-2.5-flash-image":         { provider: "gemini" as const, label: "Gemini 2.5 Flash Image" },
+    "gemini-3-pro-image-preview":     { provider: "gemini" as const, label: "Gemini 3 Pro Image" },
+    "gemini-3.1-flash-image-preview": { provider: "gemini" as const, label: "Gemini 3.1 Flash Image" },
+    "gpt-image-1":                    { provider: "openai" as const, label: "GPT Image 1" },
+  } as const;
+  type ImageModelKey = keyof typeof IMAGE_MODELS;
+  const [selectedImageModel, setSelectedImageModel] = useState<ImageModelKey>("gemini-2.5-flash-image");
+
+  // Switch processing mode and reset selected model to that provider's default
+  const switchProcessingMode = (mode: ProcessingMode) => {
+    setProcessingMode(mode);
+    if (mode === 'gemini') setSelectedImageModel('gemini-2.5-flash-image');
+    else if (mode === 'gpt') setSelectedImageModel('gpt-image-1');
+  };
 
   // Available HF models
   const HF_MODELS = {
@@ -1154,6 +1199,28 @@ export default function EditorPage() {
           }
           return n;
         });
+    });
+  };
+
+  const duplicateNode = (id: string) => {
+    setNodes((prev) => {
+      const src = prev.find((n) => n.id === id);
+      if (!src) return prev;
+      const copy: any = {
+        ...src,
+        id: uid(),
+        x: src.x + 40,
+        y: src.y + 40,
+        // Drop transient/processed state from the duplicate
+        input: undefined,
+        inputs: src.type === "MERGE" ? [] : (src as any).inputs,
+        output: undefined,
+        isRunning: false,
+        startTime: undefined,
+        executionTime: undefined,
+        error: null,
+      };
+      return [...prev, copy];
     });
   };
 
@@ -1289,12 +1356,14 @@ export default function EditorPage() {
         const cam = node as CameraNode;
         if (cam.focalLength && cam.focalLength !== "None") config.focalLength = cam.focalLength;
         if (cam.aperture && cam.aperture !== "None") config.aperture = cam.aperture;
-        if (cam.shutterSpeed && cam.shutterSpeed !== "None") config.shutterSpeed = cam.shutterSpeed;
         if (cam.whiteBalance && cam.whiteBalance !== "None") config.whiteBalance = cam.whiteBalance;
         if (cam.angle && cam.angle !== "None") config.angle = cam.angle;
-        if (cam.iso && cam.iso !== "None") config.iso = cam.iso;
         if (cam.filmStyle && cam.filmStyle !== "None") config.filmStyle = cam.filmStyle;
-        if (cam.lighting && cam.lighting !== "None") config.lighting = cam.lighting;
+        // Combine setup + quality into a single 'lighting' string the API already understands
+        {
+          const parts = [cam.lightingSetup, cam.lightingQuality].filter((v): v is string => !!v && v !== "None");
+          if (parts.length) config.lighting = parts.join(", ");
+        }
         if (cam.bokeh && cam.bokeh !== "None") config.bokeh = cam.bokeh;
         if (cam.composition && cam.composition !== "None") config.composition = cam.composition;
         if (cam.aspectRatio && cam.aspectRatio !== "None") config.aspectRatio = cam.aspectRatio;
@@ -1336,6 +1405,16 @@ export default function EditorPage() {
         if ((node as PosesNode).posePrompt && (node as PosesNode).selectedPose) {
           config.posePrompt = (node as PosesNode).posePrompt;
           config.selectedPose = (node as PosesNode).selectedPose;
+        }
+        break;
+      case "ANGLE":
+        const angleNode = node as AngleNode;
+        if (angleNode.cameraX !== undefined && angleNode.cameraY !== undefined) {
+          config.cameraX = angleNode.cameraX;
+          config.cameraY = angleNode.cameraY;
+          if (angleNode.cameraZ !== undefined) {
+            config.cameraZ = angleNode.cameraZ;
+          }
         }
         break;
     }
@@ -1601,7 +1680,9 @@ export default function EditorPage() {
             type: "COMBINED",
             image: inputImage,
             params,
-            apiToken: apiToken || undefined
+            model: selectedImageModel,
+            apiToken: processingMode === "gemini" ? (apiToken || undefined) : undefined,
+            openaiApiToken: processingMode === "gpt" ? (openaiApiToken || undefined) : undefined,
           }),
         });
       }
@@ -1714,16 +1795,6 @@ export default function EditorPage() {
       document.body.style.webkitUserSelect = '';
     }
   };
-  const disconnectFromMerge = (mergeId: string, nodeId: string) => {
-    setNodes((prev) =>
-      prev.map((n) =>
-        n.id === mergeId && n.type === "MERGE"
-          ? { ...n, inputs: (n as MergeNode).inputs.filter((i) => i !== nodeId) }
-          : n
-      )
-    );
-  };
-
   const executeMerge = async (merge: MergeNode): Promise<string | null> => {
     // Get images from merge inputs - now accepts any node type
     const mergeImages: string[] = [];
@@ -1790,7 +1861,9 @@ export default function EditorPage() {
         type: "MERGE",
         images: mergeImages,
         prompt,
-        apiToken: apiToken || undefined
+        model: selectedImageModel,
+        apiToken: processingMode === "gemini" ? (apiToken || undefined) : undefined,
+        openaiApiToken: processingMode === "gpt" ? (openaiApiToken || undefined) : undefined,
       }),
     });
 
@@ -1888,7 +1961,9 @@ export default function EditorPage() {
           type: "MERGE",
           images: imgs,
           prompt,
-          apiToken: apiToken || undefined
+          model: selectedImageModel,
+          apiToken: processingMode === "gemini" ? (apiToken || undefined) : undefined,
+          openaiApiToken: processingMode === "gpt" ? (openaiApiToken || undefined) : undefined,
         }),
       });
 
@@ -2069,6 +2144,29 @@ export default function EditorPage() {
   const [menuPos, setMenuPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [menuWorld, setMenuWorld] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
+  // Per-node context menu (Duplicate / Delete)
+  const [nodeMenu, setNodeMenu] = useState<{ open: boolean; x: number; y: number; nodeId: string | null }>({
+    open: false, x: 0, y: 0, nodeId: null,
+  });
+
+  const openNodeContextMenu = (nodeId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = containerRef.current?.getBoundingClientRect();
+    const baseX = rect ? e.clientX - rect.left : e.clientX;
+    const baseY = rect ? e.clientY - rect.top : e.clientY;
+    const menuW = 160;
+    const menuH = 88;
+    const maxW = rect ? rect.width : window.innerWidth;
+    const maxH = rect ? rect.height : window.innerHeight;
+    const x = Math.max(8, Math.min(baseX, maxW - menuW - 8));
+    const y = Math.max(8, Math.min(baseY, maxH - menuH - 8));
+    setMenuOpen(false);
+    setNodeMenu({ open: true, x, y, nodeId });
+  };
+
+  const closeNodeMenu = () => setNodeMenu((m) => ({ ...m, open: false, nodeId: null }));
+
   const onContextMenu = (e: React.MouseEvent<HTMLDivElement>) => {
     e.preventDefault();
     const rect = containerRef.current!.getBoundingClientRect();
@@ -2145,6 +2243,9 @@ export default function EditorPage() {
       case "POSES":
         setNodes(prev => [...prev, { ...commonProps, type: "POSES", poseStrength: 60 } as PosesNode]);
         break;
+      case "ANGLE":
+        setNodes(prev => [...prev, { ...commonProps, type: "ANGLE", cameraX: 0, cameraY: 0, cameraZ: 0.5 } as AngleNode]);
+        break;
     }
     setMenuOpen(false);
   };
@@ -2157,53 +2258,106 @@ export default function EditorPage() {
         </h1>
         <div className="flex items-center gap-3">
           {/* Processing Mode Toggle */}
-          <div className="flex items-center gap-2 p-1 bg-muted/50 rounded-lg">
-            <button
-              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${processingMode === 'nanobananapro'
-                ? 'bg-primary text-primary-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
+          <div className="flex items-center gap-1 p-1 bg-card rounded-lg relative border border-border shadow-sm">
+            {(['gpt', 'gemini', 'huggingface'] as const).map((mode) => (
+              <button
+                key={mode}
+                className={`relative px-4 py-1.5 text-sm font-medium rounded-md transition-colors z-10 ${
+                  processingMode === mode
+                    ? 'text-primary-foreground'
+                    : 'text-gray-500 hover:text-gray-900 dark:text-zinc-400 dark:hover:text-zinc-100'
                 }`}
-              onClick={() => setProcessingMode('nanobananapro')}
-              title="Use Google Gemini API - supports all features including MERGE"
-            >
-              🍌 Nano Banana
-            </button>
-            <button
-              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${processingMode === 'huggingface'
-                ? 'bg-primary text-primary-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
-                }`}
-              onClick={() => setProcessingMode('huggingface')}
-              title="Use HuggingFace models - requires HF login"
-            >
-              🤗 HuggingFace
-            </button>
+                onClick={() => switchProcessingMode(mode)}
+                title={
+                  mode === 'gpt' ? "Use OpenAI GPT image models" :
+                  mode === 'gemini' ? "Use Google Gemini image models - supports all features including MERGE" :
+                  "Use HuggingFace models - requires HF login"
+                }
+              >
+                {processingMode === mode && (
+                  <motion.div
+                    layoutId="active-mode-pill"
+                    className="absolute inset-0 bg-primary rounded-md shadow-sm border border-primary/50 -z-10"
+                    transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                  />
+                )}
+                <span className="relative z-10 flex items-center gap-1.5">
+                  {mode === 'gpt' && <OpenAI size={14} />}
+                  {mode === 'gemini' && <Gemini.Color size={14} />}
+                  {mode === 'huggingface' && <HuggingFace.Color size={14} />}
+                  <span>{mode === 'gpt' ? 'GPT' : mode === 'gemini' ? 'Gemini' : 'HuggingFace'}</span>
+                </span>
+              </button>
+            ))}
           </div>
 
           {/* Conditional UI based on processing mode */}
-          {processingMode === 'nanobananapro' ? (
+          {processingMode === 'gemini' ? (
             <>
               <div className="h-6 w-px bg-border" />
-              {/* API Key status indicator */}
+              <Select
+                id="image-model"
+                value={selectedImageModel}
+                onChange={(e) => setSelectedImageModel(e.target.value as ImageModelKey)}
+                className="w-52"
+              >
+                {Object.entries(IMAGE_MODELS)
+                  .filter(([, m]) => m.provider === 'gemini')
+                  .map(([key, model]) => (
+                    <option key={key} value={key}>{model.label}</option>
+                  ))}
+              </Select>
+
               {apiToken ? (
                 <div className="text-xs px-2 py-1 rounded-md bg-green-500/20 text-green-400">
-                  API key set ✓
+                  Gemini key set ✓
                 </div>
               ) : (
                 <div className="text-xs px-2 py-1 rounded-md bg-red-500/20 text-red-400">
-                  ⚠️ API key required
+                  Gemini key required
                 </div>
               )}
-              <label htmlFor="api-token" className="text-sm font-medium text-muted-foreground">
-                Gemini API Key:
-              </label>
               <Input
                 id="api-token"
                 type="password"
-                placeholder="Enter your Google Gemini API key"
+                placeholder="Gemini API key"
                 value={apiToken}
                 onChange={(e) => setApiToken(e.target.value)}
-                className="w-48"
+                className="w-44"
+              />
+            </>
+          ) : processingMode === 'gpt' ? (
+            <>
+              <div className="h-6 w-px bg-border" />
+              <Select
+                id="image-model"
+                value={selectedImageModel}
+                onChange={(e) => setSelectedImageModel(e.target.value as ImageModelKey)}
+                className="w-44"
+              >
+                {Object.entries(IMAGE_MODELS)
+                  .filter(([, m]) => m.provider === 'openai')
+                  .map(([key, model]) => (
+                    <option key={key} value={key}>{model.label}</option>
+                  ))}
+              </Select>
+
+              {openaiApiToken ? (
+                <div className="text-xs px-2 py-1 rounded-md bg-green-500/20 text-green-400">
+                  OpenAI key set ✓
+                </div>
+              ) : (
+                <div className="text-xs px-2 py-1 rounded-md bg-red-500/20 text-red-400">
+                  OpenAI key required
+                </div>
+              )}
+              <Input
+                id="openai-token"
+                type="password"
+                placeholder="OpenAI API key"
+                value={openaiApiToken}
+                onChange={(e) => setOpenaiApiToken(e.target.value)}
+                className="w-44"
               />
             </>
           ) : (
@@ -2282,92 +2436,185 @@ export default function EditorPage() {
         <>
           {/* Backdrop */}
           <div
-            className="fixed inset-0 bg-black/50 z-[9998]"
+            className="fixed inset-0 bg-black/60 z-[9998]"
             onClick={() => setShowHelpSidebar(false)}
           />
           {/* Sidebar */}
-          <div className="fixed right-0 top-0 h-full w-96 bg-card/95 backdrop-blur border-l border-border/60 shadow-xl z-[9999] overflow-y-auto">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-semibold text-foreground">Help & Guide</h2>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 w-8 p-0"
-                  onClick={() => setShowHelpSidebar(false)}
-                >
-                  <span className="text-lg">×</span>
-                </Button>
+          <div className="fixed right-0 top-0 h-full w-[26rem] bg-card border-l border-border shadow-2xl z-[9999] overflow-y-auto scrollbar-thin">
+            <div className="px-6 py-5 border-b border-border/60 flex items-center justify-between sticky top-0 bg-card z-10">
+              <div>
+                <h2 className="text-base font-semibold text-foreground tracking-tight">Help &amp; Guide</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">Modes, models, shortcuts &amp; tips</p>
               </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0 rounded-md hover:bg-muted"
+                onClick={() => setShowHelpSidebar(false)}
+                aria-label="Close help"
+              >
+                <span className="text-lg leading-none">×</span>
+              </Button>
+            </div>
 
-              <div className="space-y-6">
-                {/* Processing Modes Explanation */}
-                <div>
-                  <h3 className="font-semibold mb-3 text-foreground">⚙️ Processing Modes</h3>
-                  <div className="text-sm text-muted-foreground space-y-3">
-                    <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg">
-                      <p className="font-medium text-primary mb-2">🍌 Nano Banana (Gemini API)</p>
-                      <p>Uses Google's Gemini API. <strong>Supports ALL nodes</strong> including MERGE for combining multiple images into group photos.</p>
-                      <p className="mt-1 text-xs">Requires a Google Gemini API key from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">AI Studio</a>.</p>
-                    </div>
-                    <div className="p-3 bg-secondary border border-border rounded-lg">
-                      <p className="font-medium text-secondary-foreground mb-2">🤗 HuggingFace Models</p>
-                      <p>Uses HuggingFace inference API with models like FLUX.1-Kontext and Qwen-Image-Edit. Supports single-image editing nodes.</p>
-                      <p className="mt-1 text-xs">Requires HuggingFace login. Uses your HF inference credits.</p>
-                    </div>
+            <div className="p-6 space-y-7">
+              {/* Accent colour */}
+              <section>
+                <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">Accent Colour</h3>
+                <div className="flex flex-wrap gap-2">
+                  {ACCENT_COLORS.map((c) => {
+                    const isActive = accentColor === c.hsl;
+                    return (
+                      <button
+                        key={c.hsl}
+                        title={c.name}
+                        onClick={() => setAccentColor(c.hsl)}
+                        className="w-8 h-8 rounded-full border-2 transition-all duration-150 hover:scale-110 focus:outline-none flex items-center justify-center"
+                        style={{
+                          backgroundColor: `hsl(${c.hsl})`,
+                          borderColor: isActive ? "rgba(255,255,255,0.9)" : "transparent",
+                          boxShadow: isActive ? `0 0 0 3px hsl(${c.hsl} / 0.55)` : undefined,
+                        }}
+                      >
+                        {isActive && (
+                          <svg
+                            viewBox="0 0 10 8"
+                            width="14"
+                            height="14"
+                            fill="none"
+                            stroke="white"
+                            strokeWidth="2.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            style={{ filter: "drop-shadow(0 0 1.5px rgba(0,0,0,0.7))" }}
+                          >
+                            <path d="M1 4l3 3 5-6" />
+                          </svg>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+
+              {/* Quick start */}
+              <section>
+                <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">Quick start</h3>
+                <ol className="text-sm text-foreground/90 space-y-2 list-decimal list-inside marker:text-muted-foreground">
+                  <li>Pick a mode in the navbar — <strong>GPT</strong>, <strong>Gemini</strong>, or <strong>HuggingFace</strong>.</li>
+                  <li>Paste the matching API key (kept in memory only — cleared on refresh).</li>
+                  <li>Right-click blank canvas to add a Character or any other node.</li>
+                  <li>Right-click any node to duplicate it or delete it.</li>
+                  <li>Drag from a green output port to a red input port to wire nodes together.</li>
+                  <li>Click <strong>Run</strong> on a node to process the chain up to that point.</li>
+                </ol>
+              </section>
+
+              {/* Processing Modes */}
+              <section>
+                <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">Processing Modes</h3>
+                <div className="space-y-3">
+                  <div className="p-3 rounded-lg border border-border bg-muted/40">
+                    <p className="font-medium text-foreground mb-1 flex items-center gap-2">
+                      <OpenAI size={16} /> GPT <span className="text-xs text-muted-foreground font-normal">(OpenAI)</span>
+                    </p>
+                    <p className="text-sm text-muted-foreground">Calls the OpenAI Responses API with the <code className="text-xs px-1 py-0.5 rounded bg-background/60 border border-border/60">image_generation</code> tool. Supports text-to-image and image edit nodes including MERGE.</p>
+                    <p className="text-xs text-muted-foreground mt-2">Model: <strong className="text-foreground">gpt-image-1</strong>. Get a key from <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">platform.openai.com</a>.</p>
+                  </div>
+
+                  <div className="p-3 rounded-lg border border-border bg-muted/40">
+                    <p className="font-medium text-foreground mb-1 flex items-center gap-2">
+                      <Gemini.Color size={16} /> Gemini <span className="text-xs text-muted-foreground font-normal">(Google)</span>
+                    </p>
+                    <p className="text-sm text-muted-foreground">Google Gemini image models. Pick from the model dropdown — Flash for speed, Pro for quality, preview variants for the latest.</p>
+                    <p className="text-xs text-muted-foreground mt-2">Models: <strong className="text-foreground">2.5-flash-image</strong>, <strong className="text-foreground">3-pro-image-preview</strong>, <strong className="text-foreground">3.1-flash-image-preview</strong>. Key from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">AI Studio</a>.</p>
+                  </div>
+
+                  <div className="p-3 rounded-lg border border-border bg-muted/40">
+                    <p className="font-medium text-foreground mb-1 flex items-center gap-2">
+                      <HuggingFace.Color size={16} /> HuggingFace
+                    </p>
+                    <p className="text-sm text-muted-foreground">FLUX.1-Kontext and Qwen-Image-Edit via HF Inference. Single-image edits only — no MERGE.</p>
+                    <p className="text-xs text-muted-foreground mt-2">Sign in with HuggingFace; uses your inference credits.</p>
                   </div>
                 </div>
+              </section>
 
-                {/* MERGE Warning */}
-                <div className="p-4 bg-destructive/10 border border-destructive/30 rounded-lg">
-                  <h4 className="font-semibold text-destructive mb-2">⚠️ MERGE Node Limitation</h4>
-                  <p className="text-sm text-muted-foreground">
-                    The <strong>MERGE</strong> node requires <strong>Nano Banana</strong> because it combines multiple images into one cohesive group photo. HuggingFace models only accept single images, so MERGE won't work in HuggingFace mode.
-                  </p>
-                </div>
+              {/* MERGE compatibility */}
+              <section className="p-3 rounded-lg border border-amber-500/30 bg-amber-500/10">
+                <h4 className="text-sm font-semibold text-amber-400 mb-1">⚠️ MERGE compatibility</h4>
+                <p className="text-sm text-muted-foreground">
+                  <strong>MERGE</strong> needs a multi-image model. It works with <strong>GPT</strong> and <strong>Gemini</strong>, but not HuggingFace.
+                </p>
+              </section>
 
-                {/* Available HF Models */}
-                <div>
-                  <h3 className="font-semibold mb-3 text-foreground">🤖 HuggingFace Models</h3>
-                  <div className="text-sm text-muted-foreground space-y-2">
-                    <div className="p-2 bg-muted/50 rounded">
-                      <p className="font-medium">FLUX.1 Kontext</p>
-                      <p className="text-xs">Image editing with context understanding</p>
-                    </div>
-                    <div className="p-2 bg-muted/50 rounded">
-                      <p className="font-medium">Qwen Image Edit</p>
-                      <p className="text-xs">Powerful image editing and manipulation</p>
-                    </div>
-                    <div className="p-2 bg-muted/50 rounded">
-                      <p className="font-medium">FLUX.1 Dev</p>
-                      <p className="text-xs">Text-to-image generation (for CHARACTER nodes)</p>
-                    </div>
+              {/* Node types */}
+              <section>
+                <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">Node types</h3>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div className="p-2 rounded-md bg-muted/40 border border-border/60">
+                    <p className="font-medium text-foreground">Character</p>
+                    <p className="text-xs text-muted-foreground">Upload, paste, or drop an image.</p>
+                  </div>
+                  <div className="p-2 rounded-md bg-muted/40 border border-border/60">
+                    <p className="font-medium text-foreground">Merge</p>
+                    <p className="text-xs text-muted-foreground">Combine 2+ characters into one scene.</p>
+                  </div>
+                  <div className="p-2 rounded-md bg-muted/40 border border-border/60">
+                    <p className="font-medium text-foreground">Background</p>
+                    <p className="text-xs text-muted-foreground">Color, gradient, scene, or reference image.</p>
+                  </div>
+                  <div className="p-2 rounded-md bg-muted/40 border border-border/60">
+                    <p className="font-medium text-foreground">Style</p>
+                    <p className="text-xs text-muted-foreground">Anime, cyberpunk, Van Gogh, etc.</p>
+                  </div>
+                  <div className="p-2 rounded-md bg-muted/40 border border-border/60">
+                    <p className="font-medium text-foreground">Face / Pose</p>
+                    <p className="text-xs text-muted-foreground">Expressions, hair, body posing.</p>
+                  </div>
+                  <div className="p-2 rounded-md bg-muted/40 border border-border/60">
+                    <p className="font-medium text-foreground">Age / Camera / Light</p>
+                    <p className="text-xs text-muted-foreground">Transform photographic feel.</p>
+                  </div>
+                  <div className="p-2 rounded-md bg-muted/40 border border-border/60">
+                    <p className="font-medium text-foreground">Angle</p>
+                    <p className="text-xs text-muted-foreground">Control a 3D Earth camera orbit and zoom.</p>
+                  </div>
+                  <div className="p-2 rounded-md bg-muted/40 border border-border/60">
+                    <p className="font-medium text-foreground">Clothes</p>
+                    <p className="text-xs text-muted-foreground">Swap outfits using a reference.</p>
+                  </div>
+                  <div className="p-2 rounded-md bg-muted/40 border border-border/60">
+                    <p className="font-medium text-foreground">Edit</p>
+                    <p className="text-xs text-muted-foreground">Free-form prompt for any change.</p>
                   </div>
                 </div>
+              </section>
 
-                {/* How to Use */}
-                <div>
-                  <h3 className="font-semibold mb-3 text-foreground">🎨 How to Use the Editor</h3>
-                  <div className="text-sm text-muted-foreground space-y-2">
-                    <p>• <strong>Adding Nodes:</strong> Right-click on the canvas to add nodes</p>
-                    <p>• <strong>Character Nodes:</strong> Upload or drag images as starting points</p>
-                    <p>• <strong>Merge Nodes:</strong> Connect multiple characters (Nano Banana only)</p>
-                    <p>• <strong>Editing Nodes:</strong> Background, Style, Face, Age, Camera, etc.</p>
-                    <p>• <strong>Connecting:</strong> Drag from output port to input port</p>
-                  </div>
-                </div>
+              {/* Tips & shortcuts */}
+              <section>
+                <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">Tips &amp; shortcuts</h3>
+                <ul className="text-sm text-foreground/90 space-y-1.5">
+                  <li><span className="text-muted-foreground">•</span> <strong>Right-click</strong> blank canvas to add nodes.</li>
+                  <li><span className="text-muted-foreground">•</span> <strong>Right-click</strong> a node to duplicate or delete it.</li>
+                  <li><span className="text-muted-foreground">•</span> <strong>Drag</strong> a node header to move it; <strong>scroll</strong> the canvas to zoom.</li>
+                  <li><span className="text-muted-foreground">•</span> <strong>Drag</strong> from the green output port to a red input port.</li>
+                  <li><span className="text-muted-foreground">•</span> <strong>Drag</strong> the Angle node 3D Earth to orbit; <strong>scroll</strong> it to adjust distance.</li>
+                  <li><span className="text-muted-foreground">•</span> <strong>Paste</strong> an image from clipboard directly into Character / Background.</li>
+                  <li><span className="text-muted-foreground">•</span> Hover a node to see its <strong>elapsed time</strong> badge.</li>
+                </ul>
+              </section>
 
-                {/* Privacy */}
-                <div className="p-4 bg-muted border border-border rounded-lg">
-                  <h4 className="font-semibold text-foreground mb-2">🔒 Privacy & Security</h4>
-                  <div className="text-sm text-muted-foreground space-y-1">
-                    <p>• Gemini API keys are stored locally in your browser</p>
-                    <p>• HuggingFace tokens are stored in secure HTTP-only cookies</p>
-                    <p>• All processing happens through official APIs</p>
-                    <p>• No data is stored on our servers</p>
-                  </div>
-                </div>
-              </div>
+              {/* Privacy */}
+              <section className="p-3 rounded-lg border border-border bg-muted/40">
+                <h4 className="text-sm font-semibold text-foreground mb-2">🔒 Privacy &amp; keys</h4>
+                <ul className="text-sm text-muted-foreground space-y-1">
+                  <li>• <strong>OpenAI</strong> and <strong>Gemini</strong> keys live in memory only — cleared the moment you refresh.</li>
+                  <li>• <strong>HuggingFace</strong> auth uses a secure HTTP-only cookie.</li>
+                  <li>• Requests go directly to the official provider APIs from this server.</li>
+                  <li>• Nothing is persisted to a database.</li>
+                </ul>
+              </section>
             </div>
           </div>
         </>
@@ -2428,26 +2675,43 @@ export default function EditorPage() {
             {connectionPaths.map((p, idx) => (
               <path
                 key={idx}
-                className={p.processing ? "connection-processing connection-animated" : ""}
+                className={p.processing ? "connection-processing" : ""}
                 d={p.path}
                 fill="none"
-                stroke={p.processing ? undefined : (p.active ? "hsl(var(--primary))" : "hsl(var(--muted-foreground))")}
+                stroke={p.processing ? undefined : "hsl(var(--muted-foreground))"}
                 strokeWidth={p.processing ? undefined : "2.5"}
-                strokeDasharray={p.active && !p.processing ? "5,5" : undefined}
-                style={p.active && !p.processing ? undefined : (!p.processing ? { opacity: 0.9 } : {})}
+                style={!p.processing ? { opacity: 0.9 } : {}}
               />
             ))}
           </svg>
 
           <div className="relative z-10">
-            {nodes.map((node) => {
-              switch (node.type) {
+            {(() => {
+              const connectedOutputIds = new Set<string>();
+              for (const n of nodes) {
+                const inp = (n as any).input;
+                if (typeof inp === "string") connectedOutputIds.add(inp);
+                const inps = (n as any).inputs;
+                if (Array.isArray(inps)) for (const id of inps) connectedOutputIds.add(id);
+              }
+              return nodes.map((node) => {
+                const outputConnected = connectedOutputIds.has(node.id);
+                const wrap = (child: React.ReactNode) => (
+                  <div
+                    key={node.id}
+                    onContextMenu={(e) => openNodeContextMenu(node.id, e)}
+                  >
+                    {child}
+                  </div>
+                );
+                switch (node.type) {
                 case "CHARACTER":
-                  return (
+                  return wrap(
                     <CharacterNodeView
                       key={node.id}
                       node={node as CharacterNode}
                       scaleRef={scaleRef}
+                      outputConnected={outputConnected}
                       onChangeImage={setCharacterImage}
                       onChangeLabel={setCharacterLabel}
                       onStartConnection={handleStartConnection}
@@ -2456,13 +2720,13 @@ export default function EditorPage() {
                     />
                   );
                 case "MERGE":
-                  return (
+                  return wrap(
                     <MergeNodeView
                       key={node.id}
                       node={node as MergeNode}
                       scaleRef={scaleRef}
                       allNodes={nodes}
-                      onDisconnect={disconnectFromMerge}
+                      outputConnected={outputConnected}
                       onRun={runMerge}
                       onEndConnection={handleEndConnection}
                       onStartConnection={handleStartConnection}
@@ -2472,7 +2736,7 @@ export default function EditorPage() {
                     />
                   );
                 case "BACKGROUND":
-                  return (
+                  return wrap(
                     <BackgroundNodeView
                       key={node.id}
                       node={node as BackgroundNode}
@@ -2482,10 +2746,11 @@ export default function EditorPage() {
                       onEndConnection={handleEndSingleConnection}
                       onProcess={processNode}
                       onUpdatePosition={updateNodePosition}
+                      outputConnected={outputConnected}
                     />
                   );
                 case "CLOTHES":
-                  return (
+                  return wrap(
                     <ClothesNodeView
                       key={node.id}
                       node={node as ClothesNode}
@@ -2495,10 +2760,11 @@ export default function EditorPage() {
                       onEndConnection={handleEndSingleConnection}
                       onProcess={processNode}
                       onUpdatePosition={updateNodePosition}
+                      outputConnected={outputConnected}
                     />
                   );
                 case "STYLE":
-                  return (
+                  return wrap(
                     <StyleNodeView
                       key={node.id}
                       node={node as StyleNode}
@@ -2508,10 +2774,11 @@ export default function EditorPage() {
                       onEndConnection={handleEndSingleConnection}
                       onProcess={processNode}
                       onUpdatePosition={updateNodePosition}
+                      outputConnected={outputConnected}
                     />
                   );
                 case "EDIT":
-                  return (
+                  return wrap(
                     <EditNodeView
                       key={node.id}
                       node={node as EditNode}
@@ -2521,10 +2788,11 @@ export default function EditorPage() {
                       onEndConnection={handleEndSingleConnection}
                       onProcess={processNode}
                       onUpdatePosition={updateNodePosition}
+                      outputConnected={outputConnected}
                     />
                   );
                 case "CAMERA":
-                  return (
+                  return wrap(
                     <CameraNodeView
                       key={node.id}
                       node={node as CameraNode}
@@ -2534,10 +2802,11 @@ export default function EditorPage() {
                       onEndConnection={handleEndSingleConnection}
                       onProcess={processNode}
                       onUpdatePosition={updateNodePosition}
+                      outputConnected={outputConnected}
                     />
                   );
                 case "AGE":
-                  return (
+                  return wrap(
                     <AgeNodeView
                       key={node.id}
                       node={node as AgeNode}
@@ -2547,10 +2816,11 @@ export default function EditorPage() {
                       onEndConnection={handleEndSingleConnection}
                       onProcess={processNode}
                       onUpdatePosition={updateNodePosition}
+                      outputConnected={outputConnected}
                     />
                   );
                 case "FACE":
-                  return (
+                  return wrap(
                     <FaceNodeView
                       key={node.id}
                       node={node as FaceNode}
@@ -2560,10 +2830,11 @@ export default function EditorPage() {
                       onEndConnection={handleEndSingleConnection}
                       onProcess={processNode}
                       onUpdatePosition={updateNodePosition}
+                      outputConnected={outputConnected}
                     />
                   );
                 case "LIGHTNING":
-                  return (
+                  return wrap(
                     <LightningNodeView
                       key={node.id}
                       node={node as LightningNode}
@@ -2573,10 +2844,11 @@ export default function EditorPage() {
                       onEndConnection={handleEndSingleConnection}
                       onProcess={processNode}
                       onUpdatePosition={updateNodePosition}
+                      outputConnected={outputConnected}
                     />
                   );
                 case "POSES":
-                  return (
+                  return wrap(
                     <PosesNodeView
                       key={node.id}
                       node={node as PosesNode}
@@ -2586,15 +2858,58 @@ export default function EditorPage() {
                       onEndConnection={handleEndSingleConnection}
                       onProcess={processNode}
                       onUpdatePosition={updateNodePosition}
+                      outputConnected={outputConnected}
+                    />
+                  );
+                case "ANGLE":
+                  return wrap(
+                    <AngleNodeView
+                      key={node.id}
+                      node={node as AngleNode}
+                      onDelete={deleteNode}
+                      onUpdate={updateNode}
+                      onStartConnection={handleStartConnection}
+                      onEndConnection={handleEndSingleConnection}
+                      onProcess={processNode}
+                      onUpdatePosition={updateNodePosition}
+                      outputConnected={outputConnected}
                     />
                   );
                 default:
                   return null;
-              }
-            })}
+                }
+              });
+            })()}
           </div>
         </div>
 
+        {nodeMenu.open && nodeMenu.nodeId && (
+          <div
+            className="absolute z-50 rounded-xl border border-border bg-popover/95 backdrop-blur p-1 w-40 shadow-2xl text-popover-foreground"
+            style={{ left: nodeMenu.x, top: nodeMenu.y }}
+            onMouseLeave={closeNodeMenu}
+          >
+            <button
+              className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground rounded-lg transition-colors"
+              onClick={() => {
+                if (nodeMenu.nodeId) duplicateNode(nodeMenu.nodeId);
+                closeNodeMenu();
+              }}
+            >
+              Duplicate
+            </button>
+            <button
+              className="w-full text-left px-3 py-2 text-sm text-destructive hover:bg-destructive/15 rounded-lg transition-colors"
+              onClick={() => {
+                const id = nodeMenu.nodeId;
+                closeNodeMenu();
+                if (id) deleteNode(id);
+              }}
+            >
+              Delete
+            </button>
+          </div>
+        )}
         {menuOpen && (
           <div
             className="absolute z-50 rounded-xl border border-border bg-popover/95 backdrop-blur p-1 w-56 shadow-2xl text-popover-foreground"
@@ -2613,6 +2928,7 @@ export default function EditorPage() {
               <button className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground rounded-lg transition-colors" onClick={() => addFromMenu("STYLE")}>STYLE</button>
               <button className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground rounded-lg transition-colors" onClick={() => addFromMenu("EDIT")}>EDIT</button>
               <button className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground rounded-lg transition-colors" onClick={() => addFromMenu("CAMERA")}>CAMERA</button>
+              <button className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground rounded-lg transition-colors" onClick={() => addFromMenu("ANGLE")}>ANGLE</button>
               <button className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground rounded-lg transition-colors" onClick={() => addFromMenu("AGE")}>AGE</button>
               <button className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground rounded-lg transition-colors" onClick={() => addFromMenu("FACE")}>FACE</button>
               <button className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground rounded-lg transition-colors" onClick={() => addFromMenu("LIGHTNING")}>LIGHTNING</button>

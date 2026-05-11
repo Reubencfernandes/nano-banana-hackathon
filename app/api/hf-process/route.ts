@@ -34,14 +34,14 @@ const HF_MODELS = {
         name: "FLUX.1 Kontext",
         type: "image-to-image",
         description: "Advanced image editing with context understanding",
-        supportsNodes: ["BACKGROUND", "CLOTHES", "STYLE", "EDIT", "CAMERA", "AGE", "FACE", "LIGHTNING", "POSES"],
+        supportsNodes: ["BACKGROUND", "CLOTHES", "STYLE", "EDIT", "CAMERA", "ANGLE", "AGE", "FACE", "LIGHTNING", "POSES"],
     },
     "Qwen-Image-Edit": {
         id: "Qwen/Qwen-Image-Edit",
         name: "Qwen Image Edit",
         type: "image-to-image",
         description: "Powerful image editing and manipulation",
-        supportsNodes: ["BACKGROUND", "CLOTHES", "STYLE", "EDIT", "CAMERA", "AGE", "FACE", "LIGHTNING", "POSES"],
+        supportsNodes: ["BACKGROUND", "CLOTHES", "STYLE", "EDIT", "CAMERA", "ANGLE", "AGE", "FACE", "LIGHTNING", "POSES"],
     },
 };
 
@@ -289,6 +289,39 @@ export async function POST(req: NextRequest) {
             // Pose modifications
             if (params.posePrompt) {
                 prompts.push(`Change pose to: ${params.posePrompt}`);
+            }
+
+            if (params.cameraX !== undefined && params.cameraY !== undefined) {
+                const x = params.cameraX; // -1 to 1, 0 = front, ±1 = back
+                const y = params.cameraY; // -1 to 1, 0 = eye level
+                const z = typeof params.cameraZ === "number" ? params.cameraZ : 0.5;
+
+                const xAbs = Math.abs(x);
+                let horizontalDesc: string;
+                if (xAbs < 0.1) horizontalDesc = "directly in front, subject fully facing the camera";
+                else if (xAbs < 0.3) horizontalDesc = `slight ${x > 0 ? "right" : "left"} angle, subject mostly facing the camera`;
+                else if (xAbs < 0.6) horizontalDesc = `three-quarter view from the subject's ${x > 0 ? "right" : "left"} side`;
+                else if (xAbs < 0.85) horizontalDesc = `profile / side view from the subject's ${x > 0 ? "right" : "left"}`;
+                else if (xAbs < 0.97) horizontalDesc = `three-quarter rear view from the subject's ${x > 0 ? "right" : "left"}`;
+                else horizontalDesc = "directly behind the subject, rear view";
+
+                let verticalDesc: string;
+                if (y > 0.75) verticalDesc = "extreme high angle, bird's-eye view";
+                else if (y > 0.4) verticalDesc = "high angle, camera above the subject looking down";
+                else if (y > 0.1) verticalDesc = "slightly elevated, just above eye level";
+                else if (y > -0.1) verticalDesc = "eye level";
+                else if (y > -0.4) verticalDesc = "slightly low angle, just below eye level";
+                else if (y > -0.75) verticalDesc = "low angle, camera below the subject looking up";
+                else verticalDesc = "extreme low angle, worm's-eye view";
+
+                let shotDesc: string;
+                if (z < 0.15) shotDesc = "extreme close-up";
+                else if (z < 0.35) shotDesc = "close-up shot";
+                else if (z < 0.55) shotDesc = "medium shot";
+                else if (z < 0.75) shotDesc = "medium-wide shot";
+                else shotDesc = "wide shot";
+
+                prompts.push(`Photograph this scene from a new camera angle: ${horizontalDesc}, ${verticalDesc}, ${shotDesc}. Adjust perspective, foreshortening, horizon, and shadows to match this new viewpoint. Keep the subject's appearance and identity identical.`);
             }
 
             const finalPrompt = prompts.length > 0
