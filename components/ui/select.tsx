@@ -10,6 +10,7 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
     const [dropdownStyle, setDropdownStyle] = React.useState<React.CSSProperties>({});
     const containerRef = React.useRef<HTMLDivElement>(null);
     const triggerRef = React.useRef<HTMLButtonElement>(null);
+    const dropdownRef = React.useRef<HTMLDivElement>(null);
 
     const options = React.useMemo(() => {
       const opts: { value: string; label: string; disabled?: boolean }[] = [];
@@ -57,9 +58,10 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
     React.useEffect(() => {
       if (!open) return;
       const handler = (e: MouseEvent) => {
-        if (
-          containerRef.current && !containerRef.current.contains(e.target as Node)
-        ) {
+        const target = e.target as Node;
+        const insideContainer = containerRef.current?.contains(target);
+        const insideDropdown = dropdownRef.current?.contains(target);
+        if (!insideContainer && !insideDropdown) {
           setOpen(false);
         }
       };
@@ -78,6 +80,7 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
 
     const dropdown = open ? (
       <div
+        ref={dropdownRef}
         style={dropdownStyle}
         className="nb-select-list rounded-xl border overflow-hidden shadow-lg"
       >

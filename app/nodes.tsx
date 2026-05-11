@@ -1698,13 +1698,13 @@ export function StyleNodeView({ node, onDelete, onUpdate, onStartConnection, onE
 <div className="text-xs text-muted-foreground">Art Style</div>
         <div className="text-xs text-muted-foreground/50 mb-2">Select an artistic style to apply to your image</div>
         <Select
-          className="w-full bg-background border-border text-foreground focus:border-ring [&>option]:bg-background [&>option]:text-foreground"
+          className="w-full"
           value={node.stylePreset || ""}
           onChange={(e) => onUpdate(node.id, { stylePreset: (e.target as HTMLSelectElement).value })}
         >
-          <option value="" className="bg-background">Select a style...</option>
+          <option value="">Select a style...</option>
           {styleOptions.map(opt => (
-            <option key={opt.value} value={opt.value} className="bg-background">
+            <option key={opt.value} value={opt.value}>
               {opt.label}
             </option>
           ))}
