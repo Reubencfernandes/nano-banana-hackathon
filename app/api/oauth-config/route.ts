@@ -6,7 +6,9 @@ import crypto from 'crypto';
  */
 export async function GET(req: NextRequest) {
     const clientId = process.env.OAUTH_CLIENT_ID;
-    const scopes = 'email inference-api';
+    // openid + profile are always granted by HF Spaces OAuth; email and
+    // inference-api must also be listed under hf_oauth_scopes in README.md
+    const scopes = process.env.OAUTH_SCOPES || 'openid profile email inference-api';
 
     // Determine redirect URL based on environment
     const spaceHost = process.env.SPACE_HOST;
@@ -44,11 +46,22 @@ export async function GET(req: NextRequest) {
         SPACE_HOST: spaceHost || 'not set (local dev)',
     });
 
-    return NextResponse.json({
+    const response = NextResponse.json({
         clientId: clientId || null,
         isConfigured: !!clientId,
         redirectUrl,
         loginUrl,
         state,
     });
+
+    // Persist the state so the callback can verify it (CSRF protection)
+    response.cookies.set('hf_oauth_state', state, {
+        httpOnly: true,
+        secure: !redirectUrl.startsWith('http://'),
+        sameSite: 'lax',
+        maxAge: 60 * 10, // 10 minutes — just long enough for the login flow
+        path: '/',
+    });
+
+    return response;
 }

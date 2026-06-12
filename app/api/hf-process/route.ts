@@ -17,7 +17,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { HfInference } from "@huggingface/inference";
+import { InferenceClient } from "@huggingface/inference";
 
 // Configure Next.js runtime
 export const runtime = "nodejs";
@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        // Get HF token from cookies
+        // Get HF token from cookies (set by the OAuth login flow)
         let hfToken: string | null = null;
         try {
             const cookieStore = await cookies();
@@ -133,8 +133,10 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        // Initialize HuggingFace client
-        const hf = new HfInference(hfToken);
+        // Initialize HuggingFace client. These image-edit models are served
+        // through Inference Providers (fal-ai, replicate, ...), not the
+        // classic serverless API, so let the client pick an available one.
+        const hf = new InferenceClient(hfToken);
 
         // Handle text-to-image generation (FLUX.1-dev)
         if (modelConfig.type === "text-to-image") {
@@ -143,6 +145,7 @@ export async function POST(req: NextRequest) {
             try {
                 const result = await hf.textToImage({
                     model: modelConfig.id,
+                    provider: "auto",
                     inputs: prompt,
                     parameters: {
                         num_inference_steps: 28,
@@ -335,6 +338,7 @@ export async function POST(req: NextRequest) {
                 // Use image-to-image endpoint
                 const result = await hf.imageToImage({
                     model: modelConfig.id,
+                    provider: "auto",
                     inputs: imageBlob,
                     parameters: {
                         prompt: finalPrompt,

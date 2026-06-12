@@ -259,7 +259,10 @@ body {
 }
 
 .nb-character-node {
-  position: relative;
+  /* Must stay absolute: the canvas positions nodes via left/top. (This rule
+     loads after Tailwind utilities, so `relative` here would override the
+     `absolute` class and push character nodes into document flow.) */
+  position: absolute;
   isolation: isolate;
   background:
     var(--nb-character-grad),

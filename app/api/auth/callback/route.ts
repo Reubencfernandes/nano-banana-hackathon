@@ -24,6 +24,14 @@ export async function GET(req: NextRequest) {
   console.log('Auth callback - SPACE_URL:', SPACE_URL, 'has code:', !!code);
 
   if (code) {
+    // Verify the CSRF state set by /api/oauth-config before starting the flow
+    const returnedState = url.searchParams.get('state');
+    const expectedState = req.cookies.get('hf_oauth_state')?.value;
+    if (expectedState && returnedState !== expectedState) {
+      console.error('OAuth state mismatch - possible CSRF');
+      return NextResponse.redirect(`${SPACE_URL}/?error=invalid_state`);
+    }
+
     // Exchange authorization code for access token
     try {
       const clientId = process.env.OAUTH_CLIENT_ID;
@@ -107,6 +115,9 @@ export async function GET(req: NextRequest) {
           path: '/',
         });
       }
+
+      // The state cookie is single-use
+      response.cookies.delete('hf_oauth_state');
 
       console.log('OAuth successful, cookies set (SameSite=None), redirecting to:', SPACE_URL);
       return response;

@@ -447,6 +447,14 @@ function cx(...args: Array<string | false | null | undefined>) {
  * @param onUpdatePosition Callback to update node position in parent state
  * @returns Object with position and event handlers for dragging
  */
+// Current canvas zoom level, kept in sync by the editor page. Pointer deltas
+// are in screen pixels; node positions are in world units, so drags must be
+// divided by this scale or nodes drift away from the cursor when zoomed.
+let canvasScale = 1;
+export function setCanvasScale(scale: number) {
+  canvasScale = scale || 1;
+}
+
 function useNodeDrag(node: any, onUpdatePosition?: (id: string, x: number, y: number) => void) {
   const [localPos, setLocalPos] = useState({ x: node.x, y: node.y });  // Local position for smooth dragging
   const dragging = useRef(false);                                      // Track drag state
@@ -474,8 +482,8 @@ function useNodeDrag(node: any, onUpdatePosition?: (id: string, x: number, y: nu
    */
   const onPointerMove = (e: React.PointerEvent) => {
     if (!dragging.current || !start.current) return;  // Only process if actively dragging
-    const dx = e.clientX - start.current.sx;           // Calculate horizontal movement
-    const dy = e.clientY - start.current.sy;           // Calculate vertical movement
+    const dx = (e.clientX - start.current.sx) / canvasScale;  // Horizontal movement in world units
+    const dy = (e.clientY - start.current.sy) / canvasScale;  // Vertical movement in world units
     const newX = start.current.ox + dx;                // New X position
     const newY = start.current.oy + dy;                // New Y position
     setLocalPos({ x: newX, y: newY });                 // Update local position for immediate visual feedback
@@ -540,18 +548,19 @@ function Port({
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
-    e.stopPropagation();
+    // Connect only when the user RELEASES on an input port (drag & drop).
+    // Releases on output ports bubble up so the canvas can end the drag.
     if (!isOutput && nodeId && onEndConnection) {
+      e.stopPropagation();
       onEndConnection(nodeId);
     }
   };
 
   return (
     <div
-      className={cx("nb-port", className, connected && "nb-port--connected")}
+      className={cx("nb-port", className, isOutput ? "out" : "in", connected && "nb-port--connected")}
       onPointerDown={handlePointerDown}
       onPointerUp={handlePointerUp}
-      onPointerEnter={handlePointerUp}
       title={
         isOutput
           ? "Drag from here to connect to another node's input"

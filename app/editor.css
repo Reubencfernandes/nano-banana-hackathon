@@ -39,6 +39,51 @@
 }
 
 /* ========================================
+   CONNECTION DRAG FEEDBACK
+   ======================================== */
+
+/* Preview line while dragging a new connection (not over a target yet) */
+.connection-dragging {
+  stroke: hsl(140 70% 50% / 0.85);
+  stroke-width: 2.5;
+  stroke-dasharray: 6, 5;
+  animation: processingFlow 0.6s linear infinite;
+}
+
+/* Preview line once it has snapped onto a valid input port */
+.connection-snapped {
+  stroke: #22c55e;
+  stroke-width: 3.5;
+  filter: drop-shadow(0 0 4px rgb(34 197 94 / 0.7));
+}
+
+/* Pulsing ring drawn on the input port the line has snapped to */
+.connection-snap-ring {
+  fill: rgb(34 197 94 / 0.25);
+  stroke: #22c55e;
+  stroke-width: 2;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: snapPulse 0.9s ease-in-out infinite;
+}
+
+@keyframes snapPulse {
+  0%, 100% { transform: scale(1); opacity: 0.95; }
+  50% { transform: scale(1.35); opacity: 0.55; }
+}
+
+/* While a connection drag is in progress, make every droppable input port
+   pop so the user can see where the line can land */
+body.nb-connecting .nb-port.in {
+  transform: scale(1.35);
+  box-shadow: 0 0 0 5px hsl(0 70% 60% / 0.25), 0 0 10px hsl(0 70% 60% / 0.45);
+}
+
+body.nb-connecting .nb-canvas {
+  cursor: crosshair;
+}
+
+/* ========================================
    PARTICLE FLOW EFFECT (EXPERIMENTAL)
    ======================================== */
 

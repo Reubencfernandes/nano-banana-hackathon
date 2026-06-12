@@ -37,6 +37,7 @@ import {
   PosesNodeView,       // Pose modifications
   AngleNodeView,       // Camera angle modifications
   NodeTimer,           // Timer component
+  setCanvasScale,      // Keeps node-drag deltas zoom-corrected
 } from "./nodes";
 // UI components from shadcn/ui library
 import { Button } from "../components/ui/button";
@@ -472,6 +473,35 @@ function screenToWorld(
   return { x, y };
 }
 
+// Rendered width of each node type — must stay in sync with the w-[...px]
+// classes on the node view components. Used to position connection lines.
+const NODE_WIDTHS: Record<string, number> = {
+  CHARACTER: 340,
+  MERGE: 420,
+  BACKGROUND: 320,
+  CLOTHES: 320,
+  EDIT: 320,
+  CAMERA: 360,
+  AGE: 280,
+  FACE: 340,
+  STYLE: 320,
+  LIGHTNING: 320,
+  POSES: 320,
+  ANGLE: 320,
+};
+
+// Port centers measured from the rendered header layout (px-3 py-2 header,
+// 11px port): 12px padding + half port + border = 18.5 in, 19 down
+const getNodeOutputPortPos = (n: AnyNode) => ({
+  x: n.x + (NODE_WIDTHS[n.type] || 320) - 18.5,
+  y: n.y + 19,
+});
+const getNodeInputPortPos = (n: AnyNode) => ({ x: n.x + 18.5, y: n.y + 19 });
+
+// While dragging a connection, the line snaps to an input port within this
+// distance (screen pixels — divided by zoom before comparing in world units)
+const SNAP_RADIUS_PX = 48;
+
 function useNodeDrag(
   nodeId: string,
   scaleRef: React.MutableRefObject<number>,
@@ -538,18 +568,19 @@ function Port({
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
-    e.stopPropagation();
+    // Connect only when the user RELEASES on an input port (drag & drop).
+    // Releases on output ports bubble up so the canvas can end the drag.
     if (!isOutput && nodeId && onEndConnection) {
+      e.stopPropagation();
       onEndConnection(nodeId);
     }
   };
 
   return (
     <div
-      className={cx("nb-port", className, connected && "nb-port--connected")}
+      className={cx("nb-port", className, isOutput ? "out" : "in", connected && "nb-port--connected")}
       onPointerDown={handlePointerDown}
       onPointerUp={handlePointerUp}
-      onPointerEnter={handlePointerUp}
       title={
         isOutput
           ? "Drag from here to connect to another node's input"
@@ -997,6 +1028,7 @@ export default function EditorPage() {
   const scaleRef = useRef(scale);
   useEffect(() => {
     scaleRef.current = scale;
+    setCanvasScale(scale);
   }, [scale]);
 
   // HF OAUTH CHECK
@@ -1064,6 +1096,10 @@ export default function EditorPage() {
   // Connection dragging state
   const [draggingFrom, setDraggingFrom] = useState<string | null>(null);
   const [dragPos, setDragPos] = useState<{ x: number, y: number } | null>(null);
+  // Mirrors of the state above for window-level pointer listeners, which
+  // would otherwise see stale values from the closure they were created in
+  const draggingFromRef = useRef<string | null>(null);
+  const dragPosRef = useRef<{ x: number, y: number } | null>(null);
 
   // API Token state - REQUIRED for all users (no free tier)
   const [apiToken, setApiToken] = useState("");
@@ -1185,8 +1221,9 @@ export default function EditorPage() {
 
   const deleteNode = (id: string) => {
     setNodes((prev) => {
-      // If it's a MERGE node, just remove it
-      // If it's a CHARACTER node, also remove it from all MERGE inputs
+      // Remove the node and clean up every connection that referenced it:
+      // MERGE nodes drop it from their inputs[], single-input nodes clear
+      // their input pointer so they don't keep a dangling connection.
       return prev
         .filter((n) => n.id !== id)
         .map((n) => {
@@ -1196,6 +1233,9 @@ export default function EditorPage() {
               ...merge,
               inputs: merge.inputs.filter((inputId) => inputId !== id),
             };
+          }
+          if ((n as any).input === id) {
+            return { ...n, input: undefined };
           }
           return n;
         });
@@ -1240,29 +1280,115 @@ export default function EditorPage() {
   };
 
 
+  // Check whether `targetId` is reachable upstream from `sourceId`.
+  // Used to reject connections that would create a cycle: if the node we
+  // want to feed INTO is already an ancestor of the source, the new edge
+  // would close a loop (A -> ... -> B -> A).
+  const isReachableUpstream = (sourceId: string, targetId: string): boolean => {
+    const visited = new Set<string>();
+    const walk = (id: string): boolean => {
+      if (id === targetId) return true;
+      if (visited.has(id)) return false;
+      visited.add(id);
+      const n = nodes.find(nd => nd.id === id);
+      if (!n) return false;
+      const single = (n as any).input;
+      if (typeof single === "string" && walk(single)) return true;
+      const multi = (n as any).inputs;
+      if (Array.isArray(multi)) {
+        for (const upstreamId of multi) {
+          if (walk(upstreamId)) return true;
+        }
+      }
+      return false;
+    };
+    return walk(sourceId);
+  };
+
+  const finishConnectionDrag = () => {
+    setDraggingFrom(null);
+    setDragPos(null);
+    draggingFromRef.current = null;
+    dragPosRef.current = null;
+    document.body.classList.remove('nb-connecting');
+    // Re-enable text selection
+    document.body.style.userSelect = '';
+    document.body.style.webkitUserSelect = '';
+  };
+
+  // Find the input port within snapping distance of the drag position,
+  // skipping the source node, nodes without inputs, and invalid targets
+  const findSnapTarget = (pos: { x: number; y: number }, sourceId: string): AnyNode | null => {
+    const radius = SNAP_RADIUS_PX / (scaleRef.current || 1);
+    let best: AnyNode | null = null;
+    let bestDist = radius;
+    for (const n of nodes) {
+      if (n.id === sourceId || n.type === "CHARACTER") continue;
+      if (isReachableUpstream(sourceId, n.id)) continue; // would create a loop
+      const p = getNodeInputPortPos(n);
+      const d = Math.hypot(pos.x - p.x, pos.y - p.y);
+      if (d < bestDist) {
+        bestDist = d;
+        best = n;
+      }
+    }
+    return best;
+  };
+
+  // Complete the drag: connect to the snapped input port if one is close
+  // enough, otherwise cancel. Used by the canvas and the window fallback.
+  const completeConnectionDrag = () => {
+    const sourceId = draggingFromRef.current;
+    const pos = dragPosRef.current;
+    if (sourceId && pos) {
+      const target = findSnapTarget(pos, sourceId);
+      if (target) {
+        if (target.type === "MERGE") {
+          handleEndConnection(target.id);
+        } else {
+          handleEndSingleConnection(target.id);
+        }
+        return;
+      }
+    }
+    finishConnectionDrag();
+  };
+
+  // Safety net: finish the drag even when the pointer is released outside
+  // the canvas (over the header, another window edge, etc.)
+  useEffect(() => {
+    if (!draggingFrom) return;
+    const onWindowPointerUp = () => completeConnectionDrag();
+    window.addEventListener('pointerup', onWindowPointerUp);
+    window.addEventListener('pointercancel', onWindowPointerUp);
+    return () => {
+      window.removeEventListener('pointerup', onWindowPointerUp);
+      window.removeEventListener('pointercancel', onWindowPointerUp);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draggingFrom, nodes]);
+
   // Handle single input connections for new nodes
   const handleEndSingleConnection = (nodeId: string) => {
     if (draggingFrom) {
-      // Find the source node
-      const sourceNode = nodes.find(n => n.id === draggingFrom);
+      const sourceId = draggingFrom;
+      const sourceNode = nodes.find(n => n.id === sourceId);
       if (sourceNode) {
-        // Allow connections from ANY node that has an output port
-        // This includes:
-        // - CHARACTER nodes (always have an image)
-        // - MERGE nodes (can have output after merging)
-        // - Any processing node (BACKGROUND, CLOTHES, BLEND, etc.)
-        // - Even unprocessed nodes (for configuration chaining)
-
-        // All nodes can be connected for chaining
-        setNodes(prev => prev.map(n =>
-          n.id === nodeId ? { ...n, input: draggingFrom } : n
-        ));
+        // Reject self-connections and connections that would create a loop
+        if (sourceId === nodeId || isReachableUpstream(sourceId, nodeId)) {
+          setNodes(prev => prev.map(n =>
+            n.id === nodeId ? { ...n, error: "Invalid connection: this would create a loop." } : n
+          ));
+        } else {
+          // Allow connections from ANY node that has an output port:
+          // CHARACTER, MERGE, and processing nodes (even unprocessed ones,
+          // for configuration chaining)
+          setNodes(prev => prev.map(n =>
+            n.id === nodeId ? { ...n, input: sourceId, error: null } : n
+          ));
+        }
       }
-      setDraggingFrom(null);
-      setDragPos(null);
-      // Re-enable text selection
-      document.body.style.userSelect = '';
-      document.body.style.webkitUserSelect = '';
+      finishConnectionDrag();
     }
   };
 
@@ -1439,6 +1565,9 @@ export default function EditorPage() {
     if (inputId) {
       // Track unprocessed MERGE nodes that need to be executed
       const unprocessedMerges: MergeNode[] = [];
+      // Outputs of merges executed during this run. setNodes is async, so the
+      // `nodes` array in this closure never sees those outputs — this map does.
+      const mergeOutputs = new Map<string, string>();
 
       // Find the source image by traversing the chain backwards
       const findSourceImage = (currentNodeId: string, visited: Set<string> = new Set()): string | null => {
@@ -1451,6 +1580,11 @@ export default function EditorPage() {
         // If this is a CHARACTER node, return its image
         if (currentNode.type === "CHARACTER") {
           return (currentNode as CharacterNode).image;
+        }
+
+        // If this MERGE was executed earlier in this run, use that output
+        if (currentNode.type === "MERGE" && mergeOutputs.has(currentNodeId)) {
+          return mergeOutputs.get(currentNodeId) || null;
         }
 
         // If this is a MERGE node with output, return its output
@@ -1467,8 +1601,10 @@ export default function EditorPage() {
         if (currentNode.type === "MERGE") {
           const merge = currentNode as MergeNode;
           if (!merge.output && merge.inputs.length >= 2) {
-            // Mark this merge for processing
-            unprocessedMerges.push(merge);
+            // Mark this merge for processing (only once)
+            if (!unprocessedMerges.some(m => m.id === merge.id)) {
+              unprocessedMerges.push(merge);
+            }
             // For now, return null - we'll process the merge first
             return null;
           } else if (merge.inputs.length > 0) {
@@ -1546,8 +1682,13 @@ export default function EditorPage() {
               n.id === merge.id ? { ...n, output: mergeOutput || undefined, isRunning: false, error: null } : n
             ));
 
-            // Track that we processed this merge as part of the chain
+            // Track that we processed this merge as part of the chain.
+            // Record the output locally too: the setNodes update above won't
+            // be visible to findSourceImage's stale `nodes` closure.
             processedNodes.push(merge.id);
+            if (mergeOutput) {
+              mergeOutputs.set(merge.id, mergeOutput);
+            }
 
             // Now use this as our input image if it's the direct input
             if (inputId === merge.id) {
@@ -1648,7 +1789,7 @@ export default function EditorPage() {
       let res: Response;
 
       if (processingMode === 'huggingface') {
-        // Use HuggingFace models
+        // Use HuggingFace models (requires OAuth login)
         if (!isHfProLoggedIn) {
           throw new Error("Please login with HuggingFace to use HF models. Click 'Login with HuggingFace' in the header.");
         }
@@ -1754,6 +1895,16 @@ export default function EditorPage() {
   // Connection drag handlers
   const handleStartConnection = (nodeId: string) => {
     setDraggingFrom(nodeId);
+    draggingFromRef.current = nodeId;
+    // Anchor the preview line at the output port so it doesn't jump
+    const sourceNode = nodes.find(n => n.id === nodeId);
+    if (sourceNode) {
+      const p = getNodeOutputPortPos(sourceNode);
+      setDragPos(p);
+      dragPosRef.current = p;
+    }
+    // Lets CSS highlight all droppable input ports during the drag
+    document.body.classList.add('nb-connecting');
     // Prevent text selection during dragging
     document.body.style.userSelect = 'none';
     document.body.style.webkitUserSelect = 'none';
@@ -1761,74 +1912,83 @@ export default function EditorPage() {
 
   const handleEndConnection = (mergeId: string) => {
     if (draggingFrom) {
+      const sourceId = draggingFrom;
       // Allow connections from any node type that could have an output
-      const sourceNode = nodes.find(n => n.id === draggingFrom);
+      const sourceNode = nodes.find(n => n.id === sourceId);
       if (sourceNode) {
-        // Allow connections from:
-        // - CHARACTER nodes (always have an image)
-        // - Any node with an output (processed nodes)
-        // - Any processing node (for future processing)
-        connectToMerge(mergeId, draggingFrom);
+        // Reject self-connections and connections that would create a loop
+        if (sourceId === mergeId || isReachableUpstream(sourceId, mergeId)) {
+          setNodes(prev => prev.map(n =>
+            n.id === mergeId ? { ...n, error: "Invalid connection: this would create a loop." } : n
+          ));
+        } else {
+          // Allow connections from CHARACTER nodes, processed nodes,
+          // and processing nodes (for future processing)
+          connectToMerge(mergeId, sourceId);
+        }
       }
-      setDraggingFrom(null);
-      setDragPos(null);
-      // Re-enable text selection
-      document.body.style.userSelect = '';
-      document.body.style.webkitUserSelect = '';
+      finishConnectionDrag();
     }
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
-    if (draggingFrom) {
+    // Read the ref, not state: a move can arrive before the pointerdown's
+    // state update has rendered, and it must not be dropped
+    if (draggingFromRef.current) {
       const rect = containerRef.current!.getBoundingClientRect();
       const world = screenToWorld(e.clientX, e.clientY, rect, tx, ty, scale);
       setDragPos(world);
+      dragPosRef.current = world;
     }
   };
 
   const handlePointerUp = () => {
     if (draggingFrom) {
-      setDraggingFrom(null);
-      setDragPos(null);
-      // Re-enable text selection
-      document.body.style.userSelect = '';
-      document.body.style.webkitUserSelect = '';
+      // Connect if released near an input port, otherwise cancel
+      completeConnectionDrag();
     }
   };
+  // Resolve the nearest available image for a node feeding a MERGE:
+  // a CHARACTER image, the node's own output, or the nearest upstream
+  // image reached through unprocessed single-input nodes.
+  const resolveUpstreamImage = (startId: string): { image: string | null; label: string } => {
+    const visited = new Set<string>();
+    let id: string | undefined = startId;
+    while (id && !visited.has(id)) {
+      visited.add(id);
+      const n = nodes.find(nd => nd.id === id);
+      if (!n) break;
+      if (n.type === "CHARACTER") {
+        return { image: (n as CharacterNode).image, label: (n as CharacterNode).label || "" };
+      }
+      const out = (n as any).output;
+      if (out) {
+        return { image: out, label: n.type === "MERGE" ? "Merged Image" : `${n.type} Output` };
+      }
+      // An unprocessed MERGE has no single upstream image to fall back to
+      if (n.type === "MERGE") break;
+      id = (n as any).input;
+    }
+    return { image: null, label: "" };
+  };
+
   const executeMerge = async (merge: MergeNode): Promise<string | null> => {
-    // Get images from merge inputs - now accepts any node type
+    // Get images from merge inputs - now accepts any node type, including
+    // chains where the image sits further upstream of an unprocessed node
     const mergeImages: string[] = [];
     const inputData: { image: string; label: string }[] = [];
 
     for (const inputId of merge.inputs) {
-      const inputNode = nodes.find(n => n.id === inputId);
-      if (inputNode) {
-        let image: string | null = null;
-        let label = "";
+      const { image, label } = resolveUpstreamImage(inputId);
 
-        if (inputNode.type === "CHARACTER") {
-          image = (inputNode as CharacterNode).image;
-          label = (inputNode as CharacterNode).label || "";
-        } else if ((inputNode as any).output) {
-          // Any processed node with output
-          image = (inputNode as any).output;
-          label = `${inputNode.type} Output`;
-        } else if (inputNode.type === "MERGE" && (inputNode as MergeNode).output) {
-          // Another merge node's output
-          const mergeOutput = (inputNode as MergeNode).output;
-          image = mergeOutput !== undefined ? mergeOutput : null;
-          label = "Merged Image";
+      if (image) {
+        // Validate image format
+        if (!image.startsWith('data:') && !image.startsWith('http') && !image.startsWith('/')) {
+          console.error(`Invalid image format for ${label}:`, image.substring(0, 100));
+          continue; // Skip invalid images
         }
-
-        if (image) {
-          // Validate image format
-          if (!image.startsWith('data:') && !image.startsWith('http') && !image.startsWith('/')) {
-            console.error(`Invalid image format for ${label}:`, image.substring(0, 100));
-            continue; // Skip invalid images
-          }
-          mergeImages.push(image);
-          inputData.push({ image, label: label || `Input ${mergeImages.length}` });
-        }
+        mergeImages.push(image);
+        inputData.push({ image, label: label || `Input ${mergeImages.length}` });
       }
     }
 
@@ -1898,33 +2058,13 @@ export default function EditorPage() {
       const merge = (nodes.find((n) => n.id === mergeId) as MergeNode) || null;
       if (!merge) return;
 
-      // Get input nodes with their labels - now accepts any node type
+      // Get input nodes with their labels - now accepts any node type,
+      // resolving images through chains of unprocessed nodes
       const inputData = merge.inputs
         .map((id, index) => {
-          const inputNode = nodes.find((n) => n.id === id);
-          if (!inputNode) return null;
-
-          // Support CHARACTER nodes, processed nodes, and MERGE outputs
-          let image: string | null = null;
-          let label = "";
-
-          if (inputNode.type === "CHARACTER") {
-            image = (inputNode as CharacterNode).image;
-            label = (inputNode as CharacterNode).label || `CHARACTER ${index + 1}`;
-          } else if ((inputNode as any).output) {
-            // Any processed node with output
-            image = (inputNode as any).output;
-            label = `${inputNode.type} Output ${index + 1}`;
-          } else if (inputNode.type === "MERGE" && (inputNode as MergeNode).output) {
-            // Another merge node's output
-            const mergeOutput = (inputNode as MergeNode).output;
-            image = mergeOutput !== undefined ? mergeOutput : null;
-            label = `Merged Image ${index + 1}`;
-          }
-
+          const { image, label } = resolveUpstreamImage(id);
           if (!image) return null;
-
-          return { image, label };
+          return { image, label: label || `Input ${index + 1}` };
         })
         .filter(Boolean) as { image: string; label: string }[];
 
@@ -2013,35 +2153,23 @@ export default function EditorPage() {
       maxX = Math.max(maxX, node.x + 500);
       maxY = Math.max(maxY, node.y + 500);
     });
+    // Keep the connection-drag preview line inside the SVG canvas
+    if (dragPos) {
+      minX = Math.min(minX, dragPos.x - 100);
+      minY = Math.min(minY, dragPos.y - 100);
+      maxX = Math.max(maxX, dragPos.x + 100);
+      maxY = Math.max(maxY, dragPos.y + 100);
+    }
     return {
       x: minX,
       y: minY,
       width: maxX - minX,
       height: maxY - minY
     };
-  }, [nodes]);
+  }, [nodes, dragPos]);
 
   // Connection paths with bezier curves
   const connectionPaths = useMemo(() => {
-    const getNodeOutputPort = (n: AnyNode) => {
-      // Different nodes have different widths
-      const widths: Record<string, number> = {
-        CHARACTER: 340,
-        MERGE: 420,
-        BACKGROUND: 320,
-        CLOTHES: 320,
-        BLEND: 320,
-        EDIT: 320,
-        CAMERA: 360,
-        AGE: 280,
-        FACE: 340,
-      };
-      const width = widths[n.type] || 320;
-      return { x: n.x + width - 10, y: n.y + 25 };
-    };
-
-    const getNodeInputPort = (n: AnyNode) => ({ x: n.x + 10, y: n.y + 25 });
-
     const createPath = (x1: number, y1: number, x2: number, y2: number) => {
       const dx = x2 - x1;
       const dy = y2 - y1;
@@ -2050,7 +2178,8 @@ export default function EditorPage() {
       return `M ${x1} ${y1} C ${x1 + controlOffset} ${y1}, ${x2 - controlOffset} ${y2}, ${x2} ${y2}`;
     };
 
-    const paths: { path: string; active?: boolean; processing?: boolean }[] = [];
+    const paths: { path: string; active?: boolean; snapped?: boolean; processing?: boolean }[] = [];
+    let snapPoint: { x: number; y: number } | null = null;
 
     // Handle all connections
     for (const node of nodes) {
@@ -2060,8 +2189,8 @@ export default function EditorPage() {
         for (const inputId of merge.inputs) {
           const inputNode = nodes.find(n => n.id === inputId);
           if (inputNode) {
-            const start = getNodeOutputPort(inputNode);
-            const end = getNodeInputPort(node);
+            const start = getNodeOutputPortPos(inputNode);
+            const end = getNodeInputPortPos(node);
             const isProcessing = merge.isRunning; // Only animate to the currently processing merge node
             paths.push({
               path: createPath(start.x, start.y, end.x, end.y),
@@ -2074,8 +2203,8 @@ export default function EditorPage() {
         const inputId = (node as any).input;
         const inputNode = nodes.find(n => n.id === inputId);
         if (inputNode) {
-          const start = getNodeOutputPort(inputNode);
-          const end = getNodeInputPort(node);
+          const start = getNodeOutputPortPos(inputNode);
+          const end = getNodeInputPortPos(node);
           const isProcessing = (node as any).isRunning; // Only animate to the currently processing node
           paths.push({
             path: createPath(start.x, start.y, end.x, end.y),
@@ -2085,20 +2214,26 @@ export default function EditorPage() {
       }
     }
 
-    // Dragging path
+    // Dragging preview: snap to a valid input port when close enough so the
+    // user can see exactly where the connection will land before releasing
     if (draggingFrom && dragPos) {
       const sourceNode = nodes.find(n => n.id === draggingFrom);
       if (sourceNode) {
-        const start = getNodeOutputPort(sourceNode);
+        const start = getNodeOutputPortPos(sourceNode);
+        const snapTarget = findSnapTarget(dragPos, draggingFrom);
+        const end = snapTarget ? getNodeInputPortPos(snapTarget) : dragPos;
+        if (snapTarget) snapPoint = end;
         paths.push({
-          path: createPath(start.x, start.y, dragPos.x, dragPos.y),
-          active: true
+          path: createPath(start.x, start.y, end.x, end.y),
+          active: true,
+          snapped: !!snapTarget
         });
       }
     }
 
-    return paths;
-  }, [nodes, draggingFrom, dragPos]);
+    return { paths, snapPoint };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodes, draggingFrom, dragPos, scale]);
 
   // Panning & zooming
   const isPanning = useRef(false);
@@ -2124,20 +2259,116 @@ export default function EditorPage() {
     (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
   };
 
-  const onWheel = (e: React.WheelEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    const rect = containerRef.current!.getBoundingClientRect();
-    const oldScale = scaleRef.current;
-    const factor = Math.exp(-e.deltaY * 0.0015);
-    const newScale = Math.min(2.5, Math.max(0.25, oldScale * factor));
-    const { x: wx, y: wy } = screenToWorld(e.clientX, e.clientY, rect, tx, ty, oldScale);
-    // keep cursor anchored while zooming
-    const ntx = e.clientX - rect.left - wx * newScale;
-    const nty = e.clientY - rect.top - wy * newScale;
-    setTx(ntx);
-    setTy(nty);
-    setScale(newScale);
-  };
+  // Pan/zoom refs so the native wheel listener never reads stale state
+  const txRef = useRef(tx);
+  const tyRef = useRef(ty);
+  useEffect(() => {
+    txRef.current = tx;
+    tyRef.current = ty;
+  }, [tx, ty]);
+
+  // Wheel behaviour (registered natively with passive:false so we can
+  // preventDefault the browser's own Ctrl+wheel page zoom):
+  //   wheel             -> pan up/down (trackpads also pan sideways)
+  //   Shift + wheel     -> pan left/right
+  //   Ctrl/Cmd + wheel  -> zoom at cursor (trackpad pinch sends this too)
+  // Wheel events over scrollable content (node panels, the right-click menu,
+  // textareas) scroll that content instead of panning the canvas.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    // Walk up from the event target looking for an element that can still
+    // scroll in the wheel direction — if found, the browser handles it.
+    const findScrollableTarget = (start: EventTarget | null, deltaY: number): HTMLElement | null => {
+      let cur = start instanceof Element ? start : null;
+      while (cur && cur !== el) {
+        if (cur instanceof HTMLElement) {
+          const style = getComputedStyle(cur);
+          const scrollableY = /(auto|scroll)/.test(style.overflowY) && cur.scrollHeight > cur.clientHeight + 1;
+          if (scrollableY) {
+            const canScrollMore = deltaY > 0
+              ? cur.scrollTop + cur.clientHeight < cur.scrollHeight - 1
+              : cur.scrollTop > 0;
+            if (canScrollMore) return cur;
+          }
+        }
+        cur = cur.parentElement;
+      }
+      return null;
+    };
+
+    // Batch pan updates to one React commit per frame — applying every wheel
+    // event individually makes fast scrolling feel choppy on a big canvas
+    const panAccum = { x: 0, y: 0 };
+    let rafId: number | null = null;
+    const applyPan = () => {
+      rafId = null;
+      txRef.current -= panAccum.x;
+      tyRef.current -= panAccum.y;
+      panAccum.x = 0;
+      panAccum.y = 0;
+      setTx(txRef.current);
+      setTy(tyRef.current);
+    };
+    const schedulePan = (dx: number, dy: number) => {
+      panAccum.x += dx;
+      panAccum.y += dy;
+      if (rafId === null) rafId = requestAnimationFrame(applyPan);
+    };
+
+    const onWheelNative = (e: WheelEvent) => {
+      // Normalize line/page delta modes (Firefox) to pixels
+      const norm = (v: number) => (e.deltaMode === 1 ? v * 16 : e.deltaMode === 2 ? v * 100 : v);
+
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        const rect = el.getBoundingClientRect();
+        const oldScale = scaleRef.current;
+        const factor = Math.exp(-norm(e.deltaY) * 0.0015);
+        const newScale = Math.min(2.5, Math.max(0.25, oldScale * factor));
+        // keep cursor anchored while zooming
+        const wx = (e.clientX - rect.left - txRef.current) / oldScale;
+        const wy = (e.clientY - rect.top - tyRef.current) / oldScale;
+        const ntx = e.clientX - rect.left - wx * newScale;
+        const nty = e.clientY - rect.top - wy * newScale;
+        txRef.current = ntx;
+        tyRef.current = nty;
+        scaleRef.current = newScale;
+        setTx(ntx);
+        setTy(nty);
+        setScale(newScale);
+        return;
+      }
+
+      // Let scrollable content under the cursor consume the wheel first
+      if (findScrollableTarget(e.target, norm(e.deltaY))) {
+        return; // no preventDefault — browser scrolls the element natively
+      }
+
+      // Anywhere over a floating menu/popup: never pan the canvas underneath,
+      // even when its list is already scrolled to the end
+      if (e.target instanceof Element && e.target.closest('.nb-overlay')) {
+        e.preventDefault();
+        return;
+      }
+
+      e.preventDefault();
+      if (e.shiftKey) {
+        // Some devices report shift+wheel as deltaX, others as deltaY
+        schedulePan(norm(e.deltaY !== 0 ? e.deltaY : e.deltaX), 0);
+      } else {
+        schedulePan(norm(e.deltaX), norm(e.deltaY));
+      }
+    };
+
+    el.addEventListener('wheel', onWheelNative, { passive: false });
+    return () => {
+      el.removeEventListener('wheel', onWheelNative);
+      if (rafId !== null) cancelAnimationFrame(rafId);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Context menu for adding nodes
   const [menuOpen, setMenuOpen] = useState(false);
@@ -2218,9 +2449,6 @@ export default function EditorPage() {
         break;
       case "CLOTHES":
         setNodes(prev => [...prev, { ...commonProps, type: "CLOTHES" } as ClothesNode]);
-        break;
-      case "BLEND":
-        setNodes(prev => [...prev, { ...commonProps, type: "BLEND", blendStrength: 50 } as BlendNode]);
         break;
       case "STYLE":
         setNodes(prev => [...prev, { ...commonProps, type: "STYLE", styleStrength: 50 } as StyleNode]);
@@ -2510,6 +2738,23 @@ export default function EditorPage() {
                 </ol>
               </section>
 
+              {/* Canvas controls */}
+              <section>
+                <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">Canvas controls</h3>
+                <div className="p-3 rounded-lg border border-border bg-muted/40">
+                  <ul className="text-sm text-muted-foreground space-y-2">
+                    <li><strong className="text-foreground">Zoom in / out</strong> — hold <kbd className="text-xs px-1.5 py-0.5 rounded bg-background/60 border border-border/60">Ctrl</kbd> (or <kbd className="text-xs px-1.5 py-0.5 rounded bg-background/60 border border-border/60">Cmd</kbd> on Mac) and scroll the mouse wheel. Pinch on a trackpad works too. Zoom centres on your cursor.</li>
+                    <li><strong className="text-foreground">Scroll up / down</strong> — just scroll the mouse wheel.</li>
+                    <li><strong className="text-foreground">Scroll left / right</strong> — hold <kbd className="text-xs px-1.5 py-0.5 rounded bg-background/60 border border-border/60">Shift</kbd> and scroll.</li>
+                    <li><strong className="text-foreground">Pan freely</strong> — click and drag any empty canvas area.</li>
+                    <li><strong className="text-foreground">Move a node</strong> — drag it by its header.</li>
+                    <li><strong className="text-foreground">Connect nodes</strong> — drag from a green port; the line snaps to a red input port when you get close, then release.</li>
+                    <li><strong className="text-foreground">Disconnect</strong> — grab the red input port and pull the connection off.</li>
+                    <li>Scrolling while hovering a node panel or menu with its own scrollbar scrolls that content instead of the canvas.</li>
+                  </ul>
+                </div>
+              </section>
+
               {/* Processing Modes */}
               <section>
                 <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">Processing Modes</h3>
@@ -2639,10 +2884,10 @@ export default function EditorPage() {
           handlePointerUp();
         }}
         onPointerLeave={(e) => {
+          // Stop panning, but keep an in-progress connection drag alive —
+          // the window-level pointerup listener completes or cancels it
           onBackgroundPointerUp(e);
-          handlePointerUp();
         }}
-        onWheel={onWheel}
       >
         <div
           className="absolute left-0 top-0 will-change-transform"
@@ -2672,17 +2917,33 @@ export default function EditorPage() {
                 </feMerge>
               </filter>
             </defs>
-            {connectionPaths.map((p, idx) => (
+            {connectionPaths.paths.map((p, idx) => (
               <path
                 key={idx}
-                className={p.processing ? "connection-processing" : ""}
+                className={
+                  p.processing
+                    ? "connection-processing"
+                    : p.snapped
+                      ? "connection-snapped"
+                      : p.active
+                        ? "connection-dragging"
+                        : ""
+                }
                 d={p.path}
                 fill="none"
-                stroke={p.processing ? undefined : "hsl(var(--muted-foreground))"}
-                strokeWidth={p.processing ? undefined : "2.5"}
-                style={!p.processing ? { opacity: 0.9 } : {}}
+                stroke={p.processing || p.snapped || p.active ? undefined : "hsl(var(--muted-foreground))"}
+                strokeWidth={p.processing || p.snapped || p.active ? undefined : "2.5"}
+                style={!p.processing && !p.snapped && !p.active ? { opacity: 0.9 } : {}}
               />
             ))}
+            {connectionPaths.snapPoint && (
+              <circle
+                className="connection-snap-ring"
+                cx={connectionPaths.snapPoint.x}
+                cy={connectionPaths.snapPoint.y}
+                r="10"
+              />
+            )}
           </svg>
 
           <div className="relative z-10">
@@ -2885,7 +3146,7 @@ export default function EditorPage() {
 
         {nodeMenu.open && nodeMenu.nodeId && (
           <div
-            className="absolute z-50 rounded-xl border border-border bg-popover/95 backdrop-blur p-1 w-40 shadow-2xl text-popover-foreground"
+            className="nb-overlay absolute z-50 rounded-xl border border-border bg-popover/95 backdrop-blur p-1 w-40 shadow-2xl text-popover-foreground"
             style={{ left: nodeMenu.x, top: nodeMenu.y }}
             onMouseLeave={closeNodeMenu}
           >
@@ -2912,7 +3173,7 @@ export default function EditorPage() {
         )}
         {menuOpen && (
           <div
-            className="absolute z-50 rounded-xl border border-border bg-popover/95 backdrop-blur p-1 w-56 shadow-2xl text-popover-foreground"
+            className="nb-overlay absolute z-50 rounded-xl border border-border bg-popover/95 backdrop-blur p-1 w-56 shadow-2xl text-popover-foreground"
             style={{ left: menuPos.x, top: menuPos.y }}
             onMouseLeave={() => setMenuOpen(false)}
           >
