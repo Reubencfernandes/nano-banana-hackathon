@@ -10,7 +10,7 @@ app_port: 7860
 
 # Nano Banana Node Editor 🍌
 
-A powerful visual node editor for AI-powered image generation and manipulation. Create complex workflows by connecting nodes for image generation, merging, editing, and style transfers.
+A Powerful visual node editor for AI-powered image generation and manipulation. Create complex workflows by connecting nodes for image generation, merging, editing, and style transfers.
 
 ## Features
 
