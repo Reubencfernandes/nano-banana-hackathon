@@ -16,6 +16,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { Client, handle_file } from "@gradio/client";
+import { buildEditPrompt, type InlineImage } from "@/lib/edit-prompt";
 
 // Configure Next.js runtime
 export const runtime = "nodejs";
@@ -41,15 +42,18 @@ const HF_MODELS = {
 
 /**
  * Run Qwen-Image-2.1 on the Gradio Space and return the result as a data URL.
+ * Reference images (clothes / custom background) follow the input image, in order.
  * The user's HF token is forwarded so the Space's GPU usage counts against their quota.
  */
-async function runQwenSpace(hfToken: string, prompt: string, image: Blob | null): Promise<string> {
+async function runQwenSpace(hfToken: string, prompt: string, image: Blob | null, references: Blob[] = []): Promise<string> {
     const client = await Client.connect(QWEN_SPACE_ID, { token: hfToken as `hf_${string}` });
     const result = await client.predict("/edit", {
         image: image ? handle_file(image) : null,
         prompt,
         seed: -1,
         steps: 40,
+        reference_1: references[0] ? handle_file(references[0]) : null,
+        reference_2: references[1] ? handle_file(references[1]) : null,
     });
 
     const output = (result.data as any[])[0];
@@ -183,41 +187,30 @@ export async function POST(req: NextRequest) {
                 );
             }
 
-            // Handle different image formats
-            let parsed: { mimeType: string; data: string } | null = null;
-            let imageUrl = body.image;
-
-            // Try parsing as Data URL first
-            parsed = parseDataUrl(imageUrl);
-
-            // If not a data URL, handle various URL formats
-            if (!parsed) {
-                // Convert relative paths to absolute URLs
-                if (imageUrl.startsWith('/')) {
-                    const spaceHost = process.env.SPACE_HOST || 'localhost:3000';
-                    const protocol = spaceHost.includes('localhost') ? 'http' : 'https';
-                    imageUrl = `${protocol}://${spaceHost}${imageUrl}`;
-                    console.log('[HF-API] Converted relative path to:', imageUrl);
+            // Resolve data URLs, absolute URLs and app-relative paths (e.g. /clothes/...) to base64
+            const resolveImage = async (url: string): Promise<InlineImage | null> => {
+                if (!url) return null;
+                const dataUrl = parseDataUrl(url);
+                if (dataUrl) return dataUrl;
+                if (url.startsWith('/')) {
+                    const host = req.headers.get('host') ?? 'localhost:3000';
+                    const proto = req.headers.get('x-forwarded-proto') ?? (host.includes('localhost') ? 'http' : 'https');
+                    url = `${proto}://${host}${url}`;
                 }
-
-                // Fetch from HTTP(S) URL
-                if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
-                    try {
-                        console.log('[HF-API] Fetching image from URL:', imageUrl.substring(0, 100));
-                        const imageResponse = await fetch(imageUrl);
-                        if (!imageResponse.ok) {
-                            throw new Error(`Failed to fetch image: ${imageResponse.status}`);
-                        }
-                        const imageBuffer = await imageResponse.arrayBuffer();
-                        const contentType = imageResponse.headers.get('content-type') || 'image/png';
-                        const base64 = Buffer.from(imageBuffer).toString('base64');
-                        parsed = { mimeType: contentType, data: base64 };
-                    } catch (fetchErr) {
-                        console.error('[HF-API] Failed to fetch image URL:', fetchErr);
-                    }
+                if (!url.startsWith('http://') && !url.startsWith('https://')) return null;
+                try {
+                    const imageResponse = await fetch(url);
+                    if (!imageResponse.ok) throw new Error(`Failed to fetch image: ${imageResponse.status}`);
+                    const contentType = imageResponse.headers.get('content-type') || 'image/png';
+                    const base64 = Buffer.from(await imageResponse.arrayBuffer()).toString('base64');
+                    return { mimeType: contentType, data: base64 };
+                } catch (fetchErr) {
+                    console.error('[HF-API] Failed to fetch image URL:', fetchErr);
+                    return null;
                 }
-            }
+            };
 
+            const parsed = await resolveImage(body.image);
             if (!parsed) {
                 console.error('[HF-API] Invalid image format. Image starts with:', body.image?.substring(0, 50));
                 return NextResponse.json(
@@ -226,120 +219,15 @@ export async function POST(req: NextRequest) {
                 );
             }
 
-            // Build the editing prompt from parameters
-            const prompts: string[] = [];
-            const params = body.params || {};
-
-            // Background modifications
-            if (params.backgroundType) {
-                if (params.backgroundType === "color") {
-                    prompts.push(`Change the background to a solid ${params.backgroundColor || "white"} color.`);
-                } else if (params.backgroundType === "custom" && params.customPrompt) {
-                    prompts.push(params.customPrompt);
-                } else if (params.backgroundType === "city") {
-                    prompts.push(`Place the person in a ${params.citySceneType || "busy city street"} during ${params.cityTimeOfDay || "daytime"}.`);
-                }
-            }
-
-            // Style application  
-            if (params.stylePreset) {
-                const styleMap: { [key: string]: string } = {
-                    "90s-anime": "Transform into 90s anime art style",
-                    "mha": "Convert into My Hero Academia anime style",
-                    "dbz": "Convert into Dragon Ball Z anime style",
-                    "ukiyo-e": "Convert into Japanese Ukiyo-e woodblock print style",
-                    "cubism": "Convert into Cubist art style",
-                    "van-gogh": "Convert into Van Gogh post-impressionist style",
-                    "simpsons": "Convert into The Simpsons cartoon style",
-                    "family-guy": "Convert into Family Guy animation style",
-                    "pixar": "Convert into Pixar animation style",
-                    "manga": "Convert into Manga style",
-                };
-                const styleDescription = styleMap[params.stylePreset] || `Apply ${params.stylePreset} style`;
-                prompts.push(`${styleDescription} at ${params.styleStrength || 50}% intensity.`);
-            }
-
-            // Edit prompt
-            if (params.editPrompt) {
-                prompts.push(params.editPrompt);
-            }
-
-            // Clothing modifications
-            if (params.clothesPrompt) {
-                prompts.push(`Change clothing to: ${params.clothesPrompt}`);
-            }
-
-            // Age transformation
-            if (params.targetAge) {
-                prompts.push(`Transform the person to look ${params.targetAge} years old.`);
-            }
-
-            // Face modifications
-            if (params.faceOptions) {
-                const face = params.faceOptions;
-                const modifications: string[] = [];
-                if (face.removePimples) modifications.push("remove pimples");
-                if (face.addSunglasses) modifications.push("add sunglasses");
-                if (face.addHat) modifications.push("add a hat");
-                if (face.changeHairstyle) modifications.push(`change hairstyle to ${face.changeHairstyle}`);
-                if (face.facialExpression) modifications.push(`change expression to ${face.facialExpression}`);
-                if (modifications.length > 0) {
-                    prompts.push(`Face modifications: ${modifications.join(", ")}`);
-                }
-            }
-
-            // Lighting effects
-            if (params.lightingPrompt) {
-                prompts.push(`Apply lighting: ${params.lightingPrompt}`);
-            }
-
-            // Pose modifications
-            if (params.posePrompt) {
-                prompts.push(`Change pose to: ${params.posePrompt}`);
-            }
-
-            if (params.cameraX !== undefined && params.cameraY !== undefined) {
-                const x = params.cameraX; // -1 to 1, 0 = front, ±1 = back
-                const y = params.cameraY; // -1 to 1, 0 = eye level
-                const z = typeof params.cameraZ === "number" ? params.cameraZ : 0.5;
-
-                const xAbs = Math.abs(x);
-                let horizontalDesc: string;
-                if (xAbs < 0.1) horizontalDesc = "directly in front, subject fully facing the camera";
-                else if (xAbs < 0.3) horizontalDesc = `slight ${x > 0 ? "right" : "left"} angle, subject mostly facing the camera`;
-                else if (xAbs < 0.6) horizontalDesc = `three-quarter view from the subject's ${x > 0 ? "right" : "left"} side`;
-                else if (xAbs < 0.85) horizontalDesc = `profile / side view from the subject's ${x > 0 ? "right" : "left"}`;
-                else if (xAbs < 0.97) horizontalDesc = `three-quarter rear view from the subject's ${x > 0 ? "right" : "left"}`;
-                else horizontalDesc = "directly behind the subject, rear view";
-
-                let verticalDesc: string;
-                if (y > 0.75) verticalDesc = "extreme high angle, bird's-eye view";
-                else if (y > 0.4) verticalDesc = "high angle, camera above the subject looking down";
-                else if (y > 0.1) verticalDesc = "slightly elevated, just above eye level";
-                else if (y > -0.1) verticalDesc = "eye level";
-                else if (y > -0.4) verticalDesc = "slightly low angle, just below eye level";
-                else if (y > -0.75) verticalDesc = "low angle, camera below the subject looking up";
-                else verticalDesc = "extreme low angle, worm's-eye view";
-
-                let shotDesc: string;
-                if (z < 0.15) shotDesc = "extreme close-up";
-                else if (z < 0.35) shotDesc = "close-up shot";
-                else if (z < 0.55) shotDesc = "medium shot";
-                else if (z < 0.75) shotDesc = "medium-wide shot";
-                else shotDesc = "wide shot";
-
-                prompts.push(`Photograph this scene from a new camera angle: ${horizontalDesc}, ${verticalDesc}, ${shotDesc}. Adjust perspective, foreshortening, horizon, and shadows to match this new viewpoint. Keep the subject's appearance and identity identical.`);
-            }
-
-            const finalPrompt = prompts.length > 0
-                ? prompts.join(" ")
-                : body.prompt || "Enhance this image with high quality output.";
+            // Same prompt (and reference images) the Gemini / OpenAI route builds
+            const { prompt: finalPrompt, references } = await buildEditPrompt(body.params, body.prompt, resolveImage);
 
             try {
                 // Convert base64 to blob for HF API
                 const imageBlob = base64ToBlob(parsed.data, parsed.mimeType);
+                const referenceBlobs = references.slice(0, 2).map((r) => base64ToBlob(r.data, r.mimeType));
 
-                const dataUrl = await runQwenSpace(hfToken, finalPrompt, imageBlob);
+                const dataUrl = await runQwenSpace(hfToken, finalPrompt, imageBlob, referenceBlobs);
 
                 return NextResponse.json({ image: dataUrl });
             } catch (hfError: any) {
