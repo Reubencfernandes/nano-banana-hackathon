@@ -6,6 +6,11 @@ colorTo: yellow
 sdk: docker
 pinned: true
 app_port: 7860
+hf_oauth: true
+hf_oauth_expiration_minutes: 43200
+hf_oauth_scopes:
+  - email
+  - inference-api
 ---
 
 # Portrait Editor 🖼️
