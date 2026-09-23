@@ -1,6 +1,6 @@
 ---
-title: Nano Banana Node Editor
-emoji: 🍌
+title: Portrait Editor
+emoji: 🖼️
 colorFrom: yellow
 colorTo: yellow
 sdk: docker
@@ -13,7 +13,7 @@ hf_oauth_scopes:
   - inference-api
 ---
 
-# Nano Banana Node Editor 🍌
+# Portrait Editor 🖼️
 
 A powerful visual node editor for AI-powered image generation and manipulation. Create complex workflows by connecting nodes for image generation, merging, editing, and style transfers.
 

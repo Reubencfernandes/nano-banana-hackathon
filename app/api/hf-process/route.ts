@@ -1,49 +1,73 @@
 /**
  * API ROUTE: /api/hf-process
  * 
- * HuggingFace model processing endpoint for the Nano Banana Editor.
+ * HuggingFace model processing endpoint for the Portrait Editor.
  * Handles image editing and generation using HuggingFace models.
  * 
  * Supported Models:
- * - black-forest-labs/FLUX.1-Kontext-dev: Image editing with context understanding
- * - Qwen/Qwen-Image-Edit: Powerful image editing model  
- * - black-forest-labs/FLUX.1-dev: Text-to-image generation
+ * - Qwen/Qwen-Image-2.1: Image editing and text-to-image, served from our own
+ *   Gradio Space (QWEN_SPACE_ID) and called through its `/edit` API endpoint
  * 
  * IMPORTANT LIMITATIONS:
- * - These models only accept SINGLE images for editing
- * - MERGE operations require Nano Banana (Gemini API) which accepts multiple images
- * - Text-to-image (FLUX.1-dev) doesn't require input images
+ * - The model only accepts a SINGLE image for editing
+ * - MERGE operations require a multi-image model (Gemini or GPT)
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { InferenceClient } from "@huggingface/inference";
+import { Client, handle_file } from "@gradio/client";
 
 // Configure Next.js runtime
 export const runtime = "nodejs";
 
-// Set maximum execution time for AI operations
-export const maxDuration = 60;
+// Set maximum execution time for AI operations (Space may need to wake up / queue)
+export const maxDuration = 300;
+
+// Gradio Space hosting Qwen-Image-2.1 (see spaces/qwen-image-2.1)
+const QWEN_SPACE_ID = process.env.QWEN_SPACE_ID || "Reubencf/qwen-image-2.1";
 
 /**
  * Available HuggingFace models with their capabilities
  */
 const HF_MODELS = {
-    "FLUX.1-Kontext-dev": {
-        id: "black-forest-labs/FLUX.1-Kontext-dev",
-        name: "FLUX.1 Kontext",
+    "Qwen-Image-2.1": {
+        id: "Qwen/Qwen-Image-2.1",
+        name: "Qwen Image 2.1",
         type: "image-to-image",
-        description: "Advanced image editing with context understanding",
-        supportsNodes: ["BACKGROUND", "CLOTHES", "STYLE", "EDIT", "CAMERA", "ANGLE", "AGE", "FACE", "LIGHTNING", "POSES"],
-    },
-    "Qwen-Image-Edit": {
-        id: "Qwen/Qwen-Image-Edit",
-        name: "Qwen Image Edit",
-        type: "image-to-image",
-        description: "Powerful image editing and manipulation",
+        description: "Latest Qwen image editing and generation model",
         supportsNodes: ["BACKGROUND", "CLOTHES", "STYLE", "EDIT", "CAMERA", "ANGLE", "AGE", "FACE", "LIGHTNING", "POSES"],
     },
 };
+
+/**
+ * Run Qwen-Image-2.1 on the Gradio Space and return the result as a data URL.
+ * The user's HF token is forwarded so the Space's GPU usage counts against their quota.
+ */
+async function runQwenSpace(hfToken: string, prompt: string, image: Blob | null): Promise<string> {
+    const client = await Client.connect(QWEN_SPACE_ID, { token: hfToken as `hf_${string}` });
+    const result = await client.predict("/edit", {
+        image: image ? handle_file(image) : null,
+        prompt,
+        seed: -1,
+        steps: 40,
+    });
+
+    const output = (result.data as any[])[0];
+    const outputUrl: string | undefined = output?.url;
+    if (!outputUrl) {
+        throw new Error("Space returned no image");
+    }
+
+    const imageResponse = await fetch(outputUrl, {
+        headers: { Authorization: `Bearer ${hfToken}` },
+    });
+    if (!imageResponse.ok) {
+        throw new Error(`Failed to download result image: ${imageResponse.status}`);
+    }
+    const contentType = imageResponse.headers.get("content-type") || "image/png";
+    const base64 = Buffer.from(await imageResponse.arrayBuffer()).toString("base64");
+    return `data:${contentType};base64,${base64}`;
+}
 
 /**
  * Parse base64 data URL into components
@@ -126,39 +150,19 @@ export async function POST(req: NextRequest) {
         if (body.type === "MERGE") {
             return NextResponse.json(
                 {
-                    error: "MERGE operations require Nano Banana (Gemini API). HuggingFace models only accept single images. Please switch to 'Nano Banana' mode and enter your Google Gemini API key to use MERGE functionality.",
+                    error: "MERGE operations require a multi-image model. HuggingFace models only accept single images. Please switch to Gemini or GPT mode to use MERGE.",
                     requiresNanoBananaPro: true
                 },
                 { status: 400 }
             );
         }
 
-        // Initialize HuggingFace client. These image-edit models are served
-        // through Inference Providers (fal-ai, replicate, ...), not the
-        // classic serverless API, so let the client pick an available one.
-        const hf = new InferenceClient(hfToken);
-
-        // Handle text-to-image generation (FLUX.1-dev)
+        // Handle text-to-image generation
         if (modelConfig.type === "text-to-image") {
             const prompt = body.prompt || body.params?.characterDescription || "A professional portrait photo";
 
             try {
-                const result = await hf.textToImage({
-                    model: modelConfig.id,
-                    provider: "auto",
-                    inputs: prompt,
-                    parameters: {
-                        num_inference_steps: 28,
-                        guidance_scale: 3.5,
-                    },
-                });
-
-                // Result is a Blob, convert to base64
-                const resultBlob = result as unknown as Blob;
-                const arrayBuffer = await resultBlob.arrayBuffer();
-                const base64 = Buffer.from(arrayBuffer).toString('base64');
-                const dataUrl = `data:image/png;base64,${base64}`;
-
+                const dataUrl = await runQwenSpace(hfToken, prompt, null);
                 return NextResponse.json({ image: dataUrl });
             } catch (hfError: any) {
                 console.error('[HF-API] Text-to-image error:', hfError);
@@ -335,23 +339,7 @@ export async function POST(req: NextRequest) {
                 // Convert base64 to blob for HF API
                 const imageBlob = base64ToBlob(parsed.data, parsed.mimeType);
 
-                // Use image-to-image endpoint
-                const result = await hf.imageToImage({
-                    model: modelConfig.id,
-                    provider: "auto",
-                    inputs: imageBlob,
-                    parameters: {
-                        prompt: finalPrompt,
-                        num_inference_steps: 28,
-                        guidance_scale: 7.5,
-                        strength: 0.75,
-                    },
-                });
-
-                // Convert result blob to base64
-                const arrayBuffer = await result.arrayBuffer();
-                const base64 = Buffer.from(arrayBuffer).toString('base64');
-                const dataUrl = `data:image/png;base64,${base64}`;
+                const dataUrl = await runQwenSpace(hfToken, finalPrompt, imageBlob);
 
                 return NextResponse.json({ image: dataUrl });
             } catch (hfError: any) {
@@ -365,9 +353,16 @@ export async function POST(req: NextRequest) {
                     );
                 }
 
-                if (hfError.message?.includes('Model') && hfError.message?.includes('not')) {
+                if (hfError.message?.toLowerCase().includes('quota')) {
                     return NextResponse.json(
-                        { error: `Model ${modelConfig.id} is not available or requires a Pro subscription.` },
+                        { error: "Your HuggingFace GPU quota is used up. Try again later or upgrade to HF Pro." },
+                        { status: 429 }
+                    );
+                }
+
+                if (hfError.message?.includes('Could not resolve app config') || hfError.message?.includes('not found')) {
+                    return NextResponse.json(
+                        { error: `The ${modelConfig.name} Space (${QWEN_SPACE_ID}) is unavailable. It may be starting up — try again in a minute.` },
                         { status: 503 }
                     );
                 }
@@ -399,6 +394,6 @@ export async function POST(req: NextRequest) {
 export async function GET() {
     return NextResponse.json({
         models: HF_MODELS,
-        note: "MERGE operations require Nano Banana (Gemini API) as it needs multi-image input which HuggingFace models don't support."
+        note: "MERGE operations require Gemini or GPT as they need multi-image input which HuggingFace models don't support."
     });
 }

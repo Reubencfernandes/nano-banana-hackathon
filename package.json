@@ -11,6 +11,7 @@
   "dependencies": {
     "@fal-ai/serverless-client": "^0.15.0",
     "@google/genai": "^1.17.0",
+    "@gradio/client": "^2.7.0",
     "@huggingface/hub": "^2.6.3",
     "@huggingface/inference": "^4.8.0",
     "@lobehub/icons": "^5.8.0",

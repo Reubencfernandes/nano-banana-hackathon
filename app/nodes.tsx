@@ -1,7 +1,7 @@
 /**
- * NODE COMPONENT VIEWS FOR NANO BANANA EDITOR
+ * NODE COMPONENT VIEWS FOR PORTRAIT EDITOR
  * 
- * This file contains all the visual node components for the Nano Banana Editor,
+ * This file contains all the visual node components for the Portrait Editor,
  * a visual node-based AI image processing application. Each node represents a
  * specific image transformation or effect that can be chained together to create
  * complex image processing workflows.

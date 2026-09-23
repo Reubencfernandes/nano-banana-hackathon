@@ -1,0 +1,7 @@
+git+https://github.com/huggingface/diffusers
+transformers
+accelerate
+torch
+torchvision
+spaces
+pillow

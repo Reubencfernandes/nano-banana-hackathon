@@ -43,7 +43,7 @@ const geistMono = Geist_Mono({
  * Defines title, description, and other meta tags for search engines and social media
  */
 export const metadata: Metadata = {
-  title: "Nano Banana Editor",                     // Browser tab title and SEO title
+  title: "Portrait Editor",                     // Browser tab title and SEO title
   description: "Node-based photo editor for characters",  // Meta description for search results
 };
 

@@ -1,5 +1,5 @@
 /**
- * NANO BANANA EDITOR - MAIN APPLICATION COMPONENT
+ * PORTRAIT EDITOR - MAIN APPLICATION COMPONENT
  * 
  * This is a visual node-based editor for AI image processing.
  * Users can create nodes for different operations like merging images,
@@ -1041,6 +1041,8 @@ export default function EditorPage() {
         if (response.ok) {
           const data = await response.json();
           setIsHfProLoggedIn(data.isLoggedIn);
+          // Returning from HF login: make sure HuggingFace is the active mode
+          if (data.isLoggedIn) setProcessingMode('huggingface');
           if (data.user) {
             setHfUser(data.user);
           }
@@ -1132,7 +1134,9 @@ export default function EditorPage() {
 
   // Processing Mode: 'gpt' uses OpenAI, 'gemini' uses Gemini, 'huggingface' uses HF models
   type ProcessingMode = 'gpt' | 'gemini' | 'huggingface';
-  const [processingMode, setProcessingMode] = useState<ProcessingMode>('gemini');
+  // HuggingFace is the default. The OAuth login is a full-page redirect, so
+  // defaulting here also keeps HF selected when the user comes back logged in.
+  const [processingMode, setProcessingMode] = useState<ProcessingMode>('huggingface');
 
   // Image generation models (Gemini + OpenAI)
   const IMAGE_MODELS = {
@@ -1153,21 +1157,15 @@ export default function EditorPage() {
 
   // Available HF models
   const HF_MODELS = {
-    "FLUX.1-Kontext-dev": {
-      id: "black-forest-labs/FLUX.1-Kontext-dev",
-      name: "FLUX.1 Kontext",
+    "Qwen-Image-2.1": {
+      id: "Qwen/Qwen-Image-2.1",
+      name: "Qwen Image 2.1",
       type: "image-to-image",
-      description: "Advanced image editing with context understanding",
-    },
-    "Qwen-Image-Edit": {
-      id: "Qwen/Qwen-Image-Edit",
-      name: "Qwen Image Edit",
-      type: "image-to-image",
-      description: "Powerful image editing and manipulation",
+      description: "Latest Qwen image editing and generation model",
     },
   };
 
-  const [selectedHfModel, setSelectedHfModel] = useState<keyof typeof HF_MODELS>("Qwen-Image-Edit");
+  const [selectedHfModel, setSelectedHfModel] = useState<keyof typeof HF_MODELS>("Qwen-Image-2.1");
 
 
   // HF PRO AUTHENTICATION
@@ -1813,7 +1811,7 @@ export default function EditorPage() {
           }),
         });
       } else {
-        // Use Nano Banana (Gemini API)
+        // Use Gemini / OpenAI API
         res = await fetch("/api/process", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -2048,7 +2046,7 @@ export default function EditorPage() {
     if (processingMode === 'huggingface') {
       setNodes((prev) => prev.map((n) => (n.id === mergeId && n.type === "MERGE" ? {
         ...n,
-        error: "MERGE requires Nano Banana mode. HuggingFace models only accept single images. Please switch to '🍌 Nano Banana' in the header and enter your Gemini API key."
+        error: "MERGE requires a multi-image model. HuggingFace models only accept single images. Please switch to Gemini or GPT in the header and enter your API key."
       } : n)));
       return;
     }
@@ -2482,7 +2480,7 @@ export default function EditorPage() {
     <div className="min-h-[100svh] bg-background text-foreground">
       <header className="flex items-center justify-between px-6 py-3 border-b border-border/60 bg-card/70 backdrop-blur">
         <h1 className="text-lg font-semibold tracking-wide">
-          <span className="mr-2" aria-hidden>🍌</span>Nano Banana Editor
+          <span className="mr-2" aria-hidden>🖼️</span>Portrait Editor
         </h1>
         <div className="flex items-center gap-3">
           {/* Processing Mode Toggle */}
@@ -2779,8 +2777,8 @@ export default function EditorPage() {
                     <p className="font-medium text-foreground mb-1 flex items-center gap-2">
                       <HuggingFace.Color size={16} /> HuggingFace
                     </p>
-                    <p className="text-sm text-muted-foreground">FLUX.1-Kontext and Qwen-Image-Edit via HF Inference. Single-image edits only — no MERGE.</p>
-                    <p className="text-xs text-muted-foreground mt-2">Sign in with HuggingFace; uses your inference credits.</p>
+                    <p className="text-sm text-muted-foreground">Qwen-Image-2.1 via our HuggingFace Gradio Space. Single-image edits only — no MERGE.</p>
+                    <p className="text-xs text-muted-foreground mt-2">Sign in with HuggingFace; uses your GPU quota.</p>
                   </div>
                 </div>
               </section>

@@ -229,7 +229,7 @@ body {
   scrollbar-color: hsl(var(--muted-foreground) / 0.3) hsl(var(--background) / 0.1);
 }
 
-/* Nano Banana Editor - node visuals
+/* Portrait Editor - node visuals
    Studio-style design: theme-aware cards, subtle hairline borders,
    small ringed ports, soft elevation shadow. */
 .nb-node {

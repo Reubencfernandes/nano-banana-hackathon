@@ -1,7 +1,7 @@
 /**
  * API ROUTE: /api/process
  * 
- * Main image processing endpoint for the Nano Banana Editor.
+ * Main image processing endpoint for the Portrait Editor.
  * Handles all image transformation operations using Google's Gemini AI model.
  *   
  * Supported Operations:
