@@ -6,16 +6,11 @@ colorTo: yellow
 sdk: docker
 pinned: true
 app_port: 7860
-hf_oauth: true
-hf_oauth_expiration_minutes: 43200
-hf_oauth_scopes:
-  - email
-  - inference-api
 ---
 
 # Portrait Editor 🖼️
 
-A powerful visual node editor for AI-powered image generation and manipulation. Create complex workflows by connecting nodes for image generation, merging, editing, and style transfers.
+A Powerful visual node editor for AI-powered image generation and manipulation. Create complex workflows by connecting nodes for image generation, merging, editing, and style transfers.
 
 ## Features
 
